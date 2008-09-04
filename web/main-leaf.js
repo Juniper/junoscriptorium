@@ -18,6 +18,9 @@ var xhtmlns = "http://www.w3.org/1999/xhtml";
 // Create an XSLT processor instance
 var processor = new XSLTProcessor();
 
+// Source document
+var source;
+
 // Create an empty XML document for the XSLT transform
 var transform = document.implementation.createDocument("", "", null);
 transform.onload = loadTransform;
