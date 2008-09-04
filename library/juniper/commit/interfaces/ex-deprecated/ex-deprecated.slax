@@ -1,0 +1,39 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-deprecated.slax,v 1.1 2007/10/17 18:37:03 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match configuration {
+    if (system/ports/console/undocumented/speed < 9600) {
+        <xnm:warning> {
+            call jcs:edit-path($dot = system/ports/console);
+            call jcs:statement($dot = system/ports/console/undocumented/speed);
+            <message> {
+                expr "Console speeds less ";
+                expr "9600 baud are deprecated";
+            }
+        }
+        <change> {
+            <system> {
+                <ports> {
+                    <console> {
+                        <speed delete = "delete">;
+                    }
+                }
+            }
+        }
+    }
+}
+

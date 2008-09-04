@@ -1,0 +1,39 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-atm-vc-limit.slax,v 1.1 2007/10/17 18:37:03 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+param $limit = 200;
+
+match configuration {
+    
+    for-each (interfaces/interface[starts-with(name, "at-")]) {
+        var $count = count(unit);
+        
+        if ($count > $limit) {
+            <xnm:error> {
+                <edit-path> "[edit interfaces]";
+                <statement> name;
+                <message> {
+                    expr "ATM VC limit exceeded; ";
+                    expr $count;
+                    expr " are configured but only ";
+                    expr $limit;
+                    expr " are allowed";
+                }
+            }
+        }
+    }
+}
+

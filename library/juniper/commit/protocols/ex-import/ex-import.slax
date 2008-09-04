@@ -1,0 +1,45 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-import.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+param $po = commit-script-input/configuration/policy-options;
+
+/*
+- This example inspects the import statements configured under
+- [protocols ospf] and [protocols isis] to see if any of the
+- named policies contain a bare "then accept" term.  This is
+- meant to protect against importing the full routing table
+- into these IGPs.  The testing criteria in this example are
+- likely not sufficient, but can easily be tuned or improved.
+ */
+match configuration {
+    apply-templates protocols/ospf/import;
+    apply-templates protocols/isis/import;
+}
+
+match import {
+    param $test = .;
+    
+    for-each ($po/policy-statement[name == $test]) {
+        if (then/accept && not(to) && not(from)) {
+            <xnm:error> {
+                call jcs:edit-path($dot = $test);
+                call jcs:statement($dot = $test);
+                <message> "policy contains bare 'then accept'";
+            }
+        }
+    }
+}
+

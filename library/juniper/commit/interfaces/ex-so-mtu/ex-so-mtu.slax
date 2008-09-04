@@ -1,0 +1,36 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-so-mtu.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+param $min-mtu = 2048;
+
+/*
+- This example tests the mtu of sonet interfaces, and to report
+- when the mtu is less that $max-mtu.
+ */
+match configuration {
+    
+    for-each (interfaces/interface[starts-with(name, "so-") && mtu && mtu < $min-mtu]) {
+        <xnm:error> {
+            call jcs:edit-path();
+            call jcs:statement($dot = mtu);
+            <message> {
+                expr "SONET interfaces must have a minimum mtu of ";
+                expr $min-mtu;
+            }
+        }
+    }
+}
+

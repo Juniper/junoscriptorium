@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<script version="0.1">
+  <title>ex-atm.slax</title>
+  <alternate>ex-atm.xsl</alternate>
+  <author>phil</author>
+  <synopsis>
+    Classifies interfaces by their vc numbers and places them into groups
+  </synopsis>
+  <keyword>vc</keyword>
+  <keyword>interface</keyword>
+  <keyword>atm</keyword>
+
+  <description>
+    We want to allocate bandwith to interfaces with more
+    traffic. The script sets classifications based on vc numbers and adds
+    bronze, sliver, or gold variables to each interface.
+  </description>
+  <implementation>
+    A connection with large traffic will want to organize its bandwith
+    based on priority. 
+  </implementation>
+
+  <example>
+    <config>ex-atm.conf</config>
+    <title>A simple configuration</title>
+    <output>ex-atm.output</output>
+  </example>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" type="text/javascript"/>
+</script>

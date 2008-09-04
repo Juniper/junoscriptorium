@@ -1,0 +1,50 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-16-e1-limit.slax,v 1.1 2007/10/17 18:37:03 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+param $limit = 16;
+
+/*
+- This example tests the number of e1 interfaces configured
+- on a cstm1 interface.   For each cstm1 interface, the set
+- of corresponding e1 interfaces is selected.  The count()
+- of those interfaces should not exceed the limit given in the
+- global variable $limit.  If there are more than $limit, a
+- commit error is generated and the commit fails.
+ */
+match configuration {
+    var $interfaces = interfaces;
+    
+    for-each ($interfaces/interface[starts-with(name, "cstm1-")]) {
+        var $triple = substring-after(name, "cstm1-");
+        var $e1name = "e1-" _ $triple;
+        var $count = count($interfaces/interface[starts-with(name, $e1name)]);
+        
+        if ($count > $limit) {
+            <xnm:error> {
+                <edit-path> "[edit interfaces]";
+                <statement> name;
+                <message> {
+                    expr "e1/cstm1 limit exceeded; ";
+                    expr $count;
+                    expr " are configured but only ";
+                    expr $limit;
+                    expr " are allowed";
+                }
+            }
+        }
+    }
+}
+

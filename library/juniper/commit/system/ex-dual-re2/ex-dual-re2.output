@@ -1,0 +1,28 @@
+[edit]
+phil@dent# show | display commit-scripts    
+## Last changed: 2007-10-09 14:37:51 EDT
+groups {
+    re0 {
+        system {
+            host-name foo-RE0;
+        }
+    }
+    re1 {
+        system {
+            host-name foo-RE1;
+        }
+    }
+}
+system {
+    inactive: host-name foo;
+    scripts {
+        commit {
+            allow-transients;
+            file ex-dual-re2.slax;
+        }
+    }
+    ## Warning: missing mandatory statement(s): 'root-authentication'
+}
+
+[edit]
+phil@dent# 

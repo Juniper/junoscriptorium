@@ -1,0 +1,5 @@
+[edit interfaces interface so-1/2/3]
+  'mtu 576;'
+    SONET interfaces must have a minimum mtu of 2048
+error: 1 error reported by commit scripts
+error: commit script failure

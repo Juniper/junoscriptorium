@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<info xmlns="http://www.w3.org/1999/xhtml">
+  <directory id="library/juniper">
+    <description>
+      Scripts developed by the staff of Juniper Networks
+    </description>
+  </directory>
+  <directory id="library/juniper/commit">
+    <description>
+      Commit scripts
+    </description>
+  </directory>
+  <directory id="library/juniper/commit/filters">
+    <description>
+      Filter-related
+    </description>
+  </directory>
+  <directory id="library/juniper/commit/interfaces">
+    <description>
+      Interface-oriented scripts
+    </description>
+  </directory>
+  <directory id="library/juniper/commit/protocols">
+    <description>
+      Scripts for routing protocols
+    </description>
+  </directory>
+  <directory id="library/juniper/commit/system">
+    <description>
+      Scripts for simple setup and maintenance
+    </description>
+  </directory>
+  <directory id="library/juniper/op">
+    <description>
+      Op scripts
+    </description>
+  </directory>
+  <directory id="library/juniper/op/display">
+    <description>
+      Display ("show") oriented scripts
+    </description>
+  </directory>
+</info>

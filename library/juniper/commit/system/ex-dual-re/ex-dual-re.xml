@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<script version="0.1">
+  <title>ex-dual-re.slax</title>
+  <alternate>ex-dual-re.xsl</alternate>
+  <author>phil</author>
+  <synopsis>
+    Ensures configuration is setup correctly for the re0 or
+    re1 configuration groups
+  </synopsis>
+  <keyword>re</keyword>
+  <keyword>routing-engine</keyword>
+  <keyword>inherit</keyword>
+  <description>
+    We want to use a single configuration to support both
+    REs in a dual RE system.  JUNOS uses the configuration groups
+    feature to define to "magic" configuration groups, "re0" and "re1".
+    These groups will only be applied on the matching routing-engine.
+    You may put re-specific config in the appropriate group, knowing
+    that the two groups will not conflict.
+  </description>
+  <implementation>
+    This example ensures that certain statements are inherited from
+    the 're0' or 're1' configuration groups.  Specifically, the
+    configuration groups must define a [system host-name] and a
+    [interfaces fxp0].  If either are not inherited from a config
+    group, a warning is generated.
+  </implementation>
+  <example>
+    <config>ex-dual-re.conf</config>
+    <title>A simple configuration</title>
+    <description>
+      This is a simple example of how the script is invoked
+    </description>
+    <errors>ex-dual-re.output</errors>
+  </example>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" type="text/javascript"/>
+</script>

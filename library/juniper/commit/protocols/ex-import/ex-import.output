@@ -1,0 +1,5 @@
+[edit protocols ospf import]
+  'import bad-news;'
+    policy contains bare 'then accept'
+error: 1 error reported by commit scripts
+error: commit script failure

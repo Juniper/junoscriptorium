@@ -1,0 +1,54 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-dual-re2.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+- This example builds the config to all a single [system host-name]
+- statement to support dual REs.  The appropriate configuration groups
+- are built using $host-name-RE0 and $host-name-RE1.  Then the
+- foreground configuration is deactivated.
+ */
+match configuration {
+    var $hn = system/host-name;
+    
+    if ($hn/@junos:group) {
+    
+    } else if ($hn) {
+        <transient-change> {
+            <groups> {
+                <name> "re0";
+                <system> {
+                    <host-name> $hn _ "-RE0";
+                }
+            }
+            <groups> {
+                <name> "re1";
+                <system> {
+                    <host-name> $hn _ "-RE1";
+                }
+            }
+            <system> {
+                <host-name inactive = "inactive">;
+            }
+        }
+    
+    } else {
+        <xnm:error> {
+            <message> "Missing [system host-name]";
+        }
+    }
+}
+

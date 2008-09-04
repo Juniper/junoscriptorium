@@ -1,0 +1,439 @@
+[edit]
+phil@dent# show | display commit-scripts 
+## Last changed: 2007-10-09 15:38:27 EDT
+groups {
+    class-gold {
+        interfaces {
+            <*> {
+                unit <*> {
+                    family inet {
+                        filter {
+                            input gold-filter;
+                            output gold-filter;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    class-silver {
+        interfaces {
+            <*> {
+                unit <*> {
+                    family inet {
+                        filter {
+                            input silver-filter;
+                            output silver-filter;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    class-bronze {
+        interfaces {
+            <*> {
+                unit <*> {
+                    family inet {
+                        filter {
+                            input bronze-filter;
+                            output bronze-filter;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+system {
+    scripts {
+        commit {
+            file ex-atm.slax;
+        }
+    }
+    ## Warning: missing mandatory statement(s): 'root-authentication'
+}
+interfaces {
+    apply-macro limits {
+        bronze-max 60;
+        gold-max 20;
+        silver-max 40;
+    }
+    at-1/2/3 {
+        atm-options {
+            pic-type atm1;
+            vpi 0 {
+                maximum-vcs 100;
+            }
+        }
+        unit 15 {
+            apply-groups class-gold;
+            vci 15;
+            family inet {
+                address 10.12.13.14/20;
+            }
+        }
+        unit 16 {
+            apply-groups class-gold;
+            vci 16;
+            family inet {
+                address 10.12.13.15/20;
+            }
+        }
+        unit 17 {
+            apply-groups class-gold;
+            vci 17; 
+            family inet {
+                address 10.12.13.16/20;
+            }
+        }
+        unit 18 {
+            apply-groups class-gold;
+            vci 18;
+            family inet {
+                address 10.12.13.17/20;
+            }
+        }
+        unit 19 {
+            apply-groups class-gold;
+            vci 19;
+            family inet {
+                address 10.12.13.18/20;
+            }
+        }
+        unit 20 {
+            apply-groups class-gold;
+            vci 20;
+            family inet {
+                address 10.12.13.19/20;
+            }
+        }
+        unit 21 {
+            apply-groups class-silver;
+            vci 21;
+            family inet {
+                address 10.12.13.20/20;
+            }
+        }
+        unit 22 {
+            apply-groups class-silver;
+            vci 22;
+            family inet {
+                address 10.12.13.21/20;
+            }
+        }
+        unit 23 {
+            apply-groups class-silver;
+            vci 23;
+            family inet {
+                address 10.12.13.22/20;
+            }
+        }
+        unit 24 {
+            apply-groups class-silver;
+            vci 24;
+            family inet {
+                address 10.12.13.23/20;
+            }
+        }
+        unit 25 {
+            apply-groups class-silver;
+            vci 25;
+            family inet {
+                address 10.12.13.24/20;
+            }
+        }
+        unit 26 {
+            apply-groups class-silver;
+            vci 26;
+            family inet {
+                address 10.12.13.25/20;
+            }
+        }
+        unit 27 {
+            apply-groups class-silver;
+            vci 27;
+            family inet {
+                address 10.12.13.26/20;
+            }
+        }
+        unit 28 {
+            apply-groups class-silver;
+            vci 28;
+            family inet {
+                address 10.12.13.27/20;
+            }
+        }
+        unit 29 {   
+            apply-groups class-silver;
+            vci 29;
+            family inet {
+                address 10.12.13.28/20;
+            }
+        }
+        unit 30 {
+            apply-groups class-silver;
+            vci 30;
+            family inet {
+                address 10.12.13.29/20;
+            }
+        }
+        unit 31 {
+            apply-groups class-silver;
+            vci 31;
+            family inet {
+                address 10.12.13.30/20;
+            }
+        }
+        unit 32 {
+            apply-groups class-silver;
+            vci 32;
+            family inet {
+                address 10.12.13.31/20;
+            }
+        }
+        unit 33 {
+            apply-groups class-silver;
+            vci 33;
+            family inet {
+                address 10.12.13.32/20;
+            }
+        }
+        unit 34 {
+            apply-groups class-silver;
+            vci 34;
+            family inet {
+                address 10.12.13.33/20;
+            }
+        }           
+        unit 35 {
+            apply-groups class-silver;
+            vci 35;
+            family inet {
+                address 10.12.13.34/20;
+            }
+        }
+        unit 36 {
+            apply-groups class-silver;
+            vci 36;
+            family inet {
+                address 10.12.13.35/20;
+            }
+        }
+        unit 37 {
+            apply-groups class-silver;
+            vci 37;
+            family inet {
+                address 10.12.13.36/20;
+            }
+        }
+        unit 38 {
+            apply-groups class-silver;
+            vci 38;
+            family inet {
+                address 10.12.13.37/20;
+            }
+        }
+        unit 39 {
+            apply-groups class-silver;
+            vci 39;
+            family inet {
+                address 10.12.13.38/20;
+            }
+        }
+        unit 40 {
+            apply-groups class-silver;
+            vci 40;
+            family inet {
+                address 10.12.13.39/20;
+            }       
+        }
+        unit 41 {
+            apply-groups class-bronze;
+            vci 41;
+            family inet {
+                address 10.12.13.40/20;
+            }
+        }
+        unit 42 {
+            apply-groups class-bronze;
+            vci 42;
+            family inet {
+                address 10.12.13.41/20;
+            }
+        }
+        unit 43 {
+            apply-groups class-bronze;
+            vci 43;
+            family inet {
+                address 10.12.13.42/20;
+            }
+        }
+        unit 44 {
+            apply-groups class-bronze;
+            vci 44;
+            family inet {
+                address 10.12.13.43/20;
+            }
+        }
+        unit 45 {
+            apply-groups class-bronze;
+            vci 45;
+            family inet {
+                address 10.12.13.44/20;
+            }
+        }
+        unit 46 {
+            apply-groups class-bronze;
+            vci 46;
+            family inet {
+                address 10.12.13.45/20;
+            }
+        }
+        unit 47 {
+            apply-groups class-bronze;
+            vci 47;
+            family inet {
+                address 10.12.13.46/20;
+            }
+        }
+        unit 48 {
+            apply-groups class-bronze;
+            vci 48;
+            family inet {
+                address 10.12.13.47/20;
+            }
+        }
+        unit 49 {
+            apply-groups class-bronze;
+            vci 49;
+            family inet {
+                address 10.12.13.48/20;
+            }
+        }
+        unit 50 {
+            apply-groups class-bronze;
+            vci 50;
+            family inet {
+                address 10.12.13.49/20;
+            }
+        }
+        unit 51 {
+            apply-groups class-bronze;
+            vci 51;
+            family inet {
+                address 10.12.13.50/20;
+            }
+        }
+        unit 52 {
+            apply-groups class-bronze;
+            vci 52;
+            family inet {
+                address 10.12.13.51/20;
+            }
+        }
+        unit 53 {
+            apply-groups class-bronze;
+            vci 53;
+            family inet {
+                address 10.12.13.52/20;
+            }
+        }
+        unit 54 {
+            apply-groups class-bronze;
+            vci 54;
+            family inet {
+                address 10.12.13.53/20;
+            }
+        }
+        unit 55 {
+            apply-groups class-bronze;
+            vci 55;
+            family inet {
+                address 10.12.13.54/20;
+            }
+        }
+        unit 56 {
+            apply-groups class-bronze;
+            vci 56;
+            family inet {
+                address 10.12.13.55/20;
+            }
+        }
+        unit 57 {
+            apply-groups class-bronze;
+            vci 57;
+            family inet {
+                address 10.12.13.56/20;
+            }
+        }
+        unit 58 {
+            apply-groups class-bronze;
+            vci 58; 
+            family inet {
+                address 10.12.13.57/20;
+            }
+        }
+        unit 59 {
+            apply-groups class-bronze;
+            vci 59;
+            family inet {
+                address 10.12.13.58/20;
+            }
+        }
+        unit 60 {
+            apply-groups class-bronze;
+            vci 60;
+            family inet {
+                address 10.12.13.59/20;
+            }
+        }
+        unit 61 {
+            vci 61;
+            family inet {
+                address 10.12.13.60/20;
+            }
+        }
+        unit 62 {
+            vci 62;
+            family inet {
+                address 10.12.13.61/20;
+            }
+        }
+        unit 63 {
+            vci 63;
+            family inet {
+                address 10.12.13.62/20;
+            }
+        }
+        unit 64 {
+            vci 64;
+            family inet {
+                address 10.12.13.63/20;
+            }
+        }
+        unit 65 {
+            vci 65;
+            family inet {
+                address 10.12.13.64/20;
+            }
+        }
+    }
+}
+firewall {
+    filter gold-filter {
+        term one {
+            then forwarding-class assured-forwarding;
+        }
+    }
+    filter silver-filter {
+        term one {
+            then forwarding-class expedited-forwarding;
+        }
+    }
+    filter bronze-filter {
+        term one {
+            then forwarding-class best-effort;
+        }
+    }
+}

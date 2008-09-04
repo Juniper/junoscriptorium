@@ -1,0 +1,106 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: show-interfaces.slax,v 1.2 2007/10/22 03:08:02 phil Exp $
+-
+- Copyright (c) 2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+var $arguments = {
+    <argument> {
+        <name> "interface";
+        <description> "Name of interface to display";
+    }
+    <argument> {
+        <name> "protocol";
+        <description> "Protocol to display (inet, inet6)";
+    }
+}
+param $interface;
+param $protocol;
+
+match / {
+    <op-script-output> {
+        var $rpc = <get-interface-information> {
+            <terse>;
+            if ($interface) {
+                <interface-name> $interface;
+            }
+        }
+        var $out = jcs:invoke($rpc);
+        <interface-information junos:style = "terse"> {
+            if ($protocol == "inet" || $protocol == "inet6" || $protocol == "mpls" || $protocol == "tnp") {
+                
+                for-each ($out/physical-interface/logical-interface[address-family/address-family-name == $protocol]) {
+                    call intf();
+                }
+            
+            } else if ($protocol) {
+                <xnm:error> {
+                    <message> {
+                        expr "invalid protocol: ";
+                        expr $protocol;
+                    }
+                }
+            
+            } else {
+                
+                for-each ($out/physical-interface/logical-interface) {
+                    call intf();
+                }
+            }
+        }
+    }
+}
+
+template intf () {
+    var $status = {
+        if (admin-status == "up" && oper-status == "up") {
+        
+        } else if (admin-status == "down") {
+            expr "offline";
+        
+        } else if (oper-status == "down" && ../admin-status == "down") {
+            expr "p-offline";
+        
+        } else if (oper-status == "down" && ../oper-status == "down") {
+            expr "p-down";
+        
+        } else if (oper-status == "down") {
+            expr "down";
+        
+        } else {
+            expr oper-status _ "/" _ admin-status;
+        }
+    }
+    var $desc = {
+        if (description) {
+            expr description;
+        
+        } else if (../description) {
+            expr ../description;
+        }
+    }
+    <logical-interface> {
+        <name> name;
+        if (string-length($desc)) {
+            <admin-status> $desc;
+        }
+        <admin-status> $status;
+        if ($protocol) {
+            copy-of address-family[address-family-name == $protocol];
+        
+        } else {
+            copy-of address-family;
+        }
+    }
+}
+

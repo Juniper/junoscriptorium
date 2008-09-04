@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<script version="0.1">
+  <title>ex-iso.slax</title>
+  <alternate>ex-iso.xsl</alternate>
+  <author>phil</author>
+  <synopsis>
+    Enable mpls on iso-enabled interfaces
+  </synopsis>
+  <keyword>mpls</keyword>
+  <keyword>iso</keyword>
+  <keyword>interface</keyword>
+  <keyword>protocol</keyword>
+
+  <description>
+    We want to ensure that the interface setup as iso
+    has mpls enabled. If it is not enabled the script makes it so.
+  </description>
+  <implementation>
+    For every logical unit with iso enabled, we test to see if
+    mpls is enabled.  If it isn't, we call jcs:emit-change()
+    to add it for us.
+  </implementation>
+
+  <example>
+    <config>ex-iso.conf</config>
+    <output>ex-iso.output</output>
+  </example>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" type="text/javascript"/>
+</script>

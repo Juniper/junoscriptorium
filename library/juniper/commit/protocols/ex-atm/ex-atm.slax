@@ -1,0 +1,62 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-atm.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match configuration {
+    apply-templates interfaces {
+        mode "limit";
+    }
+}
+
+match * {
+    mode "limit";
+    
+    var $limits = apply-macro[name == "limits"];
+    var $gold-max = $limits/data[name == "gold-max"]/value;
+    var $silver-max = $limits/data[name == "silver-max"]/value;
+    var $bronze-max = $limits/data[name == "bronze-max"]/value;
+    
+    for-each (interface[starts-with(name, "at-")]) {
+        var $ifdev = name;
+        
+        for-each (unit) {
+            var $class = {
+                if (name <= $gold-max) {
+                    expr "gold";
+                
+                } else if (name <= $silver-max) {
+                    expr "silver";
+                
+                } else if (name <= $bronze-max) {
+                    expr "bronze";
+                }
+            }
+            
+            call jcs:emit-change() {
+                with $content = {
+                    <vci> name;
+                    if (string-length($class) > 0) {
+                        <apply-groups> {
+                            expr "class-";
+                            expr $class;
+                        }
+                    }
+                 }
+            }
+        }
+    }
+}
+

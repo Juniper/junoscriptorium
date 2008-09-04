@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<script>
+  <title>check-mbufs.slax</title>
+  <author>phil</author>
+  <synopsis>
+    Update an SNMP MIB with the value of the current mbuf allocation
+  </synopsis>
+  <coe>event</coe>
+  <type>snmp</type>
+
+  <description>
+    This script runs intermittently via a generated event and fetches
+    the output of "show system buffers".  Using regular expressions,
+    it extracts the current mbuf allocation and stuffs it in the
+    utility mib with the key "current-mbufs".  An SNMP application
+    can monitor it from there.
+  </description>
+
+  <example>
+    <description>
+      We fire off the script using a generated event that makes an
+      event called "check-mbufs-timer" every 600 seconds (10 minutes).
+      When the event fires off, the script is run, and the MIB value
+      is updated.
+    </description>
+    <config>simple.conf</config>
+  </example>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" type="text/javascript"/>
+</script>

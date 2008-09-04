@@ -1,0 +1,12 @@
+re0:
+[edit system ports console]
+  'speed 4800;'
+    warning: Console speeds less 9600 baud are deprecated
+configuration check succeeds
+re1:
+error: could not open commit script: /var/db/scripts/commit/ex-deprecated.xsl: N
+o such file or directory
+error: 1 error reported by commit scripts
+error: commit script failure
+re0:
+error: remote commit-configuration failed on re1

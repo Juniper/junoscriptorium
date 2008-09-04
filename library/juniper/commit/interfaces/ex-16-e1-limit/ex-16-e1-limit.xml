@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<script version="0.1">
+  <title>ex-16-e1-limit.slax</title>
+  <alternate>ex-16-e1-limit.xsl</alternate>
+  <author>phil</author>
+  <synopsis>
+    Limit the number of channelized e1 interfaces on a  cstm1 interface
+  </synopsis>
+  <keyword>channelization</keyword>
+  <keyword>per-unit-scheduler</keyword>
+
+  <description>
+    This script limits the number of channelization on cstm1 interfaces
+    to avoid contention issues with per-unit-schedulers.  
+    The script ensures that there are no more than 16 chE1s per cstm1.
+  </description>
+  <implementation>
+    This example tests the number of e1 interfaces configured
+    on a cstm1 interface.   For each cstm1 interface, the set
+    of corresponding e1 interfaces is selected.  The count()
+    of those interfaces should not exceed the limit given in the
+    global variable $limit (16).  If there are more than $limit, a
+    commit error is generated and the commit fails. 
+  </implementation>
+
+  <example>
+    <config>ex-16-e1-limit.conf</config>
+    <errors>ex-16-e1-limit.output</errors>
+  </example>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" type="text/javascript"/>
+</script>

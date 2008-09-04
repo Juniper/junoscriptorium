@@ -1,0 +1,41 @@
+/*
+ * $Id: ex-iso.slax,v 1.2 2007/10/18 03:08:07 phil Exp $
+ */
+
+version 1.0;
+ns xsl = "http://www.w3.org/1999/XSL/Transform";
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+ * This example performs two related tasks.  If an interface has
+ * [family iso] configured but not [family mpls], a configuration
+ * change is made (using the "jcs:emit-change" template) to enable
+ * MPLS.
+ *
+ * Secondly, if the interface is not configured under [protocols mpls],
+ * an additional change is made to add the interface there.
+ *
+ * Both changes are accompanied with appropriate warning messages.
+ */
+match configuration {
+    var $mpls = protocols/mpls;
+
+    for-each (interfaces/interface/unit[family/iso]) {
+        var $ifname = concat(../name, '.', name);
+        if (not(family/mpls)) {
+            var $message = "Adding 'family mpls' to iso-enabled interface";
+	    var $content = <family> { <mpls>; };
+            call jcs:emit-change($message, $content);
+        }
+        if ($mpls and not($mpls/interface[name = $ifname])) {
+            var $message = "Adding iso-enabled interface "
+                         + $ifname + " to [protocols mpls]";
+            var $content = <interface> { <name> $ifname; };
+            call jcs:emit-change($message, $content);
+        }
+    }
+}

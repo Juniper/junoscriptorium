@@ -1,0 +1,13 @@
+[edit protocols isis interface so-1/2/3.0]
+  'interface so-1/2/3.0;'
+    warning: ldp not enabled for this interface
+[edit protocols ospf area 10.4.0.0 interface ge-3/2/1.0]
+  'interface ge-3/2/1.0;'
+    warning: ldp not enabled for this interface
+[edit protocols ldp interface ge-1/2/1.0]
+  'interface ge-1/2/1.0;'
+    warning: ldp-enabled interface does not have an IGP configured
+[edit]
+  'system'
+    Missing mandatory statement: 'root-authentication'
+error: configuration check-out failed: (missing statements)

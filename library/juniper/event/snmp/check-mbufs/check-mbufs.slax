@@ -1,0 +1,28 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+match / {
+    <op-script-results> {
+	var $cmd = <command> "show system buffers";
+        var $out = jcs:invoke($cmd);
+    
+	    var $lines = jcs:break_lines($out);
+	    for-each ($lines) {
+	        if (contains(., "current/peak/max")) {
+	            var $pattern = "([0-9]+)/([0-9]+)/([0-9]+) mbufs";
+	            var $split = jcs:regex($pattern, .);
+	            var $result = $split[2];
+
+	            var $rpc = <request-snmp-utility-mib-set> {
+        	        <object-type> "integer";
+                	<instance> "current-mbufs";
+	                <object-value> $result;
+	            }
+	            var $res = jcs:invoke($rpc);
+        }
+    }
+}

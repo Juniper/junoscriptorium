@@ -1,0 +1,47 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-anton.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+- This example turns a list of addresses into a list of MPLS LSPs.
+- An apply-macro under [protocols mpls] is configured with a
+- set of addresses and a 'color' parameter.  Each address is
+- turned into an LSP configuration, with the color as an admin-group.
+ */
+match configuration {
+    var $mpls = protocols/mpls;
+    
+    for-each ($mpls/apply-macro[data/name == "color"]) {
+        var $color = data[name == "color"]/value;
+        <transient-change> {
+            <protocols> {
+                <mpls> {
+                    
+                    for-each (data[not(value)]/name) {
+                        <label-switched-path> {
+                            <name> $color _ "-lsp-" _ .;
+                            <to> .;
+                            <admin-group> {
+                                <include> $color;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

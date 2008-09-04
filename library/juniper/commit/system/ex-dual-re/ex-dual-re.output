@@ -1,0 +1,5 @@
+[edit system]
+  'host-name foo;'
+    warning: statement should not be in foreground configuration on dual RE syst
+em
+error: configuration check-out failed: (missing mandatory statements)

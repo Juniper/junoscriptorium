@@ -1,0 +1,59 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-add-accept.slax,v 1.1 2007/10/17 18:37:03 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match configuration {
+    apply-templates firewall/filter | firewall/family/inet | firewall/family/inet6 {
+        mode "filter";
+    }
+}
+
+
+/*
+- This example adds a 'then accept' to any firewall filter
+- that does not already end with one.  This counteracts the
+- normal JUNOS default of an implicit 'then reject'.
+ */
+match filter {
+    mode "filter";
+    
+    param $last = term[position() == last()];
+    
+    <xsl:comment> {
+        expr "Found ";
+        expr name;
+        expr "; last ";
+        expr $last/name;
+    }
+    if ($last &&($last/from || $last/to || not($last/then/accept))) {
+        <xnm:warning> {
+            call jcs:edit-path();
+            <message> "filter is missing bare 'then accept' rule";
+        }
+        call jcs:emit-change() {
+            with $content = {
+                <term> {
+                    <name> "very-last";
+                    <junos:comment> "This term was added by a commit script";
+                    <then> {
+                        <accept>;
+                    }
+                }
+             }
+        }
+    }
+}
+

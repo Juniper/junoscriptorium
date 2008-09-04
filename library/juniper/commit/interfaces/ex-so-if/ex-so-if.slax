@@ -1,0 +1,123 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-so-if.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+- This example uses an apply-macro to turn simplified interface
+- configuration into a diverse set of configuration statements.
+ */
+match configuration {
+    var $top = .;
+    
+    for-each (interfaces/apply-macro) {
+        var $description = data[name == "description"]/value;
+        var $inet-address = data[name == "inet-address"]/value;
+        var $isis-level-1 = data[name == "isis-level-1"]/value;
+        var $isis-level-1-metric = data[name == "isis-level-1-metric"]/value;
+        var $isis-level-2 = data[name == "isis-level-2"]/value;
+        var $isis-level-2-metric = data[name == "isis-level-2-metric"]/value;
+        var $param-devname = substring-before(name, ".");
+        var $devname = {
+            if ($param-devname) {
+                expr $param-devname;
+            
+            } else {
+                expr name;
+            }
+        }
+        var $param-unit = substring-after(name, ".");
+        var $unit = {
+            if ($param-unit) {
+                expr $param-unit;
+            
+            } else {
+                expr "0";
+            }
+        }
+        var $ifname = $devname _ "." _ $unit;
+        <transient-change> {
+            <interfaces> {
+                <interface> {
+                    <name> $devname;
+                    <apply-groups> {
+                        <name> "interface-details";
+                    }
+                    if ($description) {
+                        <description> $description;
+                    }
+                    <unit> {
+                        <name> $unit;
+                        if (string-length($inet-address) > 0) {
+                            <family> {
+                                <inet> {
+                                    <address> $inet-address;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            <protocols> {
+                <rsvp> {
+                    <interface> {
+                        <name> $ifname;
+                    }
+                }
+                <isis> {
+                    <interface> {
+                        <name> $ifname;
+                        if ($isis-level-1 || $isis-level-1-metric) {
+                            <level> {
+                                <name> "1";
+                                if ($isis-level-1) {
+                                    <xsl:element name = $isis-level-1>;
+                                }
+                                if ($isis-level-1-metric) {
+                                    <metric> $isis-level-1-metric;
+                                }
+                            }
+                        }
+                        if ($isis-level-2 || $isis-level-2-metric) {
+                            <level> {
+                                <name> "2";
+                                if ($isis-level-2) {
+                                    <xsl:element name = $isis-level-2>;
+                                }
+                                if ($isis-level-2-metric) {
+                                    <metric> $isis-level-2-metric;
+                                }
+                            }
+                        }
+                    }
+                }
+                <ldp> {
+                    <interface> {
+                        <name> $ifname;
+                    }
+                }
+            }
+            <class-of-service> {
+                <interfaces> {
+                    <name> $devname;
+                    <apply-groups> {
+                        <name> "cos-details";
+                    }
+                }
+            }
+        }
+    }
+}
+

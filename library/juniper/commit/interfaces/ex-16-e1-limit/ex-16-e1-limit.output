@@ -1,0 +1,5 @@
+[edit interfaces]
+  'cstm1-0/1/0'
+    e1/cstm1 limit exceeded; 17 are configured but only 16 are allowed
+error: 1 error reported by commit scripts
+error: commit script failure

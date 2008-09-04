@@ -1,0 +1,156 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-loop.slax,v 1.1 2007/10/17 18:37:03 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+- This example shows both the strengths and weaknesses of XSL.
+- An apply-macro is expanded, which has the name of a physical
+- interface, and a set of parameters that request a number of
+- logical units to be defined for that physical interface.  The
+- units are numbered sequentially from $unit to $max, and are
+- given IP addresses starting a $address.
+-
+- To loop thru the logical units, XSL must use recursion, which
+- is implemented in the "emit-interface" template.
+-
+- Calculating the next address is done in the "next-address" template,
+- where the nature of XSL and it's shallow data types, weak programming
+- structures, and verbosity are full exposed.
+ */
+match configuration {
+    
+    for-each (interfaces/apply-macro) {
+        var $device = name;
+        var $desc = data[name == "description"]/value;
+        var $address = data[name == "address"]/value;
+        var $max = data[name == "max"]/value;
+        var $unit = data[name == "unit"]/value;
+        var $real-max = {
+            if (string-length($max) > 0) {
+                expr $max;
+            
+            } else {
+                expr "0";
+            }
+        }
+        var $real-unit = {
+            if (string-length($unit) > 0) {
+                expr $unit;
+            
+            } else if (contains($device, ".")) {
+                expr substring-after($device, ".");
+            
+            } else {
+                expr "0";
+            }
+        }
+        var $real-device = {
+            if (contains($device, ".")) {
+                expr substring-before($device, ".");
+            
+            } else {
+                expr $device;
+            }
+        }
+        <transient-change> {
+            <interfaces> {
+                <interface> {
+                    <name> $real-device;
+                    call emit-interface($desc, $address, $unit = $real-unit, $max = $real-max);
+                }
+                <apply-macro delete = "delete"> {
+                    <name> $device;
+                }
+            }
+        }
+    }
+}
+
+template emit-interface ($desc, $max, $unit, $address) {
+    <unit> {
+        <name> $unit;
+        <vci> $unit;
+        if ($desc) {
+            <description> $desc;
+        }
+        <family> {
+            <inet> {
+                <address> $address;
+            }
+        }
+    }
+    if ($max > $unit) {
+        call emit-interface($desc, $unit = $unit + 1, $max) {
+            with $address = {
+                call next-address($address);
+             }
+        }
+    }
+}
+
+template next-address ($address) {
+    var $arg-prefix = substring-after($address,"/");
+    var $arg-addr = substring-before($address,"/");
+    var $addr = {
+        if (string-length($arg-addr) > 0) {
+            expr $arg-addr;
+        
+        } else {
+            expr $address;
+        }
+    }
+    var $prefix = {
+        if (string-length($arg-prefix) > 0) {
+            expr $arg-prefix;
+        
+        } else {
+            expr "32";
+        }
+    }
+    var $a1 = substring-before($addr, ".");
+    var $a234 = substring-after($addr, ".");
+    var $a2 = substring-before($a234, ".");
+    var $a34 = substring-after($a234, ".");
+    var $a3 = substring-before($a34, ".");
+    var $a4 = substring-after($a34, ".");
+    var $r3 = {
+        if ($a4 < 255) {
+            expr $a3;
+        
+        } else {
+            expr $a3 + 1;
+        }
+    }
+    var $r4 = {
+        if ($a4 < 255) {
+            expr $a4 + 1;
+        
+        } else {
+            expr 0;
+        }
+    }
+    
+    expr $a1;
+    expr ".";
+    expr $a2;
+    expr ".";
+    expr $r3;
+    expr ".";
+    expr $r4;
+    expr "/";
+    expr $prefix;
+}
+

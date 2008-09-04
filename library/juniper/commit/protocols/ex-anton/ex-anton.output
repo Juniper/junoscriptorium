@@ -1,0 +1,39 @@
+[edit]
+phil@dent# show | display commit-scripts 
+## Last changed: 2007-10-09 15:42:23 EDT
+system {
+    scripts {
+        commit {
+            allow-transients;
+            file ex-anton.slax;
+        }
+    }
+    ## Warning: missing mandatory statement(s): 'root-authentication'
+}
+protocols {
+    mpls {
+        apply-macro blue-type-lsp {
+            10.1.1.1;
+            10.2.2.2;
+            10.3.3.3;
+            10.4.4.4;
+            color blue;
+        }
+        label-switched-path blue-lsp-10.1.1.1 {
+            to 10.1.1.1;
+            admin-group include-any blue;
+        }
+        label-switched-path blue-lsp-10.2.2.2 {
+            to 10.2.2.2;
+            admin-group include-any blue;
+        }
+        label-switched-path blue-lsp-10.3.3.3 {
+            to 10.3.3.3;
+            admin-group include-any blue;
+        }
+        label-switched-path blue-lsp-10.4.4.4 {
+            to 10.4.4.4;
+            admin-group include-any blue;
+        }
+    }
+}

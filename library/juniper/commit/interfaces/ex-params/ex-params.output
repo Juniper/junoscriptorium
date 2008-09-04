@@ -1,0 +1,54 @@
+system {
+    scripts {
+        commit {
+            allow-transients;
+            file ex-params.xsl;
+        }
+    }
+    ## Warning: missing mandatory statement(s): 'root-authentication'
+}
+interfaces {
+    so-1/2/3 {
+        apply-groups interface-details; ## 'interface-details' is not defined
+        apply-macro params {
+            clocking internal;
+            description "Link to Hoverville";
+            encapsulation ppp;
+            inet-address 10.1.2.3/28;
+            isis-level-1 enable;
+            isis-level-1-metric 50;
+            isis-level-2-metric 85;
+        }
+        description "Link to Hoverville";
+        encapsulation ppp;
+        unit 0 {
+            family inet {
+                address 10.1.2.3/28;
+            }
+        }
+    }
+}
+protocols {
+    rsvp {
+        interface so-1/2/3.0;
+    }
+    isis {
+        interface so-1/2/3.0 {
+            level 1 {
+                enable;
+                metric 50;
+            }
+            level 2 metric 85;
+        }
+    }
+    ldp {
+        interface so-1/2/3.0;
+    }
+}
+class-of-service {
+    interfaces {
+        so-1/2/3 {
+            apply-groups cos-details; ## 'cos-details' is not defined
+        }
+    }
+}

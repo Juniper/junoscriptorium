@@ -1,0 +1,9 @@
+re0:
+[edit interfaces interface so-1/2/3 unit 0]
+  warning: Adding 'family mpls' to iso-enabled interface
+[edit interfaces interface so-1/2/3 unit 0]
+  warning: Adding iso-enabled interface so-1/2/3.0 to [protocols mpls]
+[edit interfaces interface so-1/3/2 unit 0]
+  warning: Adding 'family mpls' to iso-enabled interface
+[edit interfaces interface so-1/3/2 unit 0]
+  warning: Adding iso-enabled interface so-1/3/2.0 to [protocols mpls]

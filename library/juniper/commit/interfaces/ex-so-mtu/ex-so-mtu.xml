@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<script version="0.1">
+  <title>ex-so-mtu.slax</title>
+  <alternate>ex-so-mtu.xsl</alternate>
+  <author>phil</author>
+  <synopsis>
+    Check the mtu of sonet interfaces
+  </synopsis>
+  <keyword>sonet</keyword>
+  <keyword>test</keyword>
+
+  <description>
+    Tests the mtu of sonet interfaces, and reports when the mtu
+    is less then $max-mtu
+  </description>
+
+  <example>
+    <config>ex-so-mtu.conf</config>
+    <errors>ex-so-mtu.output</errors>
+  </example>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" type="text/javascript"/>
+</script>

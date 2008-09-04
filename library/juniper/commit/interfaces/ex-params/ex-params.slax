@@ -1,0 +1,120 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-params.slax,v 1.1 2007/10/17 18:37:03 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+- This example uses an apply-macro to turn simplified interface
+- configuration into a diverse set of configuration statements.
+-
+- Using configuration groups (such as 'interface-details' and
+- 'cos-details' in this example) with commit scripts can keep the
+- details of any configuration expansions in the configuration
+- database, where they can be more easily changed.
+ */
+match configuration {
+    var $top = .;
+    
+    for-each (interfaces/interface/apply-macro[name == "params"]) {
+        var $description = data[name == "description"]/value;
+        var $inet-address = data[name == "inet-address"]/value;
+        var $encapsulation = data[name == "encapsulation"]/value;
+        var $clocking = data[name == "clocking"]/value;
+        var $isis-level-1 = data[name == "isis-level-1"]/value;
+        var $isis-level-1-metric = data[name == "isis-level-1-metric"]/value;
+        var $isis-level-2 = data[name == "isis-level-2"]/value;
+        var $isis-level-2-metric = data[name == "isis-level-2-metric"]/value;
+        var $ifname = ../name _ ".0";
+        <transient-change> {
+            <interfaces> {
+                <interface> {
+                    <name> ../name;
+                    <apply-groups> {
+                        <name> "interface-details";
+                    }
+                    if ($description) {
+                        <description> $description;
+                    }
+                    <encapsulation> {
+                        if (string-length($encapsulation) > 0) {
+                            expr $encapsulation;
+                        
+                        } else {
+                            expr "cisco-hdlc";
+                        }
+                    }
+                    <unit> {
+                        <name> "0";
+                        if (string-length($inet-address) > 0) {
+                            <family> {
+                                <inet> {
+                                    <address> $inet-address;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            <protocols> {
+                <rsvp> {
+                    <interface> {
+                        <name> $ifname;
+                    }
+                }
+                <isis> {
+                    <interface> {
+                        <name> $ifname;
+                        if ($isis-level-1 || $isis-level-1-metric) {
+                            <level> {
+                                <name> "1";
+                                if ($isis-level-1) {
+                                    <xsl:element name = $isis-level-1>;
+                                }
+                                if ($isis-level-1-metric) {
+                                    <metric> $isis-level-1-metric;
+                                }
+                            }
+                        }
+                        if ($isis-level-2 || $isis-level-2-metric) {
+                            <level> {
+                                <name> "2";
+                                if ($isis-level-2) {
+                                    <xsl:element name = $isis-level-2>;
+                                }
+                                if ($isis-level-2-metric) {
+                                    <metric> $isis-level-2-metric;
+                                }
+                            }
+                        }
+                    }
+                }
+                <ldp> {
+                    <interface> {
+                        <name> $ifname;
+                    }
+                }
+            }
+            <class-of-service> {
+                <interfaces> {
+                    <name> ../name;
+                    <apply-groups> {
+                        <name> "cos-details";
+                    }
+                }
+            }
+        }
+    }
+}
+

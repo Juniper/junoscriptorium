@@ -1,0 +1,8 @@
+[edit firewall filter test1]
+  warning: filter is missing bare 'then accept' rule
+[edit firewall filter test2]
+  warning: filter is missing bare 'then accept' rule
+[edit]
+  'system'
+    Missing mandatory statement: 'root-authentication'
+error: configuration check-out failed: (missing statements)

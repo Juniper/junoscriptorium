@@ -1,0 +1,26 @@
+system {
+    scripts {
+        commit {
+            file ex-ifclass.xsl;
+        }
+    }
+    ## Warning: missing mandatory statement(s): 'root-authentication'
+}
+interfaces {
+    so-1/2/3 {
+        unit 0 {
+            apply-macro ifclass {
+                area 10.4.0.0;
+                igp ospf;
+                role cpe;
+            }
+        }
+    }
+}
+protocols {
+    ospf {
+        area 10.4.0.0 {
+            interface so-1/2/3.0;
+        }
+    }
+}

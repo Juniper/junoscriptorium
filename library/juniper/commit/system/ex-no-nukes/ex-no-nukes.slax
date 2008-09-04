@@ -1,0 +1,60 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-no-nukes.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+param $user;
+
+/*
+- This example detects missing configuration statement and reports them.
+ */
+match configuration {
+    call error-if-missing($must = interfaces/interface[name == "fxp0"]/unit[name == "0"]/family/inet/address, $statement = "interfaces fxp0 unit 0 family inet address");
+    call error-if-present($must = interfaces/interface[name == "fxp0"]/disable | interfaces/interface[name == "fxp0"]/unit[name == "0"]/disable) {
+        with $message = {
+            expr $user;
+            expr ", you're fired.  Again.";
+         }
+    }
+    call error-if-missing($must = protocols/bgp, $statement = "protocols bgp");
+}
+
+template error-if-missing ($must, $statement = "unknown", $message = "missing mandatory configuration statement") {
+    
+    if (not($must)) {
+        <xnm:error> {
+            <edit-path> {
+                copy-of $statement;
+            }
+            <message> {
+                copy-of $message;
+            }
+        }
+    }
+}
+
+template error-if-present ($must = 1, $message = "invalid configuration statement") {
+    /* give error if param missing */
+    
+    for-each ($must) {
+        <xnm:error> {
+            call jcs:edit-path();
+            call jcs:statement();
+            <message> {
+                copy-of $message;
+            }
+        }
+    }
+}
+

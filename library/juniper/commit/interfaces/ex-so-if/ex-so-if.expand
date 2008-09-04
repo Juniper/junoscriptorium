@@ -1,0 +1,6 @@
+XXX Fix me XXX
+
+[edit]
+  'system'
+    Missing mandatory statement: 'root-authentication'
+error: configuration check-out failed: (missing statements)

@@ -1,0 +1,38 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-dual-re.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+- This example ensures that certain statements are inherited from
+- the 're0' or 're1' configuration groups.  This allows a single
+- configuration to support both REs in a dual RE system.
+ */
+match configuration {
+    
+    for-each (system/host-name | interfaces/interface[name == "fxp0"]) {
+        if (not(@junos:group) || not(starts-with(@junos:group, "re"))) {
+            <xnm:warning> {
+                call jcs:edit-path($dot = ..);
+                call jcs:statement();
+                <message> {
+                    expr "statement should not be in foreground";
+                    expr " configuration on dual RE system";
+                }
+            }
+        }
+    }
+}
+

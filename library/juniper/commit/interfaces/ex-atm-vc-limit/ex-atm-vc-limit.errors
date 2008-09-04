@@ -1,0 +1,6 @@
+re0:
+[edit interfaces]
+  'at-1/2/3'
+    ATM VC limit exceeded; 286 are configured but only 200 are allowed
+error: 1 error reported by commit scripts
+error: commit script failure

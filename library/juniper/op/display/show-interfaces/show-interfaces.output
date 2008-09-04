@@ -1,0 +1,35 @@
+phil@dent> op show-interfaces?  
+Possible completions:
+  <script>             Name of script to run
+  show-interfaces      show interfaces terse w/ descriptions
+phil@dent> op show-interfaces ?  
+Possible completions:
+  <[Enter]>            Execute this command
+  <name>               Argument name
+  detail               Display detailed output
+  interface            Name of interface to display
+  protocol             Protocol to display (inet, inet6)
+  |                    Pipe through a command
+phil@dent> op show-interfaces protocol inet 
+Interface               Admin Link Proto    Local                 Remote
+fe-0/0/0.0              RLab Mgmt interface
+                                   inet     10.0.0.7/24     
+fe-0/0/1.0              Hub link to SJC (10.5.10.2)
+                                   inet     10.5.10.1/24    
+fe-0/0/2.0              Hub link to LAX (10.5.13.2)
+                                   inet     10.5.13.1/24    
+fe-0/0/3.0                         inet     10.5.1.2/24     
+fe-1/3/0.0              Spoke link to IAD (10.5.14.2)
+                                   inet     10.5.14.1/24    
+fe-1/3/1.0              Spoke link to AUS (10.5.12.2)
+                                   inet     10.5.12.1/24    
+fe-1/3/2.0              Spoke link to SJC (10.5.11.2)
+                                   inet     10.5.11.1/24    
+fxp0.0                             inet     152.14.12.56/28 
+fxp1.0                             inet     10.0.0.4/8      
+lo0.0                              inet     10.254.254.7        --> 0/0
+                                            127.0.0.1           --> 0/0
+lo0.16384                          inet     127.0.0.1           --> 0/0
+lo0.16385                          inet    
+
+phil@dent> 

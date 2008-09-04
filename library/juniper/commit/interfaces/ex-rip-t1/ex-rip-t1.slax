@@ -1,0 +1,44 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-rip-t1.slax,v 1.1 2007/10/17 18:37:03 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+- This example adds every t1 interface configured under [interfaces]
+- to [protocols rip group test].
+ */
+match configuration {
+    var $all-t1 = interfaces/interface[starts-with(name, "t1-")];
+    
+    if ($all-t1) {
+        <change> {
+            <protocols> {
+                <rip> {
+                    <group> {
+                        <name> "test";
+                        
+                        for-each ($all-t1) {
+                            var $ifname = name _ ".0";
+                            <neighbor> {
+                                <name> $ifname;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

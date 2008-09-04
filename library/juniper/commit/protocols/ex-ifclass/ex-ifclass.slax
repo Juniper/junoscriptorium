@@ -1,0 +1,60 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ex-ifclass.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+- This example expands an apply-macro named 'ifclass' to
+- configure an igp on the interface.
+ */
+match configuration {
+    
+    for-each (interfaces/interface/unit/apply-macro[name == "ifclass"]) {
+        var $role = data[name == "role"]/value;
+        var $igp = data[name == "igp"]/value;
+        var $ifname = {
+            expr ../../name;
+            expr ".";
+            expr ../name;
+        }
+        
+        if ($role == "cpe") {
+            <change> {
+                if ($igp == "isis") {
+                    <protocols> {
+                        <isis> {
+                            <interface> {
+                                <name> $ifname;
+                            }
+                        }
+                    }
+                
+                } else if ($igp == "ospf") {
+                    <protocols> {
+                        <ospf> {
+                            <area> {
+                                <name> data[name == "area"]/value;
+                                <interface> {
+                                    <name> $ifname;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

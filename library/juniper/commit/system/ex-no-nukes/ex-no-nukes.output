@@ -1,0 +1,7 @@
+[edit interfaces interface fxp0 disable]
+  'disable;'
+    phil, you're fired.  Again.
+protocols bgp
+  missing mandatory configuration statement
+error: 2 errors reported by commit scripts
+error: commit script failure
