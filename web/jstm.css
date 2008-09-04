@@ -68,7 +68,7 @@ div.header a:focus:hover {
 
 script div.header logo {
   display: table-cell;
-  width: 40p%;
+  width: 40%;
   color: white;
   background-color: #1f499b;
   padding: 10px;
@@ -201,7 +201,7 @@ div.file-header {
 div.file-tab {
   padding: 10px;
   display: inline;
-  color: blank;
+  color: black;
   background-color: #e5ecf9;
 }
 
