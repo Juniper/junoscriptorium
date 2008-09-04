@@ -5,7 +5,6 @@ top {
 }
 
 top div.top {
-  x-border: 1px solid black;
   margin: 3em;
   padding: 20px;
   background-color: #c3d9ff;
@@ -44,7 +43,6 @@ script {
 div.header {
   padding: 20px;
   background-color: #c3d9ff;
-  x-border: thin black solid;
   color: #0000cc;
   white-space: nowrap;
   font-size: 100%;
@@ -138,8 +136,6 @@ div.debug-line {
 }
 
 div.tab-header {
-  x-border: thin black solid;
-  x-border-width: 1px 1px 0px 1px;
   padding: 13px 4px 9px 4px;
   color: #0000cc;
   background-color: #c3d9ff;
@@ -151,8 +147,6 @@ div.tab-header {
 div.tab {
   padding: 10px;
   display: inline;
-  x-border: thin black solid;
-  x-border-width: 1px 1px 0px 1px;
   background-color: #c3d9ff;
   color: black;
 }
@@ -162,8 +156,6 @@ div.tab.current {
 }
 
 div.tab-container {
-  x-border: thin black solid;
-  x-border-width: 0px 1px 1px 1px;
   padding: 0px 4px 6px 4px;
   background-color: #c3d9ff;
   color: #0000cc;
@@ -175,8 +167,6 @@ div.tab-body {
   color: black;
   padding: 20px;
   font-size: 100%;
-  x-border: thin black solid;
-  x-border-width: 0px 1px 1px 1px;
 }
 
 div.tab-contents {
@@ -186,10 +176,6 @@ div.tab-contents {
 
 div.tab-contents {
   border: none;
-}
-
-div.tab-contents example {
-  x-border: thin black solid;
 }
 
 div.tab-contents div.title {
@@ -206,8 +192,6 @@ div.load-file {
 }
 
 div.file-header {
-  x-border: none;
-  x-border-width: 1px 1px 0px 1px;
   padding: 10px 3px 7px 0px;
   white-space: nowrap;
   font-size: 100%;
@@ -217,15 +201,11 @@ div.file-header {
 div.file-tab {
   padding: 10px;
   display: inline;
-  x-border: thin black solid;
-  x-border-width: 1px 1px 0px 1px;
   color: blank;
   background-color: #e5ecf9;
 }
 
 div.file-contents {
-  x-border: thin black solid;
-  x-border-width: 0px 1px 1px 1px;
   display: block;
   color: white;
   background-color: #e5ecf9;
