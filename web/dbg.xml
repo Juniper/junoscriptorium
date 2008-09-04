@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/css" href="jstm.css"?>
+<top>
+  <div xmlns="http://www.w3.org/1999/xhtml" id="debug-log"
+       class="debug-container">
+    <div class="debug-log">
+      <div class="debug-line">beginning debug output</div>
+    </div>
+  </div>
+</top>

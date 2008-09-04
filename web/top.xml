@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/css" href="jstm.css"?>
+<top>
+  <div xmlns="http://www.w3.org/1999/xhtml" 
+       class="debug-container">
+    <textarea id="debug-log" class="debug-log">debug</textarea>
+  </div>
+
+  <div id="top" class="top directory"
+         xmlns="http://www.w3.org/1999/xhtml">
+    <div class="title">library</div>
+    <div id="help-top" class="help"/>
+    <div id="contents-top" class="contents"/>
+  </div>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="dbg.js"
+                type="text/javascript"/>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="load.js"
+                type="text/javascript"/>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="top.js"
+                type="text/javascript"/>
+</top>
