@@ -12,7 +12,8 @@
     members of BGP groups with "apply-macro ttl-security" turned
     on are listed in the "ttl-security" filter and are only allowed
     if the TTL on incoming packets is 254, meaning they are exactly
-    one hop away.
+    one hop away.  This script is based on:
+    http://juniper.cluepon.net/index.php/ER_BGP_TTL_Security_support_enhancements
   </description>
   <implementation>
     Three parts to this script.  First we set the TTL to 255.  Then
