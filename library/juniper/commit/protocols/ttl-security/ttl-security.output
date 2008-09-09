@@ -1,0 +1,56 @@
+system {
+    scripts {
+        commit {
+            allow-transients;
+            file ttl-security.slax;
+        }
+    }
+}
+interfaces {
+    lo0 {
+        unit 0 {
+            family inet {
+                filter {
+                    input ttl-security;
+                }
+            }
+        }
+    }
+}
+protocols {
+    bgp {
+        group test {
+            apply-macro ttl-security;
+            multihop {
+                ttl 255;
+            }
+            neighbor 10.1.2.3;
+            neighbor 10.3.4.5;
+            neighbor 10.5.6.7;
+        }
+    }
+}
+firewall {
+    filter ttl-security {
+        term gtsm {
+            from {
+                source-address {
+                    10.1.2.3/32;
+                    10.3.4.5/32;
+                    10.5.6.7/32;
+                }
+                protocol tcp;
+                ttl-except 254;
+                port 179;
+            }
+            then {
+                discard;
+            }
+        }
+        term else {
+            then {
+                accept;
+            }
+        }
+    }
+}

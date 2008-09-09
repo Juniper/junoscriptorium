@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<script version="0.1">
+  <title>ex-anton.slax</title>
+  <author>phil</author>
+  <synopsis>Easy mechanism to turn on TTL-based security (GTSM)</synopsis>
+  <keyword>GTSM</keyword>
+  <keyword>BGP</keyword>
+  <keyword>TTL</keyword>
+
+  <description>
+    We need to make an lo0 filter based on our BGP config.  Any
+    members of BGP groups with "apply-macro ttl-security" turned
+    on are listed in the "ttl-security" filter and are only allowed
+    if the TTL on incoming packets is 254, meaning they are exactly
+    one hop away.
+  </description>
+  <implementation>
+    Three parts to this script.  First we set the TTL to 255.  Then
+    we make a filter that discards traffic where TTL != 254.  Then
+    we put that filter in lo0.
+    
+    We don't want to interfere with an existing filter on lo0, so
+    we have to look at the current state.  If there's no filter,
+    we make one and put a "then accept" on it.  If there's a single
+    filter, we turn it into a filter list with our's at the front of
+    the list.  If there's already a filter list, we add our's to the
+    front of the list.
+  </implementation>
+
+  <example>
+    <config>ttl-security.conf</config>
+    <title>An example with no lo0</title>
+    <output>ttl-security.output</output>
+  </example>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" type="text/javascript"/>
+</script>

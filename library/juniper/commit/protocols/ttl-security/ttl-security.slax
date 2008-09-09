@@ -1,0 +1,104 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+ * Implement GTSM for JUNOS
+ *
+ * We need to make an lo0 filter based on our BGP config.  Any
+ * members of BGP groups with "apply-macro ttl-security" turned
+ * on are listed in the "ttl-security" filter and are only allowed
+ * if the TTL on incoming packets is 254, meaning they are exactly
+ * one hop away.
+ *
+ * Three parts to this script.  First we set the TTL to 255.  Then
+ * we make a filter that discards traffic where TTL != 254.  Then
+ * we put that filter in lo0.
+ *
+ * We don't want to interfere with an existing filter on lo0, so
+ * we have to look at the current state.  If there's no filter,
+ * we make one and put a "then accept" on it.  If there's a single
+ * filter, we turn it into a filter list with our's at the front of
+ * the list.  If there's already a filter list, we add our's to the
+ * front of the list.
+ */
+match configuration {
+    var $all = protocols/bgp/group[apply-macro/name == 'ttl-security'];
+    var $tag = "transient-change";
+    var $lo0 = interfaces/interface[name == 'lo0']
+			/unit[name == '0']/family/inet/filter;
+    if ($all) {
+	var $content = <multihop> {
+	    <ttl> 255;
+	}
+
+	for-each ($all) {
+	    call jcs:emit-change($tag, $content);
+	}
+
+	var $last-term = {
+	    if (not($lo0/input) && not($lo0/input-list)) {
+		<term> {
+		    <name> "else";
+		    <then> {
+			<accept>;
+		    }
+		}
+	    }
+	}
+
+	var $filter = {
+	    if ($lo0/input) {
+		<input-list> "ttl-security";
+		<input-list> $lo0/input;
+	    } else if ($lo0/input-list) {
+		var $name = $lo0/input-list[1];
+		<input-list insert="before" name=$name> "ttl-security";
+	    } else {
+		<input> "ttl-security";
+	    }
+	}
+
+	<transient-change> {
+	    <firewall> {
+		<filter> {
+		    <name> "ttl-security";
+		    <term> {
+			<name> "gtsm";
+			<from> {
+			    for-each ($all/neighbor/name) {
+				<source-address> .;
+			    }
+			    <protocol> "tcp";
+			    <port> 179;
+			    <ttl-except> 254;
+			}
+			<then> {
+			    <discard>;
+			}
+		    }
+		    copy-of $last-term;
+		}
+	    }
+	    <interfaces> {
+		<interface> {
+		    <name> "lo0";
+		    <unit> {
+			<name> "0";
+			<family> {
+			    <inet> {
+				<filter> {
+				    copy-of $filter;
+				}
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    }
+}
