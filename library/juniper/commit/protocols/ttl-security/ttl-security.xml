@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>ex-anton.slax</title>
+  <title>ttl-security.slax</title>
   <author>phil</author>
   <synopsis>Easy mechanism to turn on TTL-based security (GTSM)</synopsis>
   <keyword>GTSM</keyword>
