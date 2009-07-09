@@ -246,6 +246,7 @@ sub add_file {
     close XML;
 
     run("cp $name $fullpath/$filename") || die;
+    run("cp $name $fullpath/$basename.xsl") || die if $alternate;
 
     # Handle examples
     for ($i = 0; $i <= $#extitle; $i++) {
@@ -266,7 +267,11 @@ sub add_file {
     }
 
     run("svn add -N $fullpath/*") || die;
-    run("svn propset svn:mime-type text/xml $fullpath/$basename.xml") || die;
+    my $mime = "svn propset svn:mime-type";
+    run("$mime text/xml $fullpath/$basename.xml") || die;
+    run("$mime application/download $fullpath/$basename.$ext") || die;
+    run("$mime application/download $fullpath/$basename.xsl") || die
+	if $alternate;
 
     # Check that the author exists
     $adir = "$home/library/$party/Authors";
