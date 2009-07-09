@@ -54,7 +54,7 @@ sub prompt {
     my $response;
 
     reprompt: {
-	print "\n", $help;
+	print "\n", $help if $help;
 	print "  [", $type_help{$type}, "]" if $type_help{$type};
 
 	return read_mtext() if $type eq "mtext";
@@ -217,6 +217,19 @@ sub add_file {
         "Give a verbose, detailed description of the script and what it does");
 
     $more = "";
+    $kwhelp = "Enter keywords (blank line when done)";
+    for (;;) {
+	$_ = prompt(undef, "${more}keywords", $kwhelp);
+	last unless $_;
+	$keywords .= " " . $_;
+	$more = "more ";
+	$kwhelp = undef;
+    }
+
+    print "\nBasic configuration would be:\n\n", make_example_config(), "\n\n"
+	if $coe eq "commit" || $coe eq "op";
+
+    $more = "";
     for (;;) {
 	$_ = prompt("yes/no", "'yes' or 'no'", "Are there ${more}examples?");
 	last if /^n/;
@@ -325,6 +338,14 @@ sub add_file {
     run("svn diff");
 
     $_ = prompt("yes/no", "'yes' or 'no'",
+                "Edit the xml file?");
+    if (/^y/) {
+	$editor = $ENV{EDITOR} || "vi";
+	run("$editor $fullpath/$basename.xml");
+	run("svn diff");
+    }
+
+    $_ = prompt("yes/no", "'yes' or 'no'",
                 "Commit these changes?");
     if (/^y/) {
         print "committing changes ...\n";
@@ -381,17 +402,22 @@ sub make_xml_contents {
 $desc\
   </description>\n\n";
 
+    if ($keywords) {
+	foreach my $kw (split(/ /, $keywords)) {
+	    $value .= "  <keyword>$kw</keyword>\n" if $kw;
+	}
+    }
 
     for ($i = 0; $i <= $#extitle; $i++) {
-	$value .= "<example>\n";
-	$value .= "  <title>${extitle[$i]}</title>\n";
-	$value .= "  <description>${exdesc[$i]}</description>\n"
+	$value .= "  <example>\n";
+	$value .= "    <title>${extitle[$i]}</title>\n";
+	$value .= "    <description>${exdesc[$i]}</description>\n"
 	    if $exdesc[$i];
 	my $j = $i + 1;
-	$value .= "  <config>example-${j}.conf</config>\n" if $exconf[$i];
-	$value .= "  <input>example-${j}.input</input>\n" if $exin[$i];
-	$value .= "  <output>example-${j}.output</output>\n" if $exout[$i];
-	$value .= "</example>\n";
+	$value .= "    <config>example-${j}.conf</config>\n" if $exconf[$i];
+	$value .= "    <input>example-${j}.input</input>\n" if $exin[$i];
+	$value .= "    <output>example-${j}.output</output>\n" if $exout[$i];
+	$value .= "  </example>\n";
     }
 
     $value .= "\
@@ -418,8 +444,17 @@ sub make_example_config {
 "system {\
     scripts {\
         $coe {\
-            file $filename;\
-        }\
+            file $filename";
+
+    if ($synopsis) {
+	$value .= " {\n                description \"$synopsis\";\n";
+	$value .= "            }\n";
+    } else {
+	$value .= ";\n";
+    }
+
+    $value .=
+"        }\
     }\
 }\n";
 
