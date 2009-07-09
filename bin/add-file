@@ -1,0 +1,323 @@
+#
+# $Id$
+#
+
+%type_help = (
+    "filename" => "An existing filename or \"-\" for stdin (cut-n-paste)",
+    "id" => "A simple token",
+    "coe" => "'commit', 'op', or 'event'",
+    "text" => "Simple ASCII text",
+    "mtext" => "Multi-line text data (end with '.')",
+    "yes/no" => "'yes' or 'no'",
+);
+
+sub read_mtext {
+    my $text;
+
+    print "Enter multiple lines; use '.' for the last line\n";
+    for (;;) {
+	$_ = <STDIN>;
+	last if $_ eq undef;
+	last if /^\.$/;
+
+	if (/^~p$/) {
+	    print $text;
+	} elsif (/^~v/) {
+	    my $editor = $'; #';
+	    chomp $editor;
+	    $editor = $ENV{EDITOR} unless $editor =~ /[a-z]/;
+	    my $tmp = "/tmp/add-file.$$";
+	    open TMP, ">$tmp" || die;
+	    print TMP $text;
+	    close TMP;
+	    run("$editor $tmp");
+	    unless (-z $tmp) {
+		open TMP, "<$tmp" || die;
+		local $/;
+		$text = <TMP>;
+		close TMP;
+	    }
+	} else {
+	    $text .= $_;
+	}
+    }
+    return $text;
+}
+
+sub prompt {
+    my($type, $prompt, $help) = @_;
+    my $response;
+
+    reprompt: {
+	print "\n", $help, "\n";
+	print "    [", $type_help{$type}, "]\n" if $type_help{$type};
+	print "  Enter ", $prompt, ": ";
+
+	return read_mtext() if $type eq "mtext";
+
+	$response = <STDIN>;
+	chomp $response;
+
+	if ($type eq "filename") {
+	    if ($response eq "-") {
+		$tmp = "/tmp/add-file.$$.${tmpno}";
+		$tmpno += 1;
+		my $in = read_mtext;
+		open TMP, ">$tmp" || die;
+		print TMP $in;
+		close TMP;
+		$response = $tmp;
+	    } else {
+		if ($response =~ /\[\]\{\}\/\\\*\$\(\)\+/) {
+		    print "error: invalid value: $response\n";
+		    redo reprompt;
+		}
+	    }
+	} elsif ($type eq "id") {
+		if ($response =~ /\[\]\{\}\/\\\*\$\(\)\+/) {
+		    print "error: invalid value: $response\n";
+		    redo reprompt;
+		}
+	} elsif ($type eq "coe") {
+	    if ($response ne "commit" && $response ne "op"
+			&& $response ne "event") {
+		print "error: invalid value: $response\n";
+		print "Please enter 'commit', 'op', or 'event'\n";
+		redo reprompt;
+	    }
+	} elsif ($type eq "text") {
+	} elsif ($type eq "yes/no") {
+	    if ($response ne "yes" && $response ne "no") {
+		print "error: invalid value: $response\n";
+		print "Please enter 'yes' or 'no'\n";
+		redo reprompt;
+	    }
+	} else {
+	    # no clue
+	}
+    }
+
+    return $response;
+}
+
+sub run {
+    print "system: ", join(" ", @_), "\n";
+    return system(@_);
+}
+
+$gsite = "https://junoscriptorium.googlecode.com/svn/trunk/";
+$gcode = "$gsite junoscriptorium";
+
+sub add_file {
+    ($name) = @_;
+    print "Welcome to the add-file utility, where you'll answer a number\n";
+    print "of questions about the script you are adding.\n\n";
+
+    $rc = $ENV{JUNOSCRIPTORIUMRC};
+    $rc = $ENV{HOME} . "/.junoscriptoriumrc" unless -f $rc;
+    do $rc if -f $rc;
+
+    print "Checking for a local svn copy of JUNOScriptorium ...\n";
+    home: {
+	$home = $ENV{JUNOSCRIPTORIUM};
+	$home = $ENV{HOME} . "/work/junoscriptorium" unless -d $home;
+	if (-d $home) {
+	    print "Updating $home ... \n";
+	    run("cd $home; svn up") && die;
+	} else {
+	    print "Checking of JUNOScriptorium into $home ...\n";
+	    run("mkdir -p $home") && die;
+	    $login = prompt("id", "Googlecode Login",
+			    "What is your googlecode login name?");
+
+	    run("cd $home/..; svn checkout $gcode --username $login");
+	}
+	die unless -f "$home/LICENSE";
+    }
+
+    print "\nEnter information about the script being added:\n";
+
+    name: {
+	$name = prompt("filename", "Script name",
+		       "What is the filename of the script?")
+	    unless $name;
+	unless (-f $name) {
+	    print "file not found: '${name}'\n";
+	    redo name;
+	}
+
+	($path, $basename, $ext) = ($name =~ m:(.*)/([^/]+)\.([^\./]+):);
+	($basename, $ext) = ($name =~ m:([^/]+)\.([^\./]+):) unless $basename;
+	unless ($basename) {
+	    print "could not parse filename\n";
+	    redo name;
+	}
+
+	if ($ext eq "slax") {
+	    $alternate = "$path/$basename.xsl";
+	    $alternate .= "t" unless -f $alternate;
+	    if (-f $alternate) {
+		$_ = prompt("yes/no", "'yes' or 'no'",
+			    "Use $alternate as an alternate?");
+		undef $alternate unless /^y/;
+	    } else {
+		undef $alternate;
+	    }
+
+	} elsif ($ext eq "xsl" || $ext eq "xslt") {
+	    $ext = "xsl";
+
+	} else {
+	    print "unknown file type (extension)\n";
+	    redo name;
+	}
+	$filename = $basename . "." . $ext;
+    }
+
+    $author = prompt("id", "Author",
+		     "What is the author's identifier (login)?")
+	unless $author;
+    $party = prompt("id", "Party",
+		    "What is the author's affiliation (company)?")
+	unless $party;
+
+    $coe = prompt("coe", "Type",
+		  "Is this a 'commit', 'op', or 'event' script?");
+
+    $category = prompt("id", "Category",
+		       "What category does this script belong in?");
+
+    unless (-f $rc) {
+	print "Saving data in $rc ...\n";
+	open RC, ">$rc" || die;
+	print RC "\# .junoscriptoriumrc (built by add-file)\n";
+	print RC "\$author = '${author}';\n";
+	print RC "\$party = '${party}';\n";
+	print RC "1;\n";
+	close RC;
+    }
+
+    $synopsis = prompt("text", "Synopsis",
+		       "What does this script do (a one line overview)?");
+    $desc = prompt("mtext", "Description",
+        "Give a verbose, detailed description of the script and what it does");
+
+    $more = "";
+    for (;;) {
+	$_ = prompt("yes/no", "'yes' or 'no'", "Are there ${more}examples?");
+	last if /^n/;
+	$more = "more ";
+
+	$extitle = prompt("text", "Example title",
+		     "What is the name of this example?");
+	push(@extitle, $extitle);
+	$exdesc = prompt("text", "Description",
+		       "What does this example show (a one line overview)?");
+	push(@exdesc, $exdesc);
+	$exconf = prompt("filename", "Configuration file",
+		     "What is the name of the configuration file?");
+	push(@exconf, $exconf);
+	$exin = prompt("filename", "Input file",
+		     "What is the name of the input file?");
+	push(@exin, $exin);
+	$exout = prompt("filename", "Output file",
+		     "What is the name of the output file?");
+	push(@exout, $exout);
+    }
+
+    $relpath = "library/$party/$coe/$category/$basename";
+    $fullpath = "$home/$relpath";
+    run("mkdir -p $fullpath") && die;
+
+    $out = xml_contents();
+    open(XML, ">$fullpath/$basename.xml") || die;
+    print XML $out;
+    close XML;
+
+    run("cp $name $fullpath/$filename") && die;
+
+    # Handle examples
+    for ($i = 0; $i <= $#extitle; $i++) {
+	run("cp ${exconf[$i]} $fullpath/example-${i}.conf") && die
+	    if $exconf[$i];
+	run("cp ${exin[$i]} $fullpath/example-${i}.input") && die
+	    if $exin[$i];
+	run("cp ${exout[$i]} $fullpath/example-${i}.output") && die
+	    if $exout[$i];
+    }
+
+    # SVN add the new files
+    my @rp = split(/\//, $relpath);
+    my $rp = "$home";
+    foreach my $member (@rp) {
+	$rp .= "/" . $member;
+	run("svn add -N $rp") && die unless -d "$rp/.svn";
+    }
+
+    run("svn add -N $fullpath/*") && die;
+
+    # Check that the author exists
+    $afile = "$home/library/$party/Authors/$author.xml";
+    unless (-f $afile) {
+	print "There is no author information for '$author'\n";
+	$_ = prompt("yes/no", "'yes' or 'no'", "Add author information?");
+	if (/^y/) {
+	    run("svn add -N $afile") && die;
+	}
+    }
+
+    run("svn up");
+
+    exit 0;
+}
+
+main: {
+    if ($#ARGV < 0) {
+	add_file;
+    }
+
+    while ($#ARGV >= 0) {
+	add_file(shift @ARGV);
+    }
+}
+
+sub xml_contents {
+    my $value =
+"<?xml version=\"1.0\"?>\
+<script>\
+  <title>$filename</title>";
+
+    $value .= "  <alternate>$basename.xsl</alternate>" if $alternate;
+
+    $value .= "\
+  <author>$author</author>\
+  <synopsis>\
+	$synopsis\
+  </synopsis>\
+  <coe>$coe</coe>\
+  <type>$category</type>\
+\
+  <description>\
+$desc\
+  </description>\n\n";
+
+
+    for ($i = 0; $i <= $#extitle; $i++) {
+	$value .= "<example>\n";
+	$value .= "  <title>${extitle[$i]}</title>\n";
+	$value .= "  <description>${exdesc[$i]}</description>\n"
+	    if $exdesc[$i];
+	$value .= "  <config>example-${i}.conf</config>\n" if $exconf[$i];
+	$value .= "  <input>example-${i}.input</input>\n" if $exin[$i];
+	$value .= "  <output>example-${i}.output</output>\n" if $exout[$i];
+	$value .= "</example>\n";
+    }
+
+    $value .= "\
+  <xhtml:script xmlns:xhtml=\"http://www.w3.org/1999/xhtml\"\
+                src=\"../../../../../web/leaf.js\" \
+	        type=\"text/javascript\"/>\
+</script>";
+
+    return $value;
+}
