@@ -332,7 +332,7 @@ sub add_file {
 
 	print "\n\nGo see your new script at:\n",
 	    "http://junoscriptorium.googlecode.com/svn/trunk/",
-	    $relpath, $basename, ".xml\n\n";
+	    $relpath, ".xml\n\n";
 
 	$_ = prompt("yes/no", "'yes' or 'no'",
 		    "Announce this new script via email?");
