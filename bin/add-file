@@ -130,7 +130,7 @@ sub add_file {
     home: {
 	$home = $ENV{JUNOSCRIPTORIUM};
 	$home = $ENV{HOME} . "/work/junoscriptorium" unless -d $home;
-	if (-d $home) {
+	if (-d "$home/") {
 	    print "Updating $home ... \n";
 	    run("cd $home; svn up") || die;
 	} else {
