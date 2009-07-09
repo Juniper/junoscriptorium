@@ -1,0 +1,111 @@
+user@cli> op run-on-all target "iad ord mia" command "show version"    
+[processing target iad]
+   [connecting]
+   [executing]
+   [closing]
+[processing target ord]
+   [connecting]
+   [executing]
+   [closing]
+[processing target mia]
+   [connecting]
+   [executing]
+   [closing]
+[begin iad]
+Hostname: iad
+Model: m7i
+JUNOS Base OS boot [9.5I20090330_0030_danai-20]
+JUNOS Base OS Software Suite [9.5I20090330_0030_danai-20]
+JUNOS Kernel Software Suite [9.5I20090330_0030_danai-20]
+JUNOS Crypto Software Suite [9.5I20090330_0030_danai-20]
+JUNOS Packet Forwarding Engine Support (M/T Common) [9.5I20090330_0030_danai-20]
+JUNOS Packet Forwarding Engine Support (M7i/M10i) [9.5I20090330_0030_danai-20]
+JUNOS Online Documentation [9.5I20090330_0030_danai-20]
+JUNOS Voice Services Container package [9.5I20090330_0030_danai-20]
+JUNOS Services AACL Container package [9.5I20090330_0030_danai-20]
+JUNOS Services LL-PDF Container package [9.5I20090330_0030_danai-20]
+JUNOS Services Stateful Firewall [9.5I20090330_0030_danai-20]
+JUNOS AppId Services [9.5I20090330_0030_danai-20]
+JUNOS IDP Services [9.5I20090330_0030_danai-20]
+JUNOS Routing Software Suite [9.5I20090330_0030_danai-20]
+[end iad]
+[begin ord]
+Hostname: ord
+Model: m7i
+JUNOS Base OS boot [9.5I20090330_0030_danai-20]
+JUNOS Base OS Software Suite [9.5I20090330_0030_danai-20]
+JUNOS Kernel Software Suite [9.5I20090330_0030_danai-20]
+JUNOS Crypto Software Suite [9.5I20090330_0030_danai-20]
+JUNOS Packet Forwarding Engine Support (M/T Common) [9.5I20090330_0030_danai-20]
+JUNOS Packet Forwarding Engine Support (M7i/M10i) [9.5I20090330_0030_danai-20]
+JUNOS Online Documentation [9.5I20090330_0030_danai-20]
+JUNOS Voice Services Container package [9.5I20090330_0030_danai-20]
+JUNOS Services AACL Container package [9.5I20090330_0030_danai-20]
+JUNOS Services LL-PDF Container package [9.5I20090330_0030_danai-20]
+JUNOS Services Stateful Firewall [9.5I20090330_0030_danai-20]
+JUNOS AppId Services [9.5I20090330_0030_danai-20]
+JUNOS IDP Services [9.5I20090330_0030_danai-20]
+JUNOS Routing Software Suite [9.5I20090330_0030_danai-20]
+[end ord]
+[begin mia]
+Hostname: mia
+Model: m20
+JUNOS Base OS boot [9.5I20090330_0030_danai-20]
+JUNOS Base OS Software Suite [9.5I20090330_0030_danai-20]
+JUNOS Kernel Software Suite [9.5I20090330_0030_danai-20]
+JUNOS Crypto Software Suite [9.5I20090330_0030_danai-20]
+JUNOS Packet Forwarding Engine Support (M/T Common) [9.5I20090330_0030_danai-20]
+JUNOS Packet Forwarding Engine Support (M20/M40) [9.5I20090330_0030_danai-20]
+JUNOS Online Documentation [9.5I20090330_0030_danai-20]
+JUNOS Voice Services Container package [9.5I20090330_0030_danai-20]
+JUNOS Services AACL Container package [9.5I20090330_0030_danai-20]
+JUNOS Services LL-PDF Container package [9.5I20090330_0030_danai-20]
+JUNOS Services Stateful Firewall [9.5I20090330_0030_danai-20]
+JUNOS AppId Services [9.5I20090330_0030_danai-20]
+JUNOS IDP Services [9.5I20090330_0030_danai-20]
+JUNOS Routing Software Suite [9.5I20090330_0030_danai-20]
+[end mia]
+
+user@cli> op run-on-all target "iad ord mia" command "show route 10.5.20.2" 
+[processing target iad]
+   [connecting]
+   [executing]
+   [closing]
+[processing target ord]
+   [connecting]
+   [executing]
+   [closing]
+[processing target mia]
+   [connecting]
+   [executing]
+   [closing]
+[begin iad]
+
+inet.0: 29 destinations, 47 routes (28 active, 0 holddown, 1 hidden)
++ = Active Route, - = Last Active, * = Both
+
+10.5.20.0/24       *[OSPF/10] 2w6d 04:16:26, metric 2
+                    > to 10.5.16.2 via fe-0/0/2.0
+[end iad]
+[begin ord]
+
+inet.0: 29 destinations, 40 routes (28 active, 0 holddown, 1 hidden)
++ = Active Route, - = Last Active, * = Both
+
+10.5.20.0/24       *[BGP/170] 1w4d 21:20:04, MED 2, localpref 100
+                      AS path: 68 I
+                    > to 10.5.19.1 via fe-0/0/0.0
+                    [BGP/170] 1w4d 21:20:08, MED 2, localpref 100
+                      AS path: 68 I
+                    > to 10.5.18.1 via fe-0/0/1.0
+[end ord]
+[begin mia]
+
+inet.0: 25 destinations, 25 routes (24 active, 0 holddown, 1 hidden)
++ = Active Route, - = Last Active, * = Both
+
+10.5.20.2/32       *[Local/0] 10w0d 00:45:49
+                      Local via fe-2/0/0.0
+[end mia]           
+
+user@cli> 

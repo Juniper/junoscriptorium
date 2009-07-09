@@ -1,0 +1,77 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+ns exsl = "http://exslt.org/math";
+
+import "../import/junos.xsl";
+
+/*
+ * This script runs a command on a set of remote hosts.  The
+ * output from all targets is displayed.
+ *
+ * Note that this uses the "jcs:execute()" function, so the
+ * user must set up ssh-agent and keys as needed to allow
+ * unprompted login.
+ */
+
+var $arguments = {
+    <argument> {
+	<name> "target";
+	<description> "Target of this command";
+    }
+    <argument> {
+	<name> "command";
+	<description> "Command to execute";
+    }
+}
+
+param $target;
+param $command;
+param $debug = 0;		/* Debug level */
+
+match / {
+    <op-script-results> {
+	<out> {
+	    if (not($target)) {
+		expr jcs:output("missing argument: target");
+	    } else if (not($command)) {
+		expr jcs:output("missing argument: command");
+	    }
+	    call main;
+	}
+    }
+}
+
+template main
+{
+    var $rpc = {
+	if (contains($command, " ")) {
+	    <command> $command;
+	} else {
+	    <xsl:element name=$command>;
+	}
+    }
+    var $targets = jcs:split(" ", $target);
+
+    for-each ($targets) {
+	var $targ = .;
+
+	expr jcs:output("[processing target ", $targ, "]");
+	expr jcs:output("   [connecting]");
+	var $conn = jcs:open(.);
+	if ($conn) {
+	    expr jcs:output("   [executing]");
+	    var $result = jcs:execute($conn, $rpc);
+
+	    copy-of $result;
+
+	    expr jcs:output("   [closing]");
+	    expr jcs:close($conn);
+	} else {
+	    expr jcs:output("   [connection failed]");
+	}
+    }
+}

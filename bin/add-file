@@ -330,6 +330,19 @@ sub add_file {
 	print "\n\nGo see your new script at:\n",
 	    "http://junoscriptorium.googlecode.com/svn/trunk/",
 	    $relpath, $basename, ".xml\n\n";
+
+	$_ = prompt("yes/no", "'yes' or 'no'",
+		    "Announce this new script via email?");
+	if (/^y/) {
+	    my $out = make_announcement();
+	    my $tmp = "/tmp/add-file.$$";
+	    open TMP, ">$tmp" || die;
+	    print TMP $out;
+	    close TMP;
+	    my $subj = "[junoscriptorium] New script: $fullname";
+	    my $addr = "junoscriptorium\@googlegroups.com";
+	    run("mail -s '$subj' $addr < $tmp");
+	}
     }
 
     exit 0;
@@ -407,5 +420,17 @@ sub make_example_config {
     }\
 }\n";
 
+    return $value;
+}
+
+sub make_announcement {
+    my $value =
+"$author has committed a new file to the junoscriptorium repository.\
+Please take a look, comment, and enjoy!\
+\
+$desc\
+\
+Enjoy,\
+ The JUNOScriptorium Community\n\n";
     return $value;
 }
