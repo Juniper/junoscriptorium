@@ -1,4 +1,4 @@
-#
+#!/usr/bin/perl
 # $Id$
 #
 
@@ -21,7 +21,7 @@ sub read_mtext {
 	last if /^\.$/;
 
 	if (/^~p$/) {
-	    print $text;
+	    print "------\n", $text, "(continue)\n";
 	} elsif (/^~v/) {
 	    my $editor = $'; #';
 	    chomp $editor;
@@ -37,6 +37,7 @@ sub read_mtext {
 		$text = <TMP>;
 		close TMP;
 	    }
+	    print "(continue)\n";
 	} else {
 	    $text .= $_;
 	}
@@ -138,11 +139,12 @@ sub add_file {
     print "\nEnter information about the script being added:\n";
 
     name: {
-	$name = prompt("filename", "Script name",
+	$name = prompt("filename", "Script file name",
 		       "What is the filename of the script?")
 	    unless $name;
 	unless (-f $name) {
 	    print "file not found: '${name}'\n";
+	    undef $name;
 	    redo name;
 	}
 
@@ -150,6 +152,7 @@ sub add_file {
 	($basename, $ext) = ($name =~ m:([^/]+)\.([^\./]+):) unless $basename;
 	unless ($basename) {
 	    print "could not parse filename\n";
+	    undef $name;
 	    redo name;
 	}
 
@@ -255,18 +258,35 @@ sub add_file {
     }
 
     run("svn add -N $fullpath/*") && die;
+    run("svn propset svn:mime-type text/xml $fullpath/$basename.xml") && die;
 
     # Check that the author exists
-    $afile = "$home/library/$party/Authors/$author.xml";
+    $adir = "$home/library/$party/Authors";
+    $afile = "$adir/$author.xml";
     unless (-f $afile) {
 	print "There is no author information for '$author'\n";
 	$_ = prompt("yes/no", "'yes' or 'no'", "Add author information?");
 	if (/^y/) {
+	    $aname = prompt("text", "Author name",
+	                   "What is the author's full name?");
+	    $company = prompt("text", "Author company",
+	                   "Who is the author's employer?");
+	    $email = prompt("text", "Author email",
+	                   "What is the author's email address?");
+	    $location = prompt("text", "Author location",
+                      "What is the author's location (city, state, country)?");
+
+	    run("mkdir -p $adir") && die;
+	    open(AFILE, ">$afile") || die;
+            print AFILE xml_author();
+            close AFILE;
+
+	    run("svn add -N $adir") && die unless -d "$adir/.svn";
 	    run("svn add -N $afile") && die;
 	}
     }
 
-    run("svn up");
+    run("svn diff | grep '^Index'");
 
     exit 0;
 }
@@ -319,5 +339,15 @@ $desc\
 	        type=\"text/javascript\"/>\
 </script>";
 
+    return $value;
+}
+
+sub xml_author {
+    my $value = "<?xml version=\"1.0\"?>\n<author>\n";
+    $value .= "  <full-name>$aname</full-name>\n" if $aname;
+    $value .= "  <company>$company</company>\n" if $company;
+    $value .= "  <email>$email</email>\n" if $email;
+    $value .= "  <location>$location</location>\n" if $location;
+    $value .= "</author>\n";
     return $value;
 }
