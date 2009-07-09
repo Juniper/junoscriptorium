@@ -11,6 +11,7 @@ import "../import/junos.xsl";
  * This script gets "FE" statistics from the PFE and displays
  * the chip counters for packet histogram data in a table.  
  * The chips records transmit and receive sizes for the following buckets:
+ *
  *     0-64    65-127   128-255   256-511  512-1023 1024-1518
  * 
  * This script was developed as a demo for a presentation at the
