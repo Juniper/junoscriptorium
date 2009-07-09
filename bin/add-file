@@ -188,9 +188,12 @@ sub add_file {
     $author = prompt("id", "Author",
 		     "What is the author's identifier (login)?")
 	unless $author;
+    $author = lc $author;
+
     $party = prompt("id", "Party",
 		    "What is the author's affiliation (company)?")
 	unless $party;
+    $party = lc $party;
 
     $coe = prompt("coe", "Type",
 		  "Is this a 'commit', 'op', or 'event' script?");

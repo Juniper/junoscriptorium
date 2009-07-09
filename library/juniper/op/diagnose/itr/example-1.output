@@ -1,0 +1,47 @@
+user@cli> op itr target 10.4.9.1    
+Intelligent Traceroute for target 10.4.9.1
+
+(0) dent is a m7i running 9.5I20090421_0255_phil (S/N A9673)
+    Interfaces:
+      out: fe-0/3/0.0 / 10.5.14.1 -> 10.5.14.2  (BGP route 10.4.9.0/24)
+    Latency (ms):
+      out: 1.639 +/- 1.188 (1.076 4.268 0.958 1.455 1.161 0.920 )
+    [dent: sleeping for 5 seconds to get interface statistics for fe-0/3/0.0 ]
+    Errors (deltas over 5 seconds):
+      out: none
+
+(1) iad is a m7i running 9.5I20090330_0030_danai-20 (S/N 39180)
+    Interfaces:
+      in: fe-0/0/3.0 / 10.5.14.2 -> 10.5.14.1  (Direct route 10.5.14.0/24)
+      out: fe-0/0/2.0 / 10.5.16.1 -> 10.5.16.2  (OSPF route 10.4.9.0/24)
+    Latency (ms):
+      in: 1.341 +/- 0.338 (1.004 1.220 1.753 0.990 1.236 1.847 )
+      out: 1.091 +/- 0.152 (0.977 1.264 1.175 0.963 1.277 0.895 )
+    [iad: sleeping for 5 seconds to get interface statistics for fe-0/0/3.0 fe-0/0/2.0 ]
+    Errors (deltas over 5 seconds):
+      in: none
+      out: none
+
+(2) rdu is a m7i running 9.5I20090330_0030_danai-20 (S/N A9687)
+    Interfaces:
+      in: fe-0/2/0.0 / 10.5.16.2 -> 10.5.16.1  (Direct route 10.5.16.0/24)
+      out: fe-0/2/2.0 / 10.5.20.1 -> 10.5.20.2  (OSPF route 10.4.9.0/24)
+    Latency (ms):
+      in: 0.925 +/- 0.123 (0.952 0.991 0.795 0.990 1.094 0.733 )
+      out: 1.043 +/- 0.125 (1.054 1.143 1.219 0.957 1.057 0.828 )
+    [rdu: sleeping for 5 seconds to get interface statistics for fe-0/2/0.0 fe-0/2/2.0 ]
+    Errors (deltas over 5 seconds):
+      in: none
+      out: none
+
+(3) mia is a m20 running 9.5I20090330_0030_danai-20 (S/N 20388)
+    Interfaces:
+      in: fe-2/0/0.0 / 10.5.20.2 -> 10.5.20.1  (Direct route 10.5.20.0/24)
+      out:  /  ->   (Local route 10.4.9.1/32)
+    Latency (ms):   
+      in: 1.020 +/- 0.061 (1.100 1.088 0.971 0.984 1.043 0.934 )
+    [mia: sleeping for 5 seconds to get interface statistics for fe-2/0/0.0  ]
+    Errors (deltas over 5 seconds):
+      in: none
+
+user@cli> 

@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<script>
+  <title>itr.slax</title>
+  <author>phil.shafer</author>
+  <synopsis>
+	Intelligent Trace Route - trace a path thru the network
+  </synopsis>
+  <coe>op</coe>
+  <type>diagnose</type>
+
+  <description>
+ITR logs into each node along the path and report the incoming and outgoing
+interface information, along with route information.  If the $sleep
+parameter is non-zero, it will sleep for that number of seconds and
+compare the error counts before and after the sleep.
+
+  </description>
+
+<example>
+  <title>Sample session</title>
+  <output>example-1.output</output>
+</example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

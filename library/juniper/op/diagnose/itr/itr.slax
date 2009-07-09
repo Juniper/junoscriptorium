@@ -1,0 +1,792 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+ns exsl = "http://exslt.org/math";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+	<name> "target";
+	<description> "Target of this traceroute (JUNOS box)";
+    }
+}
+
+param $target;
+
+/*
+ * These options are not available for the command line user.
+ */
+param $slave; 			/* In slave mode, we are the remote target */
+param $previous-address;      	/* Remote address of the previous hop */
+param $sleep = 5;	   	/* Time to sleep while gathering errors */
+param $debug = 0;		/* Enable debug output (verbose) */
+param $delta-limit = 10;	/* Change limit to report for error counters */
+param $table = "inet.0";	/* Routing table name */
+param $follow = "route";	/* Follow routing information to source */
+param $name = $hostname;	/* Name of the box running the script */
+param $debug = 0;		/* Debug level */
+
+match / {
+    <op-script-results> {
+	<out> {
+	    call main;
+	}
+    }
+}
+
+template main
+{
+    if ($slave) {
+	/*
+	 * If we are in "slave" mode, some other device is running
+	 * the show.  We only want to report our local values and
+	 * let them do the real work of following the route.
+	 */
+	call slave-mode;
+    } else {
+
+	/*
+	 * We are hop number zero, so show some local information
+	 * about ourselves.
+	 */
+	var $lc = jcs:open();
+
+	var $boxo := { call get-box-info($conn = $lc, $name = $hostname); }
+	var $box = $boxo/node();
+	var $local = $box/next-hop;
+
+	expr jcs:output("Intelligent Traceroute for target ", $target);
+	call handle-box($conn = $lc, $box);
+
+	expr jcs:close($lc);
+
+	if (not($local)) {
+	    expr jcs:output("no route to host: ", $target);
+	} else {
+
+	    if ($follow == "traceroute") {
+		expr jcs:output("running basic traceroute");
+		var $rpc = <traceroute> {
+		    <host> $target;
+		}
+		var $out = jcs:invoke($rpc);
+
+		expr jcs:output("target: ", $out/target-ip);
+		for-each ($out/hop) {
+		    var $hop = following-sibling::hop[1];
+		    var $next-hop = { call best-address($hop); }
+		    call traceroute-test-hop($next-hop,
+					  $previous-address = $local/address);
+		}
+	    } else {
+		call follow($path = $local, $first-mtu = $local/mtu);
+	    }
+	}
+    }
+}
+
+template best-address ($hop)
+{
+    var $first = $hop/probe-result[1];
+    var $target = $first/ip-address;
+    expr $target;
+
+    var $only = {
+	if (count($hop/probe-result) == 1) {
+	    expr " (only)";
+	}
+    }
+    expr jcs:progress("Best address is ", $target, $only);
+}
+
+template follow ($path, $hop-count = 1, $first-mtu)
+{
+    var $peer = $path/remote-address;
+    if ($debug > 10) {
+	expr jcs:output("connecting to ", $peer);
+    }
+
+    var $conn = jcs:open($peer);
+    if ($debug > 10) {
+	expr jcs:output("connected  to ", $peer, " :: ", $conn);
+    }
+
+    if ($conn) {
+	var $info := {
+	    call get-remote-info($conn, $name = $path/remote-address,
+				 $hop-count,
+				 $previous-address = $path/local-address);
+	}
+	var $box = $info/node();
+
+	if ($debug > 100) {
+	    call dump($name = "hop " _ $hop-count, $out = $box);
+	}
+
+	call handle-box($conn, $hop-count, $box, $first-mtu);
+
+	expr jcs:close($conn);
+	if ($debug > 10) {
+	    expr jcs:output("connected  to ", $peer, " has been closed");
+	}
+
+	var $nh = $box/next-hop;
+	if ($nh/remote-address && $nh/routing-protocol != "Local") {
+	    call follow($path = $nh, $first-mtu,
+			$hop-count = $hop-count + 1);
+	}
+
+    } else {
+	expr jcs:output("connection failed for ", $target);
+    }
+}
+
+template handle-box ($conn, $hop-count = 0, $box, $first-mtu)
+{
+    call display-box-info($hop-count, $box);
+
+    if ($box/previous-hop/mtu < $first-mtu
+	|| $box/next-hop/mtu < $first-mtu) {
+	    
+	expr jcs:output("    MTU:");
+	if ($box/previous-hop/mtu < $first-mtu) {
+	    expr jcs:output("      in: MTU is too low (",
+			    $box/previous-hop/mtu, " .vs. ", $first-mtu, ")");
+	}
+	if ($box/next-hop/mtu < $first-mtu) {
+	    expr jcs:output("      out: MTU is too low (",
+			    $box/next-hop/mtu, " .vs. ", $first-mtu, ")");
+	}
+    }
+
+    call traceroute($conn, $box);
+    if ($sleep > 0) {
+	call sleep-test($conn, $box, $sleep);
+    }
+}
+
+template traceroute-test-hop ($next-hop, $previous-address)
+{
+    expr jcs:output("hop ", ttl-value);
+    for-each (probe-result[ip-address]) {
+	expr jcs:output("   #", probe-index, ": ", ip-address);
+    }
+
+    var $first = probe-result[1];
+    var $peer = { call best-address($hop = .); }
+
+    if (count(probe-result) != count(probe-result[ip-address == $peer])) {
+	expr jcs:output("     Inconsistent path; using ", $peer,
+		"  (", count(probe-result[ip-address != $peer]), " other)");
+    }
+
+    expr jcs:output("connecting to ", $peer);
+    var $conn = jcs:open($peer);
+    expr jcs:output("connected  to ", $peer, " :: ", $conn);
+
+    if ($conn) {
+	var $info := {
+	    call get-remote-info($conn, $name = $peer, $previous-address);
+	}
+
+	var $out = jcs:printf("    %s %s(S/N %s) %s [%s] via %s: drop: %s",
+			      $peer, $info/model, $info/serial-number,
+			      $next-hop, $info/routing-protocol,
+			      $info/interface, $info/drops);
+	expr jcs:output($out);
+
+	expr jcs:close($conn);
+
+    } else {
+	expr jcs:output("connection failed for ", $peer);
+    }
+}
+
+/*@@
+ * Try to invoke this op script on the remote side; if it works, great.
+ * Otherwise, do it the slow way.
+ */
+template get-remote-info ($conn, $name, $next-hop,
+			  $previous-address)
+{
+    var $rpc = <op-script> {
+	<script> "itr";
+	<slave> "yes";
+	<target> $target;
+	<name> $name;
+	if ($next-hop) {
+	    <next-hop> $next-hop;
+	}
+	if ($previous-address) {
+	    <previous-address> $previous-address;
+	}
+    }
+    var $out = jcs:execute($conn, $rpc);
+
+    if (name($out) == "op-script-results") {
+	copy-of $out/ *;
+    } else {
+	call get-box-info($conn, $name, $next-hop,
+			  $previous-address);
+    }
+}
+
+template slave-mode
+{
+    var $conn = jcs:open(); /* no args means localhost */
+
+    call get-box-info($conn, $name, $previous-address);
+}
+
+template get-box-info ($conn, $name, $previous-address, $sleep = $sleep)
+{
+    var $swrpc = <get-software-information>;
+    var $swout = jcs:execute($conn, $swrpc);
+    var $host-name = jcs:first-of($swout/host-name, $name);
+
+    var $chrpc = <get-chassis-inventory>;
+    var $chout = jcs:execute($conn, $chrpc);
+
+    /*
+     * Retrieve per-hop information, including model and serial number.
+     */
+    <box-info> {
+	<name> $host-name;
+	<version> {
+	    call get-sw-version($swout);
+	}
+	<model> $swout/product-model;
+	<serial-number> $chout/chassis[1]/serial-number;
+
+	var $data := {
+	    call get-both-hops($conn, $target, $previous-address);
+	}
+
+	copy-of $data;
+    }
+}
+
+/*
+ * We use jroute's version info, since that's the one that's
+ * likely to matter the most.
+ */
+template get-sw-version ($swout)
+{
+    var $jroute = $swout/package-information[name == "jroute"]/comment;
+    var $s1 = substring-after($jroute, "[");
+    var $s2 = substring-before($s1, "]");
+    expr jcs:first-of($s2, $jroute, "unknown");
+}
+
+template sleep-test ($conn, $box, $sleep)
+{
+    var $before := { call get-both-counters($conn, $box); }
+    var $devnames = {
+	for-each ($box/ * /interface) {
+	    expr . _ " ";
+	}
+    }
+    if ($debug > 100) {
+	call dump($name = "sleep-test", $out = $before);
+    }
+
+    expr jcs:output("    [", $box/name, ": sleeping for ",
+		    $sleep, " seconds ",
+		    "to get interface statistics for ",
+		    $devnames, "]");
+    expr jcs:sleep($sleep);
+
+    var $after := { call get-both-counters($conn, $box); }
+
+    if ($box/previous-hop || $box/next-hop) {
+	expr jcs:output("    Errors (deltas over ", $sleep, " seconds):");
+    }
+
+    if ($box/previous-hop) {
+	call display-sleep($conn, $box, $before, $after,
+			   $name = "previous-hop", $tag = "in");
+    }
+    if ($box/next-hop/routing-protocol != "Local") {
+	call display-sleep($conn, $box, $before, $after,
+			   $name = "next-hop", $tag = "out");
+    }
+}
+
+template display-sleep ($conn, $box, $name, $before, $after, $tag)
+{
+    var $bef = $before/node();
+    var $aft = $after/node();
+
+    if ($bef) {
+	var $bd := {
+	    call get-delta($before = $bef, $after = $aft);
+	}
+	if ($debug > 100 ) { call dump($name = "bd", $out = $bd); }
+
+	if ($bd/node()) {
+	    var $errors = {
+		for-each ($bd/node()/node()) {
+		    expr name() _ ": " _ . _ ", ";
+		}
+	    }
+	    expr jcs:output("      ", $tag, ": ",
+			    substring($errors, 1, string-length($errors) - 2));
+	} else {
+	    expr jcs:output("      ", $tag, ": none");
+	}
+    }
+}
+
+template get-both-hops ($conn, $previous-address, $target = $target)
+{
+    if ($previous-address) {
+	<previous-hop> {
+	    call get-one-hop($conn, $hop = $previous-address);
+	}
+    }
+
+    <next-hop> {
+	call get-one-hop($conn, $hop = $target);
+    }
+}
+
+template get-one-hop ($conn, $hop)
+{
+    <hop> $hop;
+
+    var $route-rpc = <get-route-information> {
+	<destination> $hop;
+	<table> $table;
+    }
+    var $route = jcs:execute($conn, $route-rpc);
+
+    if ($debug > 100) {
+	call dump($name = "get-one-hop: " _ $hop, $out = $route);
+    }
+
+    var $rt = $route/route-table/rt/rt-entry[active-tag == "*"];
+    var $nh = $rt/nh[selected-next-hop];
+    var $ifname = {
+	if ($nh/via) {
+	    expr $nh/via;
+	} else if ($nh/nh-local-interface) {
+	    expr $nh/nh-local-interface;
+	}
+    }
+
+    <routing-protocol> $rt/protocol-name;
+
+    <route> $rt/../rt-destination;
+    <remote-address> {
+	if ($nh/to) {
+	    expr $nh/to;
+	} else if ($rt/protocol-name == "Direct") {
+	    expr $hop;
+	}
+    }
+
+    <interface> $ifname;
+
+    var $devname = substring-before($ifname, ".");
+
+    var $if-rpc = <get-interface-information> {
+	<interface-name> $devname;
+	<extensive>;
+    }
+    var $ifo = jcs:execute($conn, $if-rpc);
+
+    var $counters = $ifo/physical-interface/queue-counters;
+    <drops> sum($counters/queue/queue-counters-red-packets);
+
+    if ($ifname) {
+	if ($debug > 20) {
+	    expr jcs:output("Outgoing interface name for ", $hop,
+			    " is ", $ifname);
+	}
+
+	var $irpc = <get-interface-information> {
+	    <interface-name> $ifname;
+	}
+        var $if = jcs:execute($conn, $irpc);
+
+	var $li = $if/logical-interface;
+
+	var $af = $li/address-family[address-family-name == "inet"];
+	var $addr = $af/interface-address[ifa-flags/ifaf-current-primary];
+
+	<mtu> $af/mtu;
+
+	if ($debug > 20) {
+	    expr jcs:output("Outgoing address for ", $ifname,
+			    " is ", $addr/ifa-local);
+	    if ($debug > 100) {
+		call dump($name = "if", $out = $if);
+	    }
+	}
+
+	<local-address> $addr/ifa-local;
+    }
+}
+
+template get-both-counters ($conn, $box)
+{
+    if ($box/previous-hop) {
+	<previous-hop> {
+	    call get-hop-counters($conn,
+				  $interface = $box/previous-hop/interface);
+	}
+    }
+    if ($box/next-hop/routing-protocol != "Local") {
+	<next-hop> {
+	    call get-hop-counters($conn,
+				  $interface = $box/next-hop/interface);
+	}
+    }
+}
+
+template get-hop-counters ($conn, $interface)
+{
+    <interface> $interface;
+
+    var $devname = substring-before($interface, ".");
+
+    var $if-rpc = <get-interface-information> {
+	<interface-name> $devname;
+	<extensive>;
+    }
+    var $if = jcs:execute($conn, $if-rpc);
+
+    copy-of $if/node();
+}
+
+template get-delta ($before, $after)
+{
+    /* Get the deltas for error counts */
+    var $result := { call get-deltas($if = $before, $if2 = $after); }
+
+    if ($debug > 100) {
+	call dump($name = "get-delta", $out = $result);
+    }
+
+    if ($result/node()) {
+	<error-deltas> { copy-of $result; }
+    }
+}
+
+template get-deltas ($if, $if2)
+{
+    var $ife = $if/physical-interface;
+    var $ife2 = $if2/physical-interface;
+
+    call delta($name = "input-errors",
+	       $prev = $ife/input-error-list/input-errors,
+	       $cur = $ife2/input-error-list/input-errors);
+    call delta($name = "input-drops",
+	       $prev = $ife/input-error-list/input-drops,
+	       $cur = $ife2/input-error-list/input-drops);
+    call delta($name = "framing-errors",
+	       $prev = $ife/input-error-list/framing-errors,
+	       $cur = $ife2/input-error-list/framing-errors);
+    call delta($name = "input-runts",
+	       $prev = $ife/input-error-list/input-runts,
+	       $cur = $ife2/input-error-list/input-runts);
+    call delta($name = "input-discards",
+	       $prev = $ife/input-error-list/input-discards,
+	       $cur = $ife2/input-error-list/input-discards);
+    call delta($name = "input-l3-incompletes",
+	       $prev = $ife/input-error-list/input-l3-incompletes,
+	       $cur = $ife2/input-error-list/input-l3-incompletes);
+    call delta($name = "input-l2-channel-errors",
+	       $prev = $ife/input-error-list/input-l2-channel-errors,
+	       $cur = $ife2/input-error-list/input-l2-channel-errors);
+    call delta($name = "input-l2-mismatch-timeouts",
+	       $prev = $ife/input-error-list/input-l2-mismatch-timeouts,
+	       $cur = $ife2/input-error-list/input-l2-mismatch-timeouts);
+    call delta($name = "input-fifo-errors",
+	       $prev = $ife/input-error-list/input-fifo-errors,
+	       $cur = $ife2/input-error-list/input-fifo-errors);
+    call delta($name = "input-resource-errors",
+	       $prev = $ife/input-error-list/input-resource-errors,
+	       $cur = $ife2/input-error-list/input-resource-errors);
+    
+    call delta($name = "carrier-transitions",
+	       $prev = $ife/output-error-list/carrier-transitions,
+	       $cur = $ife2/output-error-list/carrier-transitions);
+    call delta($name = "output-errors",
+	       $prev = $ife/output-error-list/output-errors,
+	       $cur = $ife2/output-error-list/output-errors);
+    call delta($name = "output-collisions",
+	       $prev = $ife/output-error-list/output-collisions,
+	       $cur = $ife2/output-error-list/output-collisions);
+    call delta($name = "output-drops",
+	       $prev = $ife/output-error-list/output-drops,
+	       $cur = $ife2/output-error-list/output-drops);
+    call delta($name = "aged-packets",
+	       $prev = $ife/output-error-list/aged-packets,
+	       $cur = $ife2/output-error-list/aged-packets);
+    call delta($name = "mtu-errors",
+	       $prev = $ife/output-error-list/mtu-errors,
+	       $cur = $ife2/output-error-list/mtu-errors);
+    call delta($name = "hs-link-crc-errors",
+	       $prev = $ife/output-error-list/hs-link-crc-errors,
+	       $cur = $ife2/output-error-list/hs-link-crc-errors);
+    call delta($name = "output-fifo-errors",
+	       $prev = $ife/output-error-list/output-fifo-errors,
+	       $cur = $ife2/output-error-list/output-fifo-errors);
+    call delta($name = "output-resource-errors",
+	       $prev = $ife/output-error-list/output-resource-errors,
+	       $cur = $ife2/output-error-list/output-resource-errors);
+
+    call delta($name = "mac-input-crc-errors",
+	       $prev = $ife/ethernet-mac-statistics/input-crc-errors,
+	       $cur = $ife2/ethernet-mac-statistics/input-crc-errors);
+    call delta($name = "mac-output-crc-errors",
+	       $prev = $ife/ethernet-mac-statistics/output-crc-errors,
+	       $cur = $ife2/ethernet-mac-statistics/output-crc-errors);
+    call delta($name = "mac-input-fifo-errors",
+	       $prev = $ife/ethernet-mac-statistics/input-fifo-errors,
+	       $cur = $ife2/ethernet-mac-statistics/input-fifo-errors);
+    call delta($name = "mac-output-fifo-errors",
+	       $prev = $ife/ethernet-mac-statistics/output-fifo-errors,
+	       $cur = $ife2/ethernet-mac-statistics/output-fifo-errors);
+    call delta($name = "mac-input-code-violations",
+	       $prev = $ife/ethernet-mac-statistics/input-code-violations,
+	       $cur = $ife2/ethernet-mac-statistics/input-code-violations);
+}
+
+/*@@
+ * Short name because of the endless invocations
+ * @name: human-readable name string
+ * @prev: previous value
+ * @cur: current value
+ * @limit: threshold value for reporting
+ */
+template delta ($name, $prev, $cur, $limit = $delta-limit)
+{
+    if ($debug) {
+	<delta> {
+	    <name> $name;
+	    <prev> $prev;
+	    <cur> $cur;
+	    <limit> $limit;
+	}
+    }
+
+    if ($cur - $prev > $limit) {
+	<xsl:element name=$name> {
+	    <xsl:attribute name="info"> {
+		expr $prev _ "/" _ $cur _ "/" _ $limit;
+	    }
+	    expr $cur - $prev;
+	}
+    }
+}
+
+template dump ($name, $out, $indent = "", $style)
+{
+    var $mydent = {
+	if ($name) {
+	    expr $indent _ "  ";
+	} else {
+	    expr $indent;
+	}
+    }
+    if ($name) {
+	expr jcs:output($indent, $name, " = {");
+    }
+    var $oq = {
+	if ($style == "<>") {
+	    expr "<";
+	}
+    }
+    var $cq = {
+	if ($style == "<>") {
+	    expr ">";
+	}
+    }
+
+    if (name($out)) {
+	var $text = $out/text();
+
+	if ($out/ *) {
+	    expr jcs:output($mydent, $oq, name($out), $cq, " {");
+	    for-each ($out/ *) {
+		call dump($out = ., $indent = "  " _ $mydent);
+	    }
+	    expr jcs:output($mydent, "}");
+
+	} else if ($text) {
+	    if (string-length($out) == 1 && starts-with($out, "\n")) {
+	        expr jcs:output($mydent, $oq, name($out), $cq, ";");
+	    } else {
+		expr jcs:output($mydent, $oq, name($out), $cq,
+				" '", $text, "';");
+	    }
+
+	} else if (string-length($out) == 0
+		   || string-length($out) == 1 && starts-with($out, "\n")) {
+	    expr jcs:output($mydent, $oq, name($out), $cq, ";");
+	} else {
+	    expr jcs:output($mydent, $oq, name($out), $cq, " {");
+	    for-each ($out/ *) {
+		call dump($out = ., $indent = "  " _ $mydent);
+	    }
+	    expr jcs:output($mydent, "}");
+	}
+
+    } else if ($out/node()) {
+	for-each ($out/ *) {
+	    call dump($out = ., $indent = $mydent);
+	}
+
+    } else if ($out/text()) {
+	expr jcs:output($mydent, .);
+    }
+
+    if ($name) {
+	expr jcs:output($indent, "}");
+    }
+}
+
+template display-box-info ($box, $hop-count = 0)
+{
+    var $x1 = jcs:printf("\n(%d) %s is a %s running %s (S/N %s)",
+			 $hop-count, $box/name, $box/model,
+			 $box/version, $box/serial-number);
+    expr jcs:output($x1);
+
+    if ($debug > 50) {
+	call dump($name = "box-info " _ $box/name, $out = $box);
+    }
+    
+    expr jcs:output("    Interfaces:");
+    call display-hop($tag = "in",  $hop = $box/previous-hop);
+    if ($box/next-hop) {
+	call display-hop($tag = "out", $hop = $box/next-hop);
+    }
+}
+
+template display-hop ($tag, $hop)
+{
+    if ($hop) {
+	var $x2 = jcs:printf("      %s: %s / %s -> %s  (%s route %s)", $tag,
+			     $hop/interface, $hop/local-address,
+			     $hop/remote-address, $hop/routing-protocol,
+			     $hop/route);
+	expr jcs:output($x2);
+    }
+}
+
+template traceroute ($conn, $box)
+{
+    expr jcs:output("    Latency (ms):");
+
+    if ($box/previous-hop) {
+	call traceroute-hop($conn, $tag = "in",  $hop = $box/previous-hop);
+    }
+    if ($box/next-hop/routing-protocol != "Local") {
+	call traceroute-hop($conn, $tag = "out", $hop = $box/next-hop);
+    }
+}
+
+template traceroute-hop ($conn, $tag, $hop)
+{
+    var $rpc = <traceroute> {
+	<host> $hop/remote-address;
+	<ttl> 1;
+	<no-resolve>;
+	if ($hop/interface) {
+	    <bypass-routing>;
+	    <interface> $hop/interface;
+	}
+    }
+    var $res1 = jcs:execute($conn, $rpc);
+    var $res2 = jcs:execute($conn, $rpc);
+    if ($debug) { call dump($name = "traceroute", $out = $res1);}
+
+    var $output = {
+	for-each ($res1/hop/probe-result | $res2/hop/probe-result) {
+	    if (probe-failure) {
+		expr "* ";
+	    } else {
+		expr jcs:printf("%d.%03d ", floor(rtt div 1000), rtt mod 1000);
+	    }
+	}
+    }
+    var $data = $res1/hop/probe-result[not(probe-failure)]/rtt
+	| $res2/hop/probe-result[not(probe-failure)]/rtt;
+    var $stdtag := { call stddev($data); }
+    var $std = $stdtag/stddev;
+    var $latout = jcs:printf("      %s: %d.%03d +/- %d.%03d (%s)",
+			     $tag,
+			     floor($std/mean div 1000), $std/mean mod 1000,
+			     floor($std/dev div 1000), $std/dev mod 1000,
+			     $output);
+    expr jcs:output($latout);
+}
+
+/*
+ * Calculate the mean and standard deviation; we also return
+ * "quarter" values, to divide the output into sections, suitable
+ * for simple graphing.
+ */
+template stddev ($data)
+{
+    var $mean = floor(sum($data) div count($data));
+
+    var $diffs := {
+	for-each ($data) {
+	    var $delta = $mean - .;
+	    <diff> $delta * $delta;
+	}
+    }
+
+    var $mean-sum = floor(sum($diffs/diff) div count($data));
+    var $dev = floor(exsl:sqrt($mean-sum));
+    var $hdev = floor($dev div 2);
+
+    <stddev> {
+	<mean> $mean;
+	<dev> $dev;
+	<q1> $mean - $dev;
+	<q2> $mean - $hdev;
+	<q3> $mean;
+	<q4> $mean + $hdev;
+	<q5> $mean + dev;
+    }
+}
+
+/*
+ * Turn a set of data into a sparkline
+ * ____....----====|||||TTTTTT
+ */
+template sparkline ($data)
+{
+    var $stddev := { call stddev($data); }
+
+    var $line = {
+	for-each ($data) {
+	    if (. < $stddev/q3) {
+		if (. < $stddev/q1) {
+		    expr "_";
+		} else if (. < $stddev/q2) {
+		    expr ".";
+		} else {
+		    expr "-";
+		}
+	    } else {
+		if (. < $stddev/q4) {
+		    expr "=";
+		} else if (. < $stddev/q5) {
+		    expr "|";
+		} else {
+		    expr "T";
+		}
+	    }
+	}
+    }
+}
