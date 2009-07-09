@@ -351,9 +351,10 @@ sub add_file {
         print "committing changes ...\n";
         run("svn commit -m 'Added new script: $basename'") || die;
 
-	print "\n\nGo see your new script at:\n",
-	    "http://junoscriptorium.googlecode.com/svn/trunk/",
-	    $relpath, ".xml\n\n";
+	$url = "http://junoscriptorium.googlecode.com/svn/trunk/"
+	    . $relpath . ".xml";
+
+	print "\n\nGo see your new script at:\n", $url, "\n\n";
 
 	$_ = prompt("yes/no", "'yes' or 'no'",
 		    "Announce this new script via email?");
@@ -466,9 +467,12 @@ sub make_announcement {
 "$author has committed a new file to the junoscriptorium repository.\
 Please take a look, comment, and enjoy!\
 \
+$url\
+\
 $desc\
 \
 Enjoy,\
- The JUNOScriptorium Community\n\n";
+ The JUNOScriptorium Community (via add-file)\n\n";
+
     return $value;
 }
