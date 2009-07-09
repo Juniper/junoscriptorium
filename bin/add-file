@@ -269,11 +269,12 @@ sub add_file {
 
     # Handle examples
     for ($i = 0; $i <= $#extitle; $i++) {
-	run("cp ${exconf[$i]} $fullpath/example-${i}.conf") || die
+	my $j = $i + 1;
+	run("cp ${exconf[$i]} $fullpath/example-${j}.conf") || die
 	    if $exconf[$i];
-	run("cp ${exin[$i]} $fullpath/example-${i}.input") || die
+	run("cp ${exin[$i]} $fullpath/example-${j}.input") || die
 	    if $exin[$i];
-	run("cp ${exout[$i]} $fullpath/example-${i}.output") || die
+	run("cp ${exout[$i]} $fullpath/example-${j}.output") || die
 	    if $exout[$i];
     }
 
@@ -366,9 +367,10 @@ $desc\
 	$value .= "  <title>${extitle[$i]}</title>\n";
 	$value .= "  <description>${exdesc[$i]}</description>\n"
 	    if $exdesc[$i];
-	$value .= "  <config>example-${i}.conf</config>\n" if $exconf[$i];
-	$value .= "  <input>example-${i}.input</input>\n" if $exin[$i];
-	$value .= "  <output>example-${i}.output</output>\n" if $exout[$i];
+	my $j = $i + 1;
+	$value .= "  <config>example-${j}.conf</config>\n" if $exconf[$i];
+	$value .= "  <input>example-${j}.input</input>\n" if $exin[$i];
+	$value .= "  <output>example-${j}.output</output>\n" if $exout[$i];
 	$value .= "</example>\n";
     }
 

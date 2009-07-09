@@ -1,0 +1,96 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "interface";
+        <description> "FE interface for which to record stats";
+    }
+}
+
+param $interface;
+param $file = "ether-stats.ap";
+param $layout = "ether-stats";
+param $trap;
+
+match / {
+    <op-script-results> {
+	var $fmt = "%-12.12s%2.2s%10s%10s%10s%10s%10s%10s";
+	<output> jcs:printf($fmt, "Interface", "RT", "0-64", "65-127",
+			    "128-255", "256-511", "512-1023", "1024-1518");
+
+	if ($interface) {
+	    call do-stats($interface);
+	} else {
+	    var $rpc = <get-interface-information> {
+		<terse>;
+	    }
+	    var $if = jcs:invoke($rpc);
+
+	    for-each ($if/physical-interface/name[starts-with(., "fe-")]) {
+		call do-stats($interface = .);
+	    }
+	}
+    }
+}
+
+template do-stats($interface) {
+    var $stats-raw = {
+	call get-stats($interface);
+    }
+    var $stats = ext:node-set($stats-raw);
+
+    var $fmt = "%-12.12s%2.2s%10s%10s%10s%10s%10s%10s";
+
+    <output> jcs:printf($fmt, $interface, "rx",
+	    $stats/etherStatsPkts64Octets,
+	    $stats/etherStatsPkts65to127Octets,
+	    $stats/etherStatsPkts128to255Octets,
+	    $stats/etherStatsPkts256to511Octets,
+	    $stats/etherStatsPkts512to1023Octets,
+	    $stats/etherStatsPkts1024to1518Octets);
+
+    <output> jcs:printf($fmt, $interface, "tx",
+	    $stats/etherStatsPkts64Octets_TX,
+	    $stats/etherStatsPkts65to127Octets_TX,
+	    $stats/etherStatsPkts128to255Octets_TX,
+	    $stats/etherStatsPkts256to511Octets_TX,
+	    $stats/etherStatsPkts512to1023Octets_TX,
+	    $stats/etherStatsPkts1024to1518Octets_TX);
+}
+
+template get-stats ($interface) {
+    var $if = jcs:regex("fe-([0-9]+)/([0-9]+)/([0-9]+)", $interface);
+
+    if ($if[1]) {
+	var $fpc = "fpc" _ $if[2];
+	var $pic = $if[3];
+	var $port = $if[4];
+
+	var $rpc = <request-pfe-execute> {
+	    <target> $fpc;
+	    <command> "show fe-pic " _ $pic _ " stats " _ $port;
+	}
+	var $result = jcs:invoke($rpc);
+	var $lines = jcs:break-lines($result);
+
+	for-each ($lines) {
+	    var $pattern = "(etherStatsPkts[to0-9]+Octets[_TX]*) += +([0-9]+)";
+	    var $res = jcs:regex($pattern, .);
+	    if ($res[1]) {
+		<xsl:element name=$res[2]> $res[3];
+	    }
+	}
+
+    } else {
+	<xnm:error> {
+	    <message> "invalid interface name: " _ $interface;
+	}
+    }
+}
