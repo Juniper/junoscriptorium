@@ -3,18 +3,19 @@
 #
 
 %type_help = (
-    "filename" => "An existing filename or \"-\" for stdin (cut-n-paste)",
+    "filename" => "Filename or \"-\" (for stdin/cut-n-paste)",
     "id" => "A simple token",
     "coe" => "'commit', 'op', or 'event'",
     "text" => "Simple ASCII text",
-    "mtext" => "Multi-line text data (end with '.')",
+    #"mtext" => "Multi-line text data (end with '.')",
     "yes/no" => "'yes' or 'no'",
 );
 
 sub read_mtext {
     my $text;
 
-    print "Enter multiple lines; use '.' for the last line\n";
+    print "\nEnter multiple lines; use '.' or '^D' to end; ",
+            "~p and ~v are supported\n";
     for (;;) {
 	$_ = <STDIN>;
 	last if $_ eq undef;
@@ -26,11 +27,14 @@ sub read_mtext {
 	    my $editor = $'; #';
 	    chomp $editor;
 	    $editor = $ENV{EDITOR} unless $editor =~ /[a-z]/;
+
 	    my $tmp = "/tmp/add-file.$$";
 	    open TMP, ">$tmp" || die;
 	    print TMP $text;
 	    close TMP;
+
 	    run("$editor $tmp");
+
 	    unless (-z $tmp) {
 		open TMP, "<$tmp" || die;
 		local $/;
@@ -50,11 +54,11 @@ sub prompt {
     my $response;
 
     reprompt: {
-	print "\n", $help, "\n";
-	print "    [", $type_help{$type}, "]\n" if $type_help{$type};
-	print "  Enter ", $prompt, ": ";
+	print "\n", $help;
+	print "    [", $type_help{$type}, "]" if $type_help{$type};
 
 	return read_mtext() if $type eq "mtext";
+	print "\n  Enter ", $prompt, ": ";
 
 	$response = <STDIN>;
 	chomp $response;
@@ -72,6 +76,10 @@ sub prompt {
 		if ($response =~ /\[\]\{\}\/\\\*\$\(\)\+/) {
 		    print "error: invalid value: $response\n";
 		    redo reprompt;
+		}
+
+		if ($response =~ /^~\//) {
+		    $response =~ s:^~/:${ENV{HOME}}/:;
 		}
 	    }
 	} elsif ($type eq "id") {
@@ -103,7 +111,7 @@ sub prompt {
 
 sub run {
     print "system: ", join(" ", @_), "\n";
-    return system(@_);
+    return !system(@_);
 }
 
 $gsite = "https://junoscriptorium.googlecode.com/svn/trunk/";
@@ -124,10 +132,10 @@ sub add_file {
 	$home = $ENV{HOME} . "/work/junoscriptorium" unless -d $home;
 	if (-d $home) {
 	    print "Updating $home ... \n";
-	    run("cd $home; svn up") && die;
+	    run("cd $home; svn up") || die;
 	} else {
 	    print "Checking of JUNOScriptorium into $home ...\n";
-	    run("mkdir -p $home") && die;
+	    run("mkdir -p $home") || die;
 	    $login = prompt("id", "Googlecode Login",
 			    "What is your googlecode login name?");
 
@@ -139,7 +147,7 @@ sub add_file {
     print "\nEnter information about the script being added:\n";
 
     name: {
-	$name = prompt("filename", "Script file name",
+	$name = prompt("filename", "Script filename",
 		       "What is the filename of the script?")
 	    unless $name;
 	unless (-f $name) {
@@ -230,22 +238,22 @@ sub add_file {
 
     $relpath = "library/$party/$coe/$category/$basename";
     $fullpath = "$home/$relpath";
-    run("mkdir -p $fullpath") && die;
+    run("mkdir -p $fullpath") || die;
 
     $out = xml_contents();
     open(XML, ">$fullpath/$basename.xml") || die;
     print XML $out;
     close XML;
 
-    run("cp $name $fullpath/$filename") && die;
+    run("cp $name $fullpath/$filename") || die;
 
     # Handle examples
     for ($i = 0; $i <= $#extitle; $i++) {
-	run("cp ${exconf[$i]} $fullpath/example-${i}.conf") && die
+	run("cp ${exconf[$i]} $fullpath/example-${i}.conf") || die
 	    if $exconf[$i];
-	run("cp ${exin[$i]} $fullpath/example-${i}.input") && die
+	run("cp ${exin[$i]} $fullpath/example-${i}.input") || die
 	    if $exin[$i];
-	run("cp ${exout[$i]} $fullpath/example-${i}.output") && die
+	run("cp ${exout[$i]} $fullpath/example-${i}.output") || die
 	    if $exout[$i];
     }
 
@@ -254,11 +262,11 @@ sub add_file {
     my $rp = "$home";
     foreach my $member (@rp) {
 	$rp .= "/" . $member;
-	run("svn add -N $rp") && die unless -d "$rp/.svn";
+	run("svn add -N $rp") || die unless -d "$rp/.svn";
     }
 
-    run("svn add -N $fullpath/*") && die;
-    run("svn propset svn:mime-type text/xml $fullpath/$basename.xml") && die;
+    run("svn add -N $fullpath/*") || die;
+    run("svn propset svn:mime-type text/xml $fullpath/$basename.xml") || die;
 
     # Check that the author exists
     $adir = "$home/library/$party/Authors";
@@ -276,17 +284,24 @@ sub add_file {
 	    $location = prompt("text", "Author location",
                       "What is the author's location (city, state, country)?");
 
-	    run("mkdir -p $adir") && die;
+	    run("mkdir -p $adir") || die;
 	    open(AFILE, ">$afile") || die;
             print AFILE xml_author();
             close AFILE;
 
-	    run("svn add -N $adir") && die unless -d "$adir/.svn";
-	    run("svn add -N $afile") && die;
+	    run("svn add -N $adir") || die unless -d "$adir/.svn";
+	    run("svn add -N $afile") || die;
 	}
     }
 
-    run("svn diff | grep '^Index'");
+    run("svn diff");
+
+    $_ = prompt("yes/no", "'yes' or 'no'",
+                "Commit these changes?");
+    if (/^y/) {
+        print "committing changes ...\n";
+        run("svn commit -m 'Added new script: $basename'") || die;
+    }
 
     exit 0;
 }
