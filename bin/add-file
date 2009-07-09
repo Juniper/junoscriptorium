@@ -55,7 +55,7 @@ sub prompt {
 
     reprompt: {
 	print "\n", $help;
-	print "    [", $type_help{$type}, "]" if $type_help{$type};
+	print "  [", $type_help{$type}, "]" if $type_help{$type};
 
 	return read_mtext() if $type eq "mtext";
 	print "\n  Enter ", $prompt, ": ";
@@ -236,11 +236,30 @@ sub add_file {
 	push(@exout, $exout);
     }
 
+    if ($#extitle < 0 && ($coe eq "commit" || $coe eq "op")) {
+	$_ = prompt("yes/no", "'yes' or 'no'",
+		    "Do you want a basic config example?");
+	if (/^y/) {
+	    push(@extitle, "Sample configuration");
+	    push(@exdesc, "Configuration for the script $filename");
+
+	    $exconf = make_example_config();
+
+	    $tmp = "/tmp/add-file.$$.${tmpno}";
+	    $tmpno += 1;
+
+	    open TMP, ">$tmp" || die;
+	    print TMP $exconf;
+	    close TMP;
+	    push(@exconf, $tmp);
+	}
+    }
+
     $relpath = "library/$party/$coe/$category/$basename";
     $fullpath = "$home/$relpath";
     run("mkdir -p $fullpath") || die;
 
-    $out = xml_contents();
+    $out = make_xml_contents();
     open(XML, ">$fullpath/$basename.xml") || die;
     print XML $out;
     close XML;
@@ -291,7 +310,7 @@ sub add_file {
 
 	    run("mkdir -p $adir") || die;
 	    open(AFILE, ">$afile") || die;
-            print AFILE xml_author();
+            print AFILE make_xml_author();
             close AFILE;
 
 	    run("svn add -N $adir") || die unless -d "$adir/.svn";
@@ -321,7 +340,7 @@ main: {
     }
 }
 
-sub xml_contents {
+sub make_xml_contents {
     my $value =
 "<?xml version=\"1.0\"?>\
 <script>\
@@ -357,17 +376,30 @@ $desc\
   <xhtml:script xmlns:xhtml=\"http://www.w3.org/1999/xhtml\"\
                 src=\"../../../../../web/leaf.js\" \
 	        type=\"text/javascript\"/>\
-</script>";
+</script>\n";
 
     return $value;
 }
 
-sub xml_author {
+sub make_xml_author {
     my $value = "<?xml version=\"1.0\"?>\n<author>\n";
     $value .= "  <full-name>$aname</full-name>\n" if $aname;
     $value .= "  <company>$company</company>\n" if $company;
     $value .= "  <email>$email</email>\n" if $email;
     $value .= "  <location>$location</location>\n" if $location;
     $value .= "</author>\n";
+    return $value;
+}
+
+sub make_example_config {
+    my $value =
+"system {\
+    scripts {\
+        $coe {\
+            file $filename;\
+        }\
+    }\
+}\n";
+
     return $value;
 }
