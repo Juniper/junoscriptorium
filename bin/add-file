@@ -289,8 +289,8 @@ sub add_file {
     run("svn add -N $fullpath/*") || die;
     my $mime = "svn propset svn:mime-type";
     run("$mime text/xml $fullpath/$basename.xml") || die;
-    run("$mime application/download $fullpath/$basename.$ext") || die;
-    run("$mime application/download $fullpath/$basename.xsl") || die
+    run("$mime text/download $fullpath/$basename.$ext") || die;
+    run("$mime text/download $fullpath/$basename.xsl") || die
 	if $alternate;
 
     # Check that the author exists
@@ -326,6 +326,10 @@ sub add_file {
     if (/^y/) {
         print "committing changes ...\n";
         run("svn commit -m 'Added new script: $basename'") || die;
+
+	print "\n\nGo see your new script at:\n",
+	    "http://junoscriptorium.googlecode.com/svn/trunk/",
+	    $relpath, $basename, ".xml\n\n";
     }
 
     exit 0;
