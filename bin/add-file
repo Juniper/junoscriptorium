@@ -185,15 +185,35 @@ sub add_file {
 	$filename = $basename . "." . $ext;
     }
 
-    $author = prompt("id", "Author",
-		     "What is the author's identifier (login)?")
-	unless $author;
-    $author = lc $author;
+    author: {
+	$author = prompt("id", "Author",
+		     "What is the author's identifier (googlecode login)?")
+	    unless $author;
+	$author = lc $author;
+	if ($author =~ /@/) {
+	    print "error: do not use an email address, just a bare id\n";
+	    undef $author;
+	    redo author;
+	}
+	if ($author =~ / \t/) {
+	    print "error: no whitespace in author\n";
+	    undef $author;
+	    redo author;
+	}
+    }
 
-    $party = prompt("id", "Party",
-		    "What is the author's affiliation (company)?")
-	unless $party;
-    $party = lc $party;
+    party: {
+	$party = prompt("id", "Party",
+			"What is the author's affiliation (company name)?")
+	    unless $party;
+	$party = lc $party;
+	if ($party =~ / \t/) {
+	    print "error: no whitespace in affiliation\n";
+	    undef $party;
+	    redo party;
+	}
+	$party = "juniper" if $party =~ /^juniper/;
+    }
 
     $coe = prompt("coe", "Type",
 		  "Is this a 'commit', 'op', or 'event' script?");
@@ -358,15 +378,21 @@ sub add_file {
 
 	$_ = prompt("yes/no", "'yes' or 'no'",
 		    "Announce this new script via email?");
+	my $out = make_announcement();
+	my $subj = "[junoscriptorium] New script: $fullname";
+	my $addr = "junoscriptorium\@googlegroups.com";
+
 	if (/^y/) {
-	    my $out = make_announcement();
 	    my $tmp = "/tmp/add-file.$$";
 	    open TMP, ">$tmp" || die;
 	    print TMP $out;
 	    close TMP;
-	    my $subj = "[junoscriptorium] New script: $fullname";
-	    my $addr = "junoscriptorium\@googlegroups.com";
 	    run("mail -s '$subj' $addr < $tmp");
+	} else {
+	    print "(message not sent)\n------\n";
+	    print "To: $addr\n";
+	    print "Subject: $subj\n\n";
+	    print $out;
 	}
     }
 
