@@ -82,6 +82,12 @@ sub prompt {
 		    $response =~ s:^~/:${ENV{HOME}}/:;
 		}
 	    }
+
+	    if ($response && ! -f $response) {
+		print "error: file not found\n";
+		redo reprompt;
+	    }
+
 	} elsif ($type eq "id") {
 		if ($response =~ /\[\]\{\}\/\\\*\$\(\)\+/) {
 		    print "error: invalid value: $response\n";
@@ -257,6 +263,8 @@ sub add_file {
 
 	$extitle = prompt("text", "Example title",
 		     "What is the name of this example?");
+	$extitle = "Example" unless $extitle;
+
 	push(@extitle, $extitle);
 	$exdesc = prompt("text", "Description",
 		       "What does this example show (a one line overview)?");
