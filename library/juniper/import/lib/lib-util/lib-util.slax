@@ -1,0 +1,168 @@
+/*
+ * $id$
+ *
+ * This file contains a number of utility functions that are not
+ * suffciently common to include in junos.xsl.
+ */
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+ns exsl = "http://exslt.org/math";
+
+/**
+ * Dump an XML hierarchy, using JUNOS-style braces
+ * Output is done using "jcs:output()", so the contents are display
+ * immediately, rather than when the script exits.
+ *
+ * $name (string) Name of item
+ * $out (xml) Contents to be displayed
+ * $indent (string) a leading string displayed on each line
+ * $style (string) style of displaying element names;
+ *            empty (junos) or "<>" (xml)
+ */
+template jcs:dump ($name, $out, $indent = "", $style)
+{
+    var $mydent = {
+	if ($name) {
+	    expr $indent _ "  ";
+	} else {
+	    expr $indent;
+	}
+    }
+    if ($name) {
+	expr jcs:output($indent, $name, " = {");
+    }
+    var $oq = {
+	if ($style == "<>") {
+	    expr "<";
+	}
+    }
+    var $cq = {
+	if ($style == "<>") {
+	    expr ">";
+	}
+    }
+
+    if (name($out)) {
+	var $text = $out/text();
+
+	if ($out/ *) {
+	    expr jcs:output($mydent, $oq, name($out), $cq, " {");
+	    for-each ($out/ *) {
+		call jcs:dump($out = ., $indent = "  " _ $mydent);
+	    }
+	    expr jcs:output($mydent, "}");
+
+	} else if ($text) {
+	    if (string-length($out) == 1 && starts-with($out, "\n")) {
+	        expr jcs:output($mydent, $oq, name($out), $cq, ";");
+	    } else {
+		expr jcs:output($mydent, $oq, name($out), $cq,
+				" '", $text, "';");
+	    }
+
+	} else if (string-length($out) == 0
+		   || string-length($out) == 1 && starts-with($out, "\n")) {
+	    expr jcs:output($mydent, $oq, name($out), $cq, ";");
+	} else {
+	    expr jcs:output($mydent, $oq, name($out), $cq, " {");
+	    for-each ($out/ *) {
+		call jcs:dump($out = ., $indent = "  " _ $mydent);
+	    }
+	    expr jcs:output($mydent, "}");
+	}
+
+    } else if ($out/node()) {
+	for-each ($out/ *) {
+	    call jcs:dump($out = ., $indent = $mydent);
+	}
+
+    } else if ($out/text()) {
+	expr jcs:output($mydent, .);
+    }
+
+    if ($name) {
+	expr jcs:output($indent, "}");
+    }
+}
+
+/**
+ * Calculate the mean and standard deviation; we also return
+ * "quarter" values, to divide the output into sections, suitable
+ * for simple graphing.
+ * $data (node set) data values to be crunched
+ */
+template jcs:stddev ($data)
+{
+    var $mean = floor(sum($data) div count($data));
+
+    var $diffs := {
+	for-each ($data) {
+	    var $delta = $mean - .;
+	    <diff> $delta * $delta;
+	}
+    }
+
+    var $mean-sum = floor(sum($diffs/diff) div count($data));
+    var $dev = floor(exsl:sqrt($mean-sum));
+    var $hdev = floor($dev div 2);
+
+    <stddev> {
+	<mean> $mean;
+	<dev> $dev;
+	<q1> $mean - $dev;
+	<q2> $mean - $hdev;
+	<q3> $mean;
+	<q4> $mean + $hdev;
+	<q5> $mean + dev;
+    }
+}
+
+/**
+ * Turn a set of data into a sparkline, using ascii art.
+ * The $art contains a set of seven characters to be displayed
+ * when the data value is between the following values:
+ *  1: value is less that the mean minus the standard deviation
+ *  2: value is less that the mean minus half the standard deviation
+ *  3: value is less that the mean
+ *  4: value is equal to the mean
+ *  5: value is less than the mean plus half the standard deviation
+ *  6: value is less than the mean plus the standard deviation
+ *  7: value is greater than the mean plus the standard deviation
+ * The default value for this string is ".[<|>]!".
+ *
+ * $data (node set) data values to be displayed
+ * $art (string) values to be displayed for each section
+ */
+template jcs:sparkline ($data, $art = ".[<|>]!")
+{
+    var $stddev := { call stddev($data); }
+    var $q = jcs:regex("(.)(.)(.)(.)(.)(.)(.)", $art);
+
+    var $line = {
+	for-each ($data) {
+	    if (. < $stddev/q3) {
+		if (. < $stddev/q1) {
+		    expr $q[1];
+		} else if (. < $stddev/q2) {
+		    expr $q[2];
+		} else {
+		    expr $q[3];
+		}
+	    } else {
+		if (. == $stddev/q3) {
+		    expr $q[4];
+		} else if (. < $stddev/q4) {
+		    expr $q[5];
+		} else if (. < $stddev/q5) {
+		    expr $q[6];
+		} else {
+		    expr $q[7];
+		}
+	    }
+	}
+    }
+}
