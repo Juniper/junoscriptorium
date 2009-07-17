@@ -95,7 +95,7 @@ sub prompt {
 		}
 	} elsif ($type eq "coe") {
 	    if ($response ne "commit" && $response ne "op"
-			&& $response ne "event") {
+		    && $response ne "event" && $response ne "import") {
 		print "error: invalid value: $response\n";
 		print "Please enter 'commit', 'op', or 'event'\n";
 		redo reprompt;
@@ -223,6 +223,16 @@ sub add_file {
 
     $coe = prompt("coe", "Type",
 		  "Is this a 'commit', 'op', or 'event' script?");
+
+    print
+"\n\nThe category provides a way of grouping related scripts\
+and serves as a directory in the script's path.  The category\
+will vary with the type of script, but some examples are:\
+---type---  --categories-----\
+  commit     interfaces filters system protocols\
+    op       display diagnose remote\
+  event      snmp traffic\
+\nEnter one of the above, or make a new category if needed.\n";
 
     $category = prompt("id", "Category",
 		       "What category does this script belong in?");
