@@ -1,0 +1,316 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+ns exsl = "http://exslt.org/math";
+ns func extension = "http://exslt.org/functions";
+ns dyn extension = "http://exslt.org/dynamic";
+
+import "../import/junos.xsl";
+import "../import/lib-util.slax";
+
+/*
+ * This script maintains common config groups among a set of routers.
+ * Each group to be shared contains a list of targets to which the
+ * contents of the group a copied.  The contents of this group on
+ * remote machines are completely replaced by the incoming data.
+ *
+ * The script detects which addresses are assigned to the local device
+ * and will skip such addresses, so the local device can be listed among
+ * the targets, allowing the config to be updated and shared from any
+ * device on the list.
+ *
+ * The share-data script can be invoked in two ways.  With no
+ * arguments, the script looks for any group containing an
+ * apply-macro named "share-data".  The contents of the macro are
+ * a list of targets to which the shared data should be copied.
+ *
+ * In addition, the share-data script can be invoked with a set of
+ * command line arguments to detail the exact data (by config group
+ * using the "group" parameter) and targets to which that data should
+ * be copied (using the "target" parameter with a space-separated
+ * list of targets).
+ *
+ * The "database" argument can tell the script to use the "candidate"
+ * configuration database, which allows uncommitted data to be shared.
+ * The default behavior is to use the committed configuration.
+ *
+ * "transform":  Each target listed in the "share-data" macro can
+ * contain (as its value (in the name/value pairing)) the name of
+ * a func:function that can be called with the contents of the config
+ * group to be shared, and returns the data to be shipped to that
+ * target.  This allows all manner of transformations to be implemented
+ * inside his framework.
+ */
+
+/*
+ * Future work: It would be great to have a "generation" number that
+ * is monotonically increasing, and can be used to avoid clobbering
+ * data when the config has been changed and not shared.
+ */
+
+var $arguments = {
+    <argument> {
+	<name> "group";
+	<description> "Name of config group to share";
+    }
+    <argument> {
+	<name> "database";
+	<description> "Database for configuration ('candidate' or 'committed')";
+    }
+    <argument> {
+	<name> "target";
+	<description> "Target for transfer (one or space-delimited list)";
+    }
+}
+
+param $group;
+param $database = "candidate";
+param $target;
+param $debug;
+param $macro = "share-data";
+param $transform;
+
+match / {
+    /*
+     * Standard op script fodder; make the top-level element all op
+     * scripts need (op-script-results), and an element to keep
+     * our output together (out).  This script really only makes
+     * <output> data, so this isn't needed, but can still be useful
+     * for dumping data.  Well, okay, I tend to use jcs:dump() for
+     * dumping data, so the script will really not make any interesting
+     * output, but we still follow the JUNOScript rules and emit these
+     * tags to play by the rules.
+     */
+    <op-script-results> {
+	<out> {
+	    call main;
+	}
+    }
+}
+
+/**
+ * main: start by getting the configuration for all groups.  Then
+ * call share to either the one group chosen by command line argument'
+ * or for all groups with the share-data macro.
+ */
+template main {
+    var $rpc = {
+	<get-configuration database=$database> {
+	    <configuration> {
+		<groups> {
+		    if ($group) {
+			<name> $group;
+		    }
+		}
+	    }
+	}
+    }
+    var $config = jcs:invoke($rpc);
+    if ($debug) {
+	call jcs:dump($name = "config", $out = $config);
+    }
+
+    if ($config/xnm:error) {
+	<xsl:message terminate="yes"> {
+	    expr "error: " _ $config/xnm:error/message;
+	}
+    }
+
+    var $rpc2 = <get-configuration database=$database> {
+	<configuration> {
+	    <apply-groups>;
+	}
+    }
+
+    var $apply = jcs:invoke($rpc2);
+    if ($debug) {
+	call jcs:dump($name = "apply", $out = $apply);
+    }
+
+    /*
+     * Check to see if we need to add this group locally
+     */
+
+    if ($group) {
+	call check-apply($apply, $names = $config/groups);
+
+	if ($config/groups/name) {
+	    call share($config = $config/groups, $group);
+	} else {
+	    expr jcs:output("no configuration to transfer");
+	}
+    } else {
+	var $names = $config/groups[apply-macro[name == $macro]
+				    && not(@inactive)];
+	if ($names) {
+	    call check-apply($apply, $names);
+
+	    for-each ($config/groups[apply-macro[name == $macro]]) {
+		call share($config = ., $group = name);
+	    }
+	} else {
+	    expr jcs:output("no share-data configuration groups found");
+	}
+    }
+}
+
+/*
+ * Determine whether the group has been applied locally
+ */
+template check-apply ($apply, $names)
+{
+    var $missing := {
+	for-each ($names/name) {
+	    var $this = .;
+	    if (not(../@inactive) && not($apply/apply-groups[. == $this])) {
+		<missing> $this;
+	    }
+	}
+    }
+
+    if (count($missing/node()) > 0) {
+	expr jcs:output("The following group(s) are not applied locally:");
+	for-each ($missing) {
+	    expr jcs:output("    ", .);
+	}
+	var $prompt = "Apply locally now?";
+	var $response := { call promptyesno($prompt); }
+	if ($response == "yes") {
+	    var $configuration := <configuration> {
+		for-each ($missing) {
+		    <apply-groups> .;
+		}
+	    }
+
+	    if ($debug) {
+		call jcs:dump($name = "new", $out = $configuration);
+	    }
+
+	    var $conn = jcs:open();
+	    if ($conn) {
+
+		var $results := {
+		    call jcs:load-configuration($connection = $conn,
+						$configuration,
+						$action = "merge");
+		}
+
+		if ($results/node()) {
+		    call jcs:dump($name = "results", $out = $results);
+		} else {
+		    expr jcs:output("    successfully committed locally");
+		}
+		expr jcs:close($conn);
+	    }
+	}
+    }
+}
+
+/*
+ * Share the group's config.  Calls transfer() to do the real work.  If
+ * a specific set of targets was given on the command line, use those.
+ * Otherwise use the targets given in the macro, avoiding those which
+ * belong to the current device.
+ *
+ * The logic to decide if the address is our's (local or (direct and
+ * next-hop is lo0.0) was confirmed by rpd-hackers, so hopefully it's
+ * valid for all cases.  If not, please let me know.
+ */
+template share ($config, $group)
+{
+    expr jcs:output("sharing group '", $group, "'");
+
+    if ($debug > 1) {
+	call jcs:dump($name = "config", $out = $config);
+    }
+
+    if ($target) {
+	var $targets = jcs:split(" ", $target);
+	for-each ($targets) {
+	    call transfer($config, $target = ., $transform);
+	}
+
+    } else {
+	var $mac = $config/apply-macro[name == $macro];
+
+	for-each ($mac/data/name) {
+	    var $target = .;
+	    expr jcs:output("  target: ", $target);
+
+	    var $rpc = <get-route-information> {
+		<destination> $target;
+	    }
+
+	    var $res = jcs:invoke($rpc);
+	    var $rt = $res/route-table/rt/rt-entry[current-active];
+	    var $proto = $rt/protocol-name;
+
+	    if ($res/xnm:error) {
+		expr jcs:output("    error: ", $res/xnm:error/message);
+
+	    } else if ($proto == "Local"
+		       || ($proto == "Direct" && $rt/nh/via == "lo0.0")) {
+		expr jcs:output("    skipping local address");
+	    } else {
+		call transfer($config, $target, $transform = ../value);
+	    }
+	}
+    }
+}
+
+/*
+ * Transfer (load replace and commit) the configuration on the
+ * remote target.
+ */
+template transfer ($config, $target, $transform)
+{
+    /*
+     * If there is a transformation defined, we call it, passing in
+     * the config and getting back the post-transform config.
+     */
+    var $trans-config := {
+	if ($transform) {
+	    var $tpath = $transform _ "($config)";
+	    expr jcs:output("    transforming ", $target);
+	    var $new = dyn:evaluate($tpath);
+	    copy-of $new;
+	}
+    }
+
+    expr jcs:output("    connecting to ", $target);
+    var $conn = jcs:open($target);
+    if ($conn) {
+	expr jcs:output("    connected; transfering group ", $config/name);
+
+	var $configuration = <configuration> {
+	    <groups replace="replace"> {
+		if ($transform) {
+		    <name> $config/name;
+		    copy-of $trans-config;
+		} else {
+		    copy-of $config/node();
+		}
+	    }
+	    <apply-groups> $config/name;
+	}
+
+	var $results := {
+	    call jcs:load-configuration($connection = $conn, $configuration,
+					$action = "replace");
+	}
+
+	if ($results/node()) {
+	    call jcs:dump($name = "results", $out = $results);
+	} else {
+	    expr jcs:output("    successfully committed on ", $target);
+	}
+
+	expr jcs:close($conn);
+    } else {
+	expr jcs:output("    failed to connect");
+    }
+}
+

@@ -1,0 +1,23 @@
+phil-fake {
+    apply-macro share-data {
+        10.5.18.2;
+        10.5.22.2;
+        10.5.14.2;
+        10.5.14.1;
+    }
+    system {
+        location postal-code 10101;
+    }
+}
+
+---
+
+phil@dent> op share-data group phil-fake target 10.5.18.2
+The following group(s) are not applied locally:
+    phil-fake
+Apply locally now? [yes/no]: yes
+    successfully committed locally
+sharing group 'phil-fake'
+    connecting to 10.5.18.2
+    connected; transfering group phil-fake
+    successfully committed on 10.5.18.2
