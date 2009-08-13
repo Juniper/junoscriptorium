@@ -166,3 +166,15 @@ template jcs:sparkline ($data, $art = ".[<|>]!")
 	}
     }
 }
+
+template promptyesno ($prompt)
+{
+    var $fullprompt = $prompt _ " [yes/no]: ";
+    var $response = jcs:input($fullprompt);
+    if ($response == "yes" || $response == "no") {
+	expr $response;
+    } else {
+	expr jcs:output("Please answer 'yes' or 'no'");
+	call promptyesno($prompt);
+    }
+}
