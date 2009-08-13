@@ -80,9 +80,9 @@
               <div class="load-file" filename="{$file}"
                    target="file-errors-{$id}"/>
             </xsl:if>
-              <div class="load-file" filename="{$title}"
-                   target="file-source-source"/>
           </xsl:if>
+          <div class="load-file" filename="{$title}"
+               target="file-source-source"/>
         </xsl:for-each>
       </div>
 
