@@ -1,0 +1,89 @@
+phil@dent> op ezsetup    
+*
+* EZSetup wizard
+*
+* Use the EZSetup wizard to configure the identity of the switch.
+* Once you complete EZSetup, the switch can be accessed over the network.
+*
+* To exit the EZSetup wizard press CTRL+C.
+*
+* In the wizard, default values are provided for some options.
+* Press ENTER key to accept the default values.
+*
+   Entering data for System Configuration:
+      Enter Host name (was: dent) [dnsname]: test
+      Enter Domain name (was: juniper.net) [dnsname]: test.net
+      Configure Root password? (was: yes) [yes/no]: asdf
+Please answer 'yes' or 'no'
+      Configure Root password? (was: yes) [yes/no]: yes
+         Enter Password [secret]: 
+         Enter Password (re-enter to confirm) :
+      Entering data for Services:
+         Configure telnet? [yes/no]: no
+         Configure Secure Shell (SSH)? (was: yes) [yes/no]: yes
+   Entering data for Routing options:
+      Static routes:
+         Destination:                   152.14.12.0/26
+            Next hop address:           10.5.1.1
+            Don't readvertise:          yes
+         Destination:                   172.25.4.0/24
+            Next hop address:           10.5.1.1
+            Don't readvertise:          yes
+      Enter option (default: continue) [add,delete,list,continue]: add
+      Enter Destination: 0.0.0.0/0
+         Enter Next hop address: 10.1.1.1
+         Enter Don't readvertise [yes/no]: yes
+      Enter option (default: continue) [add,delete,list,continue]: list
+      Static routes:
+         Destination:                   152.14.12.0/26
+            Next hop address:           10.5.1.1
+            Don't readvertise:          yes
+         Destination:                   172.25.4.0/24
+            Next hop address:           10.5.1.1
+            Don't readvertise:          yes
+         Destination:                   0.0.0.0/0
+            Next hop address:           10.1.1.1
+            Don't readvertise:          yes
+      Enter option (default: continue) [add,delete,list,continue]: continue
+   Configure SNMP? (was: yes) [yes/no]: no
+   Configure Management interface? [yes/no]: yes
+      Choose Management interface [default-vlan,named-vlan,out-of-band]: named-vlan
+         Enter VLAN name: test
+         Enter VLAN Id [integer]: 401
+         Enter VLAN IP Prefix (default: 192.168.1.1/24) [ipprefix]: 10.1.2.3/24
+         Enter Default next-hop (default: 192.168.1.254): 10.1.2.1
+         Configure Trunk ports? (default: no) [yes/no]: yes
+            Enter Interface: ge-0/1/2-3
+            Add another Interface (default: no) [yes/no]: no
+            Enter option (default: continue) [add,delete,list,continue]: list
+            Trunk ports:
+               Interface:               ge-0/1/2-3
+            Enter option (default: continue) [add,delete,list,continue]: continue
+
+Configuration:
+   System Configuration:
+      Host name:                        test
+      Domain name:                      test.net
+      Root password:                    yes
+         Password:                      ********
+   Routing options:
+      Static routes:
+         Destination:                   152.14.12.0/26
+            Next hop address:           10.5.1.1
+            Don't readvertise:          yes
+         Destination:                   172.25.4.0/24
+            Next hop address:           10.5.1.1
+            Don't readvertise:          yes
+         Destination:                   0.0.0.0/0
+            Next hop address:           10.1.1.1
+            Don't readvertise:          yes
+   Management interface:                yes
+      Management interface:             In-band with named VLAN (vlan.0)
+         VLAN name:                     test
+         VLAN Id:                       401
+         VLAN IP Prefix:                10.1.2.3/24
+         Default next-hop:              10.1.2.1
+         Trunk ports:
+            Interface:                  ge-0/1/2-3
+Is this configuration accurate? (default: no) [yes/no]: yes
+...

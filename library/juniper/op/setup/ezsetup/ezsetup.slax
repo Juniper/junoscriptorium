@@ -1,0 +1,279 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+ns exsl = "http://exslt.org/math";
+
+import "../import/junos.xsl";
+import "../import/lib-util.slax";
+import "../import/lib-wizard.slax";
+
+var $vlan-default-prefix = "192.168.1.1/24";
+var $vlan-default-next-hop = "192.168.1.254";
+
+var $vlan-address-parameters := {
+    <leaf title="VLAN IP Prefix" path="prefix"
+          default=$vlan-default-prefix type="ipprefix">;
+    <leaf title="Default next-hop" path="next-hop"
+          default=$vlan-default-next-hop>;
+}
+
+var $vlan-parameters := {
+    <leaf title="VLAN name" path="vlan">;
+    <leaf title="VLAN Id" path="id" type="integer" range="2-4096">;
+    copy-of $vlan-address-parameters;
+    <list title="Trunk ports" path="interfaces"> {
+	<key title="Interface">;
+    }
+}
+
+var $guide := {
+    <container title="System Configuration" path="system"> {
+	<ignore-choice title="Vehicle to drive"> {
+	    <container choice="car" title="Car" path="car"> {
+		<leaf title="Year of Manufactor" path="year">;
+		<leaf title="Manufactor" path="make">;
+		<leaf title="Model" path="model">;
+	    }
+	    <container choice="suv" title="SUV" path="suv"> {
+		<leaf title="Mile per gallon" path="mpg">;
+	    }
+	}
+	<leaf title="Host name" path="host-name" type="dnsname"> {
+	    <help> "The DNS name for this device";
+	}
+	<leaf title="Domain name" path="domain-name" type="dnsname"> {
+	    <help> {
+		<line> "The DNS domain to which this device belongs";
+		<line> "This will be the default DNS search path";
+	    }
+	}
+	<option title="Root password" path="root-authentication"> {
+	    <leaf title="Password" path="plain-text-password-value"
+	          type="secret">;
+	}
+	<container title="Services" path="services"> {
+	    <option title="telnet" path="telnet">;
+	    <option title="Secure Shell (SSH)" path="ssh">;
+	}
+	<ignore-container path="login"> {
+	    <list title="User accounts" path="user"> {
+		<key title="User name">;
+		<leaf title="Full name" path="full-name">;
+		<leaf title="Class name" path="class">;
+	    }
+	}
+    }
+    <container title="Routing options" path="routing-options"> {
+	<container path="static"> {
+	    <list title="Static routes" path="route"> {
+		<key title="Destination">;
+		<leaf title="Next hop address" path="next-hop">;
+		<leaf title="Don't readvertise" path="no-readvertise"
+		     type="empty">;
+	    }
+	}
+    }
+    <container ask="yes" title="SNMP" path="snmp"> {
+        <leaf title="Contact information" path="contact">;
+        <leaf title="Community name" path="community">;
+        <leaf title="Physical location of system" path="location">;
+    }
+    <option title="Management interface" path="mgmt"> {
+	<choice title="Management interface"> {
+	    <container choice="default-vlan"
+	           title="In-band with default VLAN (vlan.0)"
+    	           path="default-vlan"> {
+		copy-of $vlan-address-parameters;
+	    }
+	    <container choice="named-vlan"
+	           title="In-band with named VLAN (vlan.0)"
+	           path="named-vlan"> {
+		copy-of $vlan-parameters;
+	    }
+	    <container choice="out-of-band"
+	           title="Out of band via managment ethernet (me0)"
+	           path="out-of-band"> {
+		copy-of $vlan-address-parameters;
+	    }
+	}
+    }
+}
+
+var $banner-message := {
+    <line> "*";
+    <line> "* EZSetup wizard";
+    <line> "*";
+    <line> "* Use the EZSetup wizard to configure the identity of the switch.";
+    <line> "* Once you complete EZSetup, "
+            _ "the switch can be accessed over the network.";
+    <line> "*";
+    <line> "* To exit the EZSetup wizard press CTRL+C.";
+    <line> "*";
+    <line> "* In the wizard, default values are provided for some options.";
+    <line> "* Press ENTER key to accept the default values.";
+    <line> "*";
+}
+
+var $swinfo = jcs:invoke("get-software-information");
+var $model = $swinfo/product-model;
+
+var $non-uplnk-ports = {
+    if (starts-with($model, "ex3200-24")
+	|| starts-with($model, "ex4200-24")) {
+	expr 23;
+    } else if (starts-with($model, "ex3200-48")
+	       || starts-with($model, "ex4200-48")) {
+        expr 47;
+    }
+}
+
+var $sys-mgmt-if = {
+    if (starts-with($model, "ex4200")) {
+	expr "vme";
+    } else {
+	expr "me0";
+    }
+}
+
+var $sys-slot-id = jcs:sysctl("hw.re.slotid", "i");
+
+match / {
+    <op-script-results> {
+	<out> {
+	    call main;
+	}
+    }
+}
+
+template main
+{
+    call banner-message($banner-message);
+    var $rpc = <get-configuration database="committed" inherit="inherit">;
+    var $config = jcs:invoke($rpc);
+
+    var $new := {
+	call wizard-builder($config, $guide, $title = "ezsetup");
+    }
+
+    call jcs:dump($name = "new", $out = $new);
+
+    if ($new/node()) {
+
+	var $tconfig := { call transform($new); }
+	if ($debug) {
+	    call jcs:dump($name = "tconfig", $out = $tconfig);
+	}
+
+	call commit-config($config = $tconfig);
+    }
+}
+
+/*
+ * This template transforms the user-oriented config in the
+ * guide into config that is junos-compatible.  The only
+ * part that's affected is the "mgmt" hierarchy, which is
+ * transformed into [vlan], [interfaces], and [routing-options]
+ * configuration.
+ */
+template transform ($new)
+{
+    var $list := {
+	call expand-interfaces($input = $new/mgmt/node()/interfaces);
+    }
+
+    var $rest := $new/node()[name() != "mgmt"];
+    copy-of $rest;
+
+    if ($new/mgmt) {
+	if (not($new/mgmt/out-of-band)) {
+	    <vlan> {
+		if ($new/mgmt/named-vlan) {
+		    var $vlan = $new/mgmt/named-vlan;
+		    <name> $vlan/vlan;
+		    <vlan-id> $vlan/id;
+		    <l3-interface> "vlan.0";
+
+		} else { /* if ($new/mgmt/default-vlan) */
+		    <name> "default";
+		    <l3-interface> "vlan.0";
+		}
+	    }
+	}
+
+	var $addr = $new/mgmt/node();
+
+	<interfaces> {
+	    <interface> {
+		if ($new/mgmt/out-of-band) {
+		    <name> "me0";
+		} else {
+		    <name> "vlan";
+		}
+
+		<unit> {
+		    <name> "0";
+		    <family> {
+			<inet> {
+			    <address> {
+				<name> jcs:first-of($addr/prefix,
+						    $vlan-default-prefix);
+			    }
+			}
+		    }
+		}
+	    }
+
+	    for-each ($list/name) {
+		<interface> {
+		    <name> .;
+		    <unit> {
+			<name> "0";
+			<family> {
+			    <ethernet-switching>;
+			}
+		    }
+		}
+	    }
+	}
+
+	<routing-options> {
+	    <static> {
+		<route> {
+		    <name> "0.0.0.0/0";
+		    <next-hop> jcs:first-of($addr/next-hop,
+					    $vlan-default-next-hop);
+		}
+	    }
+	}
+    }
+}
+
+template expand-interfaces ($input)
+{
+    for-each ($input) {
+	expr jcs:output("expand: ", .);
+	var $ranges = jcs:split(",", .);
+	for-each ($ranges) {
+	    var $re = jcs:regex("^(.*)/([0-9]+)-([0-9]+)$", .);
+	    if ($re[1]) {
+		expr jcs:output("range: ", .);
+		call generate-interface-range($base = $re[2],
+					      $min = $re[3], $max = $re[4]);
+	    } else {
+		expr jcs:output("dull: ", .);
+		<name> .;
+	    }
+	}
+    }
+}
+
+template generate-interface-range ($base, $min, $max)
+{
+    <name> $base _ "/" _ $min;
+    if ($min < $max) {
+	call generate-interface-range($base, $min = $min + 1, $max);
+    }
+}
