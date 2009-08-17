@@ -13,6 +13,8 @@ import "../import/lib-wizard.slax";
 var $vlan-default-prefix = "192.168.1.1/24";
 var $vlan-default-next-hop = "192.168.1.254";
 
+param $debug;
+
 var $vlan-address-parameters := {
     <leaf title="VLAN IP Prefix" path="prefix"
           default=$vlan-default-prefix type="ipprefix">;
@@ -158,7 +160,9 @@ template main
 	call wizard-builder($config, $guide, $title = "ezsetup");
     }
 
-    call jcs:dump($name = "new", $out = $new);
+    if ($debug) {
+	call jcs:dump($name = "new", $out = $new);
+    }
 
     if ($new/node()) {
 
