@@ -1,0 +1,698 @@
+version 1.0;
+
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns wizard extension = "http://xml.juniper.net/wizard";
+ns dyn extension = "http://exslt.org/dynamic";
+ns exslt = "http://exslt.org/common";
+
+import "../import/lib-phil.slax";
+
+var $value-indent = 40; /* Where to break title/value boundary */
+var $new-indent = "   ";
+
+var $typedefs := {
+    <typedef name="dnsname"> {
+	<match> {
+	    <regex> "^[a-zA-Z0-9._-]{1,255}$";
+	    <message> "must contain 1-255 letters, numbers and characters";
+	}
+    }
+    <typedef name="ip-address"> {
+	<match> {
+	    <regex> "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$";
+	    <message> "nope";
+	}
+    }
+}
+
+template wizard-builder ($config, $guide, $title)
+{
+    call build-config($config, $guide, $title, $last = /null);
+}
+
+template build-config ($config, $guide, $last, $title)
+{
+    var $new := {
+	call build($config, $last, $guide);
+    }
+
+    if (0) {
+	call jcs:dump($name = "new", $out = $new);
+    }
+
+    expr jcs:output("\nConfiguration:");
+    call display-config($guide, $config = $new);
+
+    var $response = {
+	call prompt($prompt = "Is this configuration accurate?",
+		    $default = "no", $type = "yes/no");
+    }
+
+    if ($response == "yes") {
+	/*
+	 * We can now return the built configuration to our caller!!
+	 */
+	copy-of $new;
+
+    } else {
+	var $response2 = {
+	    call prompt($prompt = "Would you like to change it, or exit?",
+			$default = "change", $type = "change,exit");
+	}
+	if ($response2 == "exit") {
+	    expr jcs:output("Exit from ", $title);
+	    /* Return nothing */
+	} else {
+	    expr jcs:output("Please correct configuration data as needed");
+	    call build-config($config, $guide, $last = $new, $title);
+	}
+    }
+}
+
+/*
+ * Display the banner message to the user
+ */
+template banner-message ($banner-message)
+{
+    for-each ($banner-message/line) {
+	expr jcs:output(.);
+    }
+}
+
+/*
+ * Prompt for the value, with bells and whistles.
+ * "." == empty, since there's a PR for empty lines.
+ * If the input is empty and there was a previous value, use it.
+ */
+template prompt ($prompt, $previous, $node = /null,
+		 $default = $node/@default, $mandatory = $node/@mandatory,
+		 $type = $node/@type, $range = $node/@range,
+		 $help = $node/help)
+{
+    var $fullprompt = {
+	expr $prompt;
+	if ($type == "secret") {
+	    /* nothing */
+	} else if (string-length($previous) > 0) {
+	    expr " (was: " _ $previous _ ")";
+	} else if ($default) {
+	    expr " (default: " _ $default _ ")";
+	}
+	if ($type) {
+	    if ($type == "empty") {
+		expr " [yes/no]";
+	    } else {
+		expr " [" _ $type _ "]";
+	    }
+	}
+	if ($mandatory) {
+	    expr " [mandatory]";
+	}
+	expr ": ";
+    }
+
+    /*
+     * For 'secret' data, we use jcs:getsecret to avoid displaying
+     * the input string.
+     */
+    if ($type == "secret" && function-available('jcs:getsecret')) {
+	var $response = jcs:getsecret($fullprompt);
+	if ($response == ".") {
+	    expr $previous;
+	} else {
+	    var $prompt2 = $prompt _ " (re-enter to confirm) :";
+	    var $response2 = jcs:getsecret($prompt2);
+	    if ($response2 == $response) {
+		expr $response;
+	    } else {
+		expr jcs:output(">>> invalid response: ",
+				"values were not identical");
+		call prompt($prompt, $previous, $node, $help,
+			    $default, $mandatory, $type);
+	    }
+	}
+    } else {
+
+	var $response = jcs:input($fullprompt);
+	if ($response == "?") {
+	    if ($help) {
+		for-each ($help/node()) {
+		    expr jcs:output(.);
+		}
+	    } else {
+	        expr jcs:output(">>> no help message is available");
+	    }
+	    call prompt($prompt, $previous, $node, $help,
+			$default, $mandatory, $type);
+	    
+	} else if ($response == "") {
+	    /*
+             * Bad news: if one hits "^C", jcs:input returns
+             * an empty string (and CLI starts discarding
+             * all output).  This means we have to detect
+             * empty lines and abort.
+             */
+	    call abort($message = "Invalid blank line (sorry; use '.')");
+
+	    /* Return the previous value */
+	    expr $previous;
+
+	} else if ($response != ".") {
+	    if (not($type)) {
+		expr $response;
+	    } else if ($type == "yes/no" || $type == "empty") {
+		if ($response == "yes" || $response == "no") {
+		    expr $response;
+		} else {
+		    expr jcs:output("Please answer 'yes' or 'no'");
+		    call prompt($prompt, $previous, $node, $help,
+				$default, $mandatory, $type);
+		}
+	    } else if ($type == "integer") {
+		if ($range) {
+		    var $re = jcs:regex("([0-9]+)-([0-9]+)", $range);
+		    if ($re[1] && ($response < $re[2] || $response > $re[3])) {
+			expr jcs:output(">>> invalid response: ",
+					"must be within range of ",
+					$re[2], "..", $re[3]);
+			call prompt($prompt, $previous, $node, $help,
+				    $default, $mandatory, $type, $range);
+		    } else {
+			expr $response;
+		    }
+		} else {
+		    expr $response;
+		}
+
+	    } else {
+		var $td = $typedefs/node()[@name == $type];
+		if ($td && $td/match/regex) {
+		    var $re = jcs:regex($td/match/regex, $response);
+		    if ($re[1]) {
+			expr $response;
+		    } else {
+			expr jcs:output(">>> invalid response: ",
+					$td/match/message);
+			call prompt($prompt, $previous, $node, $help,
+				    $default, $mandatory, $type);
+		    }
+		} else {
+		    expr $response;
+		}
+	    }
+	} else if ($previous) {
+	    expr $previous;
+	}
+    }
+}
+
+template evaluate ($expression)
+{
+    /*
+     * This is the odd case of "The RTF That Wouldn't Go Away".
+     * dyn:evaluate calls a function that returns a template,
+     * but that template is an RTF.  The normal ":=" trick won't
+     * fly, so we need to do it the long way.  One more pin goes
+     * into my voodoo doll for the inventor of RTF.
+     */
+    var $rtf = dyn:evaluate(guide-builder);
+    copy-of $rtf;
+}
+
+template build ($config, $last, $guide, $indent = $new-indent)
+{
+    if (guide-builder) {
+	var $new-guide := { call evaluate($expression = guide-builder); }
+
+	call build-internal($config, $last, $guide = $new-guide, $indent);
+
+    } else {
+	call build-internal($config, $last, $guide, $indent);
+    }
+}
+
+/*
+ * This is the core of the config builder.  Guided by $guide, we prompt
+ * the user for information and assemble it into configuration.
+ */
+template build-internal ($config, $last, $guide, $indent)
+{
+    for-each ($guide/node()) {
+	var $path = @path;
+	var $this-config = $config/node()[name() == $path];
+	var $this-last = $last/node()[name() == $path];
+
+	if (name() == "container") {
+	    var $enable = {
+		if (@ask) {
+		    var $prompt = $indent _ "Configure " _ @title _ "?";
+		    var $previous = {
+			if ($this-last) {
+			    expr "yes";
+			} else if ($last) {
+			    expr "no";
+			} else if ($this-config) {
+			    expr "yes";
+			}
+		    }
+		    call prompt($prompt, $previous,
+				$default = @default, $type = "yes/no");
+		    
+		} else {
+		    expr "yes";
+		}
+	    }
+
+	    if ($enable == "yes") {
+
+		var $ind = {
+		    if (@title) {
+			if (not(@ask)) {
+			    expr jcs:output($indent,
+					    "Entering data for ", @title, ":");
+			}
+			expr $indent _ $new-indent;
+		    } else {
+			expr $indent;
+		    }
+		}
+
+		var $new := {
+		    call build($config = $this-config,
+			       $last = $this-last,
+			       $guide = ., $indent = $ind);
+		}
+		if ($new/node()) {
+		    <xsl:element name=$path> {
+			copy-of $new;
+		    }
+		}
+	    }
+
+	} else if (name() == "option") {
+	    var $prompt = $indent _ "Configure " _ @title _ "?";
+	    var $previous = {
+		if ($this-last) {
+		    expr "yes";
+		} else if ($last) {
+		    expr "no";
+		} else if ($this-config) {
+		    expr "yes";
+		}
+	    }
+	    var $value = {
+		call prompt($prompt, $previous,
+			    $default = @default, $type = "yes/no");
+	    }
+	    if ($value == "yes") {
+		var $new := {
+		    call build($config = $this-config,
+			       $last = $this-last,
+			       $guide = ., $indent = $indent _ $new-indent);
+		}
+		if ($new/node()) {
+		    <xsl:element name=$path> {
+			copy-of $new;
+		    }
+		}
+	    }
+
+	} else if (name() == "list") {
+	    var $list := {
+	        if ($this-last) {
+		    copy-of $this-last;
+		} else if ($this-config) {
+		    copy-of $this-config;
+		}
+	    }
+
+	    if (count($list/node()) <= 0) {
+		var $prompt = $indent _ "Configure " _ @title _ "?";
+		var $value = {
+		    call prompt($prompt, $default = "no", $type = "yes/no");
+		}
+		if ($value == "yes") {
+		    call manage-list($list, $guide = .,
+				$indent = $indent _ $new-indent,
+				$op = "first-add");
+		}
+	    } else {
+		call manage-list($list, $guide = .,
+			    $indent, $op = "list");
+	    }
+
+	} else if (name() == "choice") {
+	    call manage-choice($guide = ., $config, $last, $indent);
+
+	} else if (name() == "leaf") {
+	    var $prompt = $indent _ "Enter " _ @title;
+	    var $previous = {
+	        var $prev = jcs:first-of($this-last, $this-config);
+		if (@type == "empty") {
+		    if ($prev) {
+			expr "yes";
+		    }
+		} else {
+		    expr $prev;
+		}
+	    }
+
+	    var $value = {
+		call prompt($prompt, $previous, $node = .);
+	    }
+	    if (@type == "empty") {
+		if ($value == "yes") {
+		    <xsl:element name=$path>;
+		}
+	    } else {
+		if (string-length($value) > 0) {
+		    <xsl:element name=$path> $value;
+		}
+	    }
+	}
+    }
+}
+
+/*
+ * Manage a choice of multiple children
+ */
+template manage-choice ($guide, $config, $last, $indent)
+{
+    var $choice = {
+	call prompt-choice($guide, $config, $last, $indent);
+    }
+
+    if ($choice) {
+	var $new-guide = $guide/node()[@choice == $choice];
+	var $this-last = $last/node()[name() == $choice];
+	var $this-config = $config/node()[name() == $choice];
+
+	if ($new-guide) {
+	    var $new := {
+		call build($config = $this-config, $last = $this-last,
+			   $guide = $new-guide,
+			   $indent = $indent _ $new-indent);
+	    }
+	    if ($new) {
+		<xsl:element name=$new-guide/@path> {
+		    copy-of $new;
+		}
+	    }
+	} else {
+	    expr jcs:output(">>> invalid option");
+	    call manage-choice($guide, $config, $last, $indent);
+	}
+    }
+}
+
+/*
+ * Prompt for a choice
+ */
+template prompt-choice ($guide, $config, $last, $indent)
+{
+    var $prompt = $indent _ "Choose " _ $guide/@title;
+    var $type1 = {
+	for-each ($guide/node()) {
+	    expr "," _ @choice;
+	}
+    }
+    var $type = substring($type1, 2);
+    var $default = $guide/@default;
+    var $previous = {
+	for-each ($guide/node()) {
+	    var $path = @path;
+	    var $that = $last/node()[name() == $path];
+	    if ($that) {
+		expr @choice;
+	    }
+	}
+    }
+
+    var $response = { call prompt($prompt, $default, $previous, $type); }
+    if ($response && $response != "none") {
+	expr $response;
+    }
+}
+
+/*
+ * Manage a list of instances
+ * This is a bit tricky: we call this template recursively as
+ * we build the config, so $list always has the config we
+ * are building.
+ */
+template manage-list ($list, $guide, $indent, $op)
+{
+    if (0) {
+	expr jcs:output("manage-list: ", $op, " :: ", count($list));
+	call jcs:dump($name = "list", $out = $list);
+    }
+
+    /*
+     * If the caller passed in an operation, use that one.
+     * Otherwise prompt for a suitable operation.
+     */
+    var $operation := {
+	if (string-length($op)) {
+	    expr $op;
+	} else {
+	    call prompt($prompt = $indent _ "Enter option",
+			$default = "continue",
+			$type = "add,delete,list,continue");
+	}
+    }
+
+    if ($operation == "list") {
+	call list-members($guide, $indent, $list = $list/node());
+	call manage-list($list, $guide, $indent);
+	
+    } else if ($operation == "first-add") {
+	var $add := { call make-list-member($list, $guide, $indent); }
+	var $new := { call merge-lists($list, $add); }
+	var $prompt = $indent _ "Add another " _ $guide/key/@title;
+	var $more = {
+	    call prompt($prompt, $default = "no", $type = "yes/no");
+	}
+
+	var $op = {
+	    if ($more == "yes") {
+		expr "first-add";
+	    }
+	}
+	call manage-list($list = $new, $guide, $indent, $op);
+
+    } else if ($operation == "add") {
+	var $add := { call make-list-member($list, $guide, $indent); }
+	var $new := { call merge-lists($list, $add); }
+	call manage-list($list = $new, $guide, $indent);
+
+    } else if ($operation == "delete") {
+	var $name = { call prompt($prompt = $indent _ "Enter "
+				  _ $guide/key/@title _ " to delete"); }
+
+	var $old = $list/node()[name == $name];
+	if ($old) {
+	    var $rest := {
+		copy-of $list/node()[name != $name];
+	    }
+	    expr jcs:output($indent, $guide/key/@title, " '", $name,
+			    "' has been deleted");
+	    call manage-list($list = $rest, $guide, $indent);
+	} else {
+	    expr jcs:output(">>> ", $guide/key/@title, " '", $name,
+			    "' was not found");
+	    call manage-list($list, $guide, $indent);
+	}
+
+    } else if ($operation == "continue" || $operation == "") {
+	copy-of $list;
+    } else {
+	expr jcs:output(">>> invalid option");
+	call manage-list($list, $guide, $indent);
+    }
+}
+
+template list-members ($list, $indent, $guide)
+{
+    expr jcs:output($indent, $guide/@title, ":");
+    if (count($list) == 0) {
+	expr jcs:output($indent, $new-indent, "(none)");
+    } else {
+	for-each ($list) {
+	    var $line = $indent _ $new-indent _ $guide/key/@title _ ": ";
+	    var $pad = substring($padding, 1,
+				 $value-indent - string-length($line));
+	    expr jcs:output($line, $pad, name);
+
+	    call display-config($config = ., $guide,
+				$indent = $indent _ $new-indent _ $new-indent);
+	}
+    }
+}
+
+template make-list-member ($list, $guide, $indent)
+{
+    var $prompt = $indent _ "Enter " _ $guide/key/@title;
+    var $name := { call prompt($prompt); }
+
+    var $this = $list[name == $name];
+
+    <xsl:element name=$guide/@path> {
+	<name> $name;
+	call build($config = /null, $last = $this,
+		   $guide = ., $indent = $indent _ $new-indent);
+    }
+}
+
+template merge-lists ($list, $add)
+{
+    var $rest = $list/node()[name != $add/node()/name];
+    var $new = $rest | $add/node();
+
+    if (0) {
+	call jcs:dump($name = "list", $out = $list);
+	call jcs:dump($name = "add", $out = $add);
+	for-each ($add/node()/name) {
+	    expr jcs:output("add name ", .);
+	}
+	expr jcs:output("add: [", $add/node()/name, "] ", name($add/node()));
+        call jcs:dump($name = "rest", $out = $rest);
+	call jcs:dump($name = "new", $out = $new);
+	for-each ($list/node()) {
+	    expr jcs:output("[", name, "/", name(), "]");
+	    if (name != $add/node()/name) {
+	        expr jcs:output("   match");
+	    }
+	}
+	expr jcs:output("count ", count($list), "/", count($rest));
+    }
+
+    copy-of $new;
+}
+
+var $padding = "                                                    ";
+
+/*
+ * Display the configuration in simple format
+ */
+template display-config ($guide, $config, $indent = $new-indent)
+{
+    if (guide-builder) {
+	var $new-guide := { call evaluate($expression = guide-builder); }
+
+	call display-config-internal($guide = $new-guide, $config, $indent);
+
+    } else {
+	call display-config-internal($guide, $config, $indent);
+    }
+}
+
+template display-config-internal ($guide, $config, $indent = $new-indent)
+{
+    if (false) {
+	expr jcs:output("display: ", name($config), " ", count($config));
+	call jcs:dump($name = "new", $out = $config);
+    }
+
+    for-each ($guide/node()) {
+	var $path = @path;
+	var $this = $config/node()[name() == $path];
+
+	if (name() == "container") {
+	    if ($this) {
+		var $ind = {
+		    if (@title) {
+			expr jcs:output($indent, @title, ":");
+			expr $indent _ $new-indent;
+		    } else {
+			expr $indent;
+		    }
+		}
+		call display-config($config = $config/node()[name() == $path],
+				    $guide = ., $indent = $ind);
+	    }
+
+	} else if (name() == "option") {
+	    var $line = $indent _ @title _ ": ";
+	    var $pad = substring($padding, 1,
+				 $value-indent - string-length($line));
+	    if ($this) {
+		expr jcs:output($line, $pad, "yes");
+		call display-config($config = $config/node()[name() == $path],
+				    $guide = .,
+				    $indent = $indent _ $new-indent);
+	    } else {
+		expr jcs:output($line, $pad, "no");
+	    }
+
+	} else if (name() == "list") {
+	    if ($this) {
+		call list-members($list = $this, $guide = ., $indent);
+		/*
+		expr jcs:output($indent, @title, ":");
+		for-each ($this) {
+		    var $line = $indent _ $new-indent _ key/@title _ ": ";
+		    var $pad = substring($padding, 1,
+		                         $value-indent - string-length($line));
+		    expr jcs:output($line, $pad, name);
+
+		    call display-config($guide = .,
+                                $config = $config/node()[name() == $path],
+				$indent = $indent _ $new-indent _ $new-indent);
+		}
+		*/
+	    }
+
+	} else if (name() == "choice") {
+	    for-each (node()) {
+		var $p2 = @path;
+		var $that = $config/node()[name() == $p2];
+
+		if ($that) {
+		    var $line = $indent _ ../@title _ ": ";
+		    var $pad = substring($padding, 1,
+					 $value-indent - string-length($line));
+		    expr jcs:output($line, $pad, @title);
+
+		    call display-config($config = $that, $guide = .,
+					$indent = $indent _ $new-indent);
+		}
+	    }
+
+	} else if (name() == "leaf") {
+	    if ($this) {
+		var $line = $indent _ @title _ ": ";
+		var $pad = substring($padding, 1,
+				     $value-indent - string-length($line));
+		if (@type == "secret") {
+		    expr jcs:output($line, $pad, "********");
+		} else if (@type == "empty") {
+		    expr jcs:output($line, $pad, "yes");
+		} else {
+		    expr jcs:output($line, $pad, $this);
+		}
+	    }
+	}
+    }
+}
+
+template commit-config ($config, $dump)
+{
+    if ($dump) {
+	call jcs:dump($name = "configuration", $out = $config);
+    }
+
+    var $conn = jcs:open();
+
+    if (not($conn)) {
+	expr jcs:output("failed to get local connection");
+    } else {
+	call jcs:load-configuration($connection = $conn,
+				    $configuration = $config);
+    }
+    expr jcs:close($conn);
+}
+
+template abort ($message = "Aborted")
+{
+    <xsl:message terminate="yes"> $message;
+}
