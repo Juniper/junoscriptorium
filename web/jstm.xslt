@@ -122,7 +122,9 @@
           <div class="tab-contents {$classes}" id="body-{$id}">
             <xsl:choose>
               <xsl:when test="$name = 'description'">
-                <xsl:value-of select="$contents"/>
+                <div class="description">
+                  <xsl:value-of select="$contents"/>
+                </div>
               </xsl:when>
               <xsl:when test="$name = 'implementation'">
                 <xsl:value-of select="$contents"/>
