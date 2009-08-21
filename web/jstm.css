@@ -185,6 +185,7 @@ div.tab-contents div.title {
 
 div.tab-contents div.description {
   padding: 3px 3px 20px 3px;
+  white-space: pre;
 }
 
 div.load-file {
