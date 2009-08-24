@@ -7,6 +7,10 @@ ns exslt = "http://exslt.org/common";
 
 import "../import/lib-phil.slax";
 
+var $lib-wizard-version = 20090824;
+
+param $disallow-blank-line;
+
 var $value-indent = 40; /* Where to break title/value boundary */
 var $new-indent = "   ";
 
@@ -146,16 +150,33 @@ template prompt ($prompt, $previous, $node = /null,
 			$default, $mandatory, $type);
 	    
 	} else if ($response == "") {
-	    /*
-             * Bad news: if one hits "^C", jcs:input returns
-             * an empty string (and CLI starts discarding
-             * all output).  This means we have to detect
-             * empty lines and abort.
-             */
-	    call abort($message = "Invalid blank line (sorry; use '.')");
+	    if ($disallow-blank-line) {
+		/*
+		 * Bad news: if one hits "^C", jcs:input returns
+		 * an empty string (and CLI starts discarding
+		 * all output).  This means we have to detect
+		 * empty lines and abort.
+		 *
+		 * This bug is now fixed, but we allow the old
+		 * behavior if needed.
+		 */
+		call abort($message = "Invalid blank line (sorry; use '.')");
+	    }
 
-	    /* Return the previous value */
-	    expr $previous;
+	    if ($previous) {
+		/* Return the previous value */
+		expr $previous;
+	    } else if ($type == "yes/no" || $type == "empty") {
+		if ($response == "yes" || $response == "no") {
+		    expr $response;
+		} else {
+		    expr jcs:output("Please answer 'yes' or 'no'");
+		    call prompt($prompt, $previous, $node, $help,
+				$default, $mandatory, $type);
+		}
+	    } else {
+		expr "";
+	    }
 
 	} else if ($response != ".") {
 	    if (not($type)) {
@@ -206,7 +227,7 @@ template prompt ($prompt, $previous, $node = /null,
     }
 }
 
-template evaluate ($expression)
+template evaluate ($expression, $config, $last)
 {
     /*
      * This is the odd case of "The RTF That Wouldn't Go Away".
@@ -215,14 +236,20 @@ template evaluate ($expression)
      * fly, so we need to do it the long way.  One more pin goes
      * into my voodoo doll for the inventor of RTF.
      */
-    var $rtf = dyn:evaluate(guide-builder);
+
+    var $value = $expression _ "($config, $last)";
+    expr jcs:output("evaluate: ", $value);
+    var $rtf = dyn:evaluate($value);
+    expr jcs:output("evaluate: back");
     copy-of $rtf;
 }
 
 template build ($config, $last, $guide, $indent = $new-indent)
 {
     if (guide-builder) {
-	var $new-guide := { call evaluate($expression = guide-builder); }
+	var $new-guide := {
+	    call evaluate($expression = guide-builder, $config, $last);
+	}
 
 	call build-internal($config, $last, $guide = $new-guide, $indent);
 
@@ -369,6 +396,8 @@ template build-internal ($config, $last, $guide, $indent)
 		    <xsl:element name=$path> $value;
 		}
 	    }
+	} else if (name() == "guide") {
+	    /* ... */
 	}
     }
 }
@@ -577,7 +606,9 @@ var $padding = "                                                    ";
 template display-config ($guide, $config, $indent = $new-indent)
 {
     if (guide-builder) {
-	var $new-guide := { call evaluate($expression = guide-builder); }
+	var $new-guide := {
+	    call evaluate($expression = guide-builder, $config, $last = /null);
+	}
 
 	call display-config-internal($guide = $new-guide, $config, $indent);
 

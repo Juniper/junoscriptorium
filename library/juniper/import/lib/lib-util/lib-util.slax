@@ -13,6 +13,8 @@ ns ext = "http://xmlsoft.org/XSLT/namespace";
 ns math = "http://exslt.org/math";
 ns exsl = "http://exslt.org/common";
 
+var $lib-util-version = 20090824;
+
 /**
  * Dump an XML hierarchy, using JUNOS-style braces
  * Output is done using "jcs:output()", so the contents are display
