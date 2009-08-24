@@ -10,7 +10,8 @@ ns junos = "http://xml.juniper.net/junos/*/junos";
 ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
 ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
 ns ext = "http://xmlsoft.org/XSLT/namespace";
-ns exsl = "http://exslt.org/math";
+ns math = "http://exslt.org/math";
+ns exsl = "http://exslt.org/common";
 
 /**
  * Dump an XML hierarchy, using JUNOS-style braces
@@ -46,7 +47,10 @@ template jcs:dump ($name, $out, $indent = "", $style)
 	}
     }
 
-    if (name($out)) {
+    if (exsl:object-type($out) == "string") {
+	expr jcs:output($mydent, "'", $out, "';");
+
+    } else if (name($out)) {
 	var $text = $out/text();
 
 	if ($out/ *) {
@@ -107,7 +111,7 @@ template jcs:stddev ($data)
     }
 
     var $mean-sum = floor(sum($diffs/diff) div count($data));
-    var $dev = floor(exsl:sqrt($mean-sum));
+    var $dev = floor(math:sqrt($mean-sum));
     var $hdev = floor($dev div 2);
 
     <stddev> {
