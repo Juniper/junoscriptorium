@@ -1,0 +1,333 @@
+#
+# $Id$
+#
+
+* A "Wizard" Framework for JUNOScript
+
+Building interactive applications can be repetitive and annoying, with
+the outcome buggy and inconsistent.  A framework can make the work
+simpler, easier, more consistent and higher quality.  The import file
+"lib-wizard.slax" provides such a framework.  This document describes
+the operation and features of this framework.
+
+* Overview
+
+The wizard framework uses a "guide" as meta-data that describes the
+data to be built.  This meta-data guides the framework to prompt the
+user for input data to create in an XML hierarchy that matches the
+guide.  This is a cli-based framework, suitable for "op" scripts.
+
+The script declares a guide as normal xml content, using any
+appropriate mix of static and dynamic context.  This guide is then
+passed to the wizard-builder template, which builds the data hierarchy
+based on user input to a series of prompts based on the guide.
+
+The guide defines a set of choices, containers, leafs, options, and
+lists which define the structure of the data.  Additional elements
+provide additional features.
+
+The terms "leaf", "list", and "container" are used in a manner
+consistent with the IETF's YANG data modeling language.
+
+In the following example, an XML element named "system" functions as a
+container, containing two leafs, "host-name" and "domain-name".  Each
+leaf has a specific data type ("dnsname"), which the wizard uses for
+as a constraint on the values the leaf will accept.  Help messages are
+defined that will be displayed if the user enters "?".
+
+var $guide := {
+    <container title="System Configuration" path="system"> {
+        <leaf title="Host name" path="host-name" type="dnsname"> {
+            <help> "The DNS name for this device";
+        }
+        <leaf title="Domain name" path="domain-name" type="dnsname"> {
+            <help> {
+                <line> "The DNS domain to which this device belongs";
+                <line> "This will be the default DNS search path";
+            }
+        }
+    }
+}
+
+The above guide would be able to build data such as the following:
+
+<system>
+    <host-name>foo</host-name>
+    <domain-name>example.net</domain-name>
+</system>
+
+- add sample session
+
+The following guide defines a choice between "car" and "suv".  Once
+the user selects on choice, only one path child container will be
+populated. 
+
+var $guide := {
+    <choice title="Vehicle to drive"> {
+        <container choice="car" title="Car" path="car"> {
+            <leaf title="Year of Manufactor" path="year">;
+            <leaf title="Manufactor" path="make">;
+            <leaf title="Model" path="model">;
+        }
+        <container choice="suv" title="SUV" path="suv"> {
+            <leaf title="Mile per gallon" path="mpg">;
+        }
+    }
+}
+
+- add sample session
+
+* Elements
+
+The Wizard Framework uses elements as meta-data to guide its actions
+and control the data that it builds.  This section describes those
+elements and their functionality.
+
+** Common attributes
+
+There are a number of elements that are common between elements,
+though their function may vary slightly depending on where they
+are used.  This section documents these attributes.  Due to the nature
+of the content, this section will make forward references to the
+elements. 
+
+*** title
+
+The "title" attribute contains a human readable string describing the
+purpose of the element, suitable for use in a prompt string to enter
+data or in a header for a section of data.
+
+    <container title="Local Interface" path="local-interface">;
+
+*** path
+
+The "path" attribute contains the name of the element used to contain
+data for this hierarchy.
+
+    <container title="Local Interface" path="local-interface">;
+
+In truth, the path should default to $title =~ tr/[A-Z ]/[a-z_]/
+but this functionality is not currently implemented.
+
+** Common elements
+
+*** help
+
+The "help" element contains one or more lines of text that can be
+displayed to the user.  This text is normally shown when the user
+enters "?" at the appropriate prompt.
+
+The help message can be either a single line or multiple lines in a
+series of <line> elements.
+
+    <leaf title="Host name" path="host-name" type="dnsname"> {
+        <help> "The DNS name for this device";
+    }
+    <leaf title="Domain name" path="domain-name" type="dnsname"> {
+        <help> {
+            <line> "The DNS domain to which this device belongs";
+            <line> "This will be the default DNS search path";
+        }
+    }
+
+** leaf
+
+The "leaf" element describes a single XML element and it's contents.
+
+The "type" attribute defines the type of the leaf.  A fixed set of
+types are supported, 
+
+- yes/no: a yes/no value
+- empty: an empty element
+- enumeration: a comma-separated list of enumerations
+- secret: a secret string, such as a password, whose value should
+not be echoed during input, nor be shown during display.
+- integer: an integer value, which can be constrained to the range
+given in the "range" attribute as "min-max".
+
+The "mandatory" attribute can be used to indicate that a value must be
+specified.  If the mandatory attribute is not present, the value is
+optional, and if no value is given, the element will not appear in the
+content returned by wizard-builder.
+
+The "default" attribute gives a default value that is presented to
+the user (as part of the prompt) so they know the default value.
+
+Default values are not encoded in the result tree unless the "force"
+attribute is present.  The force attribute forces the creation of
+nodes for default values.  This mechanism is likely only useful when
+the guide is built dynamically using the <guild-builder> function
+(^guide-builder^).
+
+    <leaf title="VLAN name" path="vlan">;
+    <leaf title="VLAN Id" path="id" type="integer" range="2-4096">;
+    <leaf title="VLAN IP Prefix" path="prefix"
+          default="192.168.1.1/24" type="ipprefix">;
+    <leaf title="Default next-hop" path="next-hop"
+          default="192.168.1.254">;
+
+** container
+
+The "container" element represents a level of XML hierarchy and can
+be used to organize data into a meaningful or convenient format.
+
+If the "ask" attribute is present, the user will be asked if they want
+to descend into the container.  If the answer is "no", the container
+and it's contents will be skipped.
+
+    <container choice="car" title="Car" path="car"> {
+        <leaf title="Year of Manufactor" path="year">;
+        <leaf title="Manufactor" path="make">;
+        <leaf title="Model" path="model">;
+    }
+
+** list
+
+The "list" element represents a list of XML elements, uniquely
+identified by their "key" element.  The framework allows list entries
+to be added and deleted, and allow the user to list the member of a
+list which working on the list.
+
+    <list title="Static routes" path="route"> {
+        <key title="Destination">;
+        <leaf title="Next hop address" path="next-hop">;
+        <leaf title="Don't readvertise" path="no-readvertise"
+             type="empty">;
+    }
+
+** key
+
+The "key" element represents the identifier of a list.  The key must
+be unique for each list instance.  Only one key is allowed.
+
+The key element works a bit differently than YANG, since the "key"
+statement in YANG refers to other leafs, where the Wizard Framework is
+a substitute for a leaf.
+
+** option
+
+The "option" element represents a level of XML hierarchy that carries
+a specific connotation so that the presence of the option means
+conveys a specific meaning.  The option element can then contain other
+elements that describe additional details about the option.
+
+    <container title="Services" path="services"> {
+        <option title="telnet" path="telnet">;
+        <option title="Secure Shell (SSH)" path="ssh"> {
+            <leaf title="Allow root login" path="root-login" type="empty">;
+        }
+    }
+
+** choice
+
+The "choice" element represents a set of mutually exclusive
+alternatives.  The user is prompted to select one of the choices
+and is then directed according to the contents of that choice.
+
+The <choice> element contains a set of alternatives, each with
+a "choice" attribute.  The choice value is displayed to the
+user similar to an enumeration.
+
+    <choice title="Management interface"> {
+        <container choice="default-vlan"
+               title="In-band with default VLAN (vlan.0)"
+               path="default-vlan"> {
+            copy-of $vlan-address-parameters;
+        }
+        <container choice="named-vlan"
+               title="In-band with named VLAN (vlan.0)"
+               path="named-vlan"> {
+            copy-of $vlan-parameters;
+        }
+        <container choice="out-of-band"
+               title="Out of band via managment ethernet (me0)"
+               path="out-of-band"> {
+            copy-of $vlan-address-parameters;
+        }
+    }
+
+* Special Topics
+
+** $config and $last
+
+** Functions
+
+The Wizard Framework uses the EXSLT func:function and dyn:evaluate
+mechanisms to provide a dynamic callback capability.  These functions
+are used for specific functionality at particular points during the
+execution of the framework.
+
+*** Function Arguments
+
+Each function is given a fixed set of arguments.  The XSLT engine
+requires that all parameters be declared inside the function, so
+each function must take care to ensure the parameters are handled
+correctly.  Two parameters are common to all functions.
+
+**** $opaque
+
+The $opaque parameter is used to pass opaque data through the wizard
+framework to a callback, allowing access to any data learned before
+wizard-builder() is called.  Any sort of data can be passed in this
+variable.
+
+**** $data
+
+The $data parameter is used to both hide less commonly used parameters
+so they need not be explicitly declared in every function.  Since the
+argument list for func:functions cannot change, this also provide a
+degree of future-proofing,
+
+*** guide-builder
+
+The "guide-builder" function is called when the framework descends
+into a guide element that contains a <guide-builder> element.  The
+element will contain a string that is name of the callback function.
+
+The callback function will return a subsection of the guide, assumably
+using dynamic information to build the guide.
+
+**** config
+
+Guide builder functions can return a <config> element, since will
+be copied into the configuration data.  This is helpful for generating
+data on the fly.
+
+*** validator
+
+This callback function is called after a value has been entered to
+allow custom validation.  The function can emit an error message and
+return nothing, which will tell the framework to re-prompt for a new
+value.  To indicate success, the function returns the value of the
+leaf, allowing the function to reformat or repair the value before it
+is saved to the data tree.
+
+* Transforming Wizard Data
+
+Data from the wizard framework may not be acceptable for use
+on JUNOS devices directly, based on the guide in use.  The
+framework can certainly build JUNOS-compatible configuration, but the
+specific application may choose to organize the data in a way that is
+more natural to the user.  This is particularly true in the case of
+multi-box or network-oriented configuration.
+
+The op script can transform the data returned by the framework using
+the normal XSLT/SLAX mechanisms, including the use of apply-templates
+with the mode statement.
+
+* Committing Wizard Data
+
+Once the configuration is built, the jcs:load-configuration template
+can be used to load it onto the device or devices.
+
+* Examples
+
+** ezsetup.slax
+
+** tunnel.slax
+
+* Conclusion
+
+Cool, eh?
+
+Please send questions to junoscriptorium@googlegroups.com (external).

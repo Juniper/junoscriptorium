@@ -1,0 +1,480 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+ns exsl = "http://exslt.org/common";
+ns math = "http://exslt.org/math";
+ns func extension = "http://exslt.org/functions";
+ns wizard extension = "http://xml.juniper.net/wizard";
+
+import "../import/junos.xsl";
+import "../import/lib-util.slax";
+import "../import/lib-wizard.slax";
+
+param $debug;
+param $show;
+
+var $guide := {
+    <choice title="Style of tunnel"> {
+	<container choice="gre" title="GRE tunnel" path="gre"> {
+	    <leaf title="Local Endpoint Address" path="source"> {
+		<validator> "wizard:validate-local-address";
+	    }
+	    <leaf title="Remote Endpoint Address" path="destination"> {
+		<validator> "wizard:validate-remote-address";
+	    }
+	    <container ask="yes" default="no"
+	            title="Numbered link" path="link"> {
+
+		<leaf title="Link Prefix" path="prefix"> {
+		    <validator> "wizard:validate-prefix";
+		}
+	    }
+	    <container title="Local Interface" path="local"> {
+		<guide-builder> "wizard:generate-local";
+	    }
+	    <container title="Remote Interface" path="remote"> {
+		<guide-builder> "wizard:generate-remote";
+	    }
+	}
+	<container choice="ipsec" title="IP-SEC tunnel" path="ipsec"> {
+	    <guide-builder> "wizard:not-supported";
+	}
+    }
+}
+
+var $local-connection = jcs:open();
+
+match / {
+    <op-script-results> {
+	<out> {
+	    call main;
+	}
+    }
+}
+
+template main
+{
+    call add();
+}
+
+template add
+{
+    /*
+     * Start by finding the remote end.  We need to do this first
+     * to allow us to stuff it in the opaque data the wizard builder
+     * handles for us.  It will be passed to our callback functions.
+     */
+    var $info := {
+	call open-connection();
+    }
+
+    call box-info($info);
+
+    var $new := {
+	call wizard-builder($config = /null, $guide, $opaque = $info,
+			    $title = "Tunnel Wizard");
+    }
+
+    if ($show) {
+	call jcs:dump($name = "new", $out = $new);
+    }
+
+    if ($new/gre) {
+	call add-gre($gre = $new/gre, $info);
+    }
+}
+
+template add-gre ($gre, $info)
+{
+    var $local := {
+	call gen-config($local = "yes", $gre, $info);
+    }
+    var $remote := {
+	call gen-config($local = false, $gre, $info);
+    }
+
+    if ($show) {
+	call jcs:dump($name = "local", $out = $local);
+	call jcs:dump($name = "remote", $out = $remote);
+    }
+
+    expr jcs:output("[loading local configuration ...]");
+    call jcs:load-configuration($connection = $local-connection,
+				$configuration = $local);
+    expr jcs:output("[loading remote configuration ...]");
+    call jcs:load-configuration($connection = $info/connection,
+				$configuration = $remote);
+    expr jcs:output("[finished]");
+}
+
+template gen-config ($local, $gre, $info)
+{
+    var $interface = {
+	if ($local) {
+	    expr $gre/local/interface;
+	} else {
+	    expr $gre/remote/interface;
+	}
+    }
+    var $ifname = substring-before($interface, ".");
+    var $unit = substring-after($interface, ".");
+
+    var $swrpc = <get-software-information>;
+    var $swout = jcs:execute($info/connection, $swrpc);
+    var $remote-hostname = jcs:first-of($swout/host-name, $info/target);
+
+    var $desc = {
+	if ($local) {
+	    expr "Link from " _ $hostname _ " to " _ $remote-hostname;
+	} else {
+	    expr "Link from " _ $remote-hostname _ " to " _ $hostname;
+	}
+    }
+
+    <configuration> {
+	<interfaces> {
+	    <interface> {
+		<name> $ifname;
+		<unit> {
+		    <name> $unit;
+		    <description> $desc;
+		    <tunnel> {
+			if ($local) {
+			    <source> $gre/source;
+			    <destination> $gre/destination;
+			} else {
+			    <source> $gre/destination;
+			    <destination> $gre/source;
+			}
+		    }
+		    if ($gre/link/prefix) {
+			<family> {
+			    <inet> {
+				<address> {
+				    <name> {
+					call gen-address($local,
+						   $prefix = $gre/link/prefix);
+				    }
+				}
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    }
+}
+
+template gen-address ($local, $prefix)
+{
+    var $pref = jcs:parse-ip($prefix);
+    if ($pref[1]) {
+	var $pattern = "^([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)$";
+	var $addr = jcs:regex($pattern, $pref[1]);
+	var $bits = 32 - $pref[3];
+	var $mod = math:power(2, $bits);
+	var $low = $addr[3] mod $mod;
+	var $high = $addr[3] - $low;
+
+	var $new = {
+	    if ($local) {
+		/* Local gets the low number */
+		if ($low > 0) {
+		    expr $addr[3];
+		} else {
+		    expr $high + 1;
+		}
+	    } else {
+		if ($low > 0) {
+		    expr $addr[3] + 1;
+		} else {
+		    expr $high + 2;
+		}
+	    }
+	}
+
+	var $output = $addr[2] _ "." _ $new _ "/" _ $pref[3];
+	expr $output;
+    } else {
+	expr $prefix;
+    }
+}
+
+template open-connection
+{
+    var $target = { call get-remote-address; }
+
+    expr jcs:output("[opening connection to ", $target, " ... ]");
+    var $conn = jcs:open($target);
+    if ($conn) {
+	expr jcs:output("[connected]");
+	<peer> $target;
+	<connection> $conn;
+    } else {
+	expr jcs:output("[connection failed; reenter remote address]");
+	call open-connection;
+    }
+}
+
+template get-remote-address
+{
+    var $fullprompt = "Enter remote endpoint address [ipaddr]: ";
+    var $response = jcs:input($fullprompt);
+    if ($response) {
+	var $ip = jcs:parse-ip($response);
+	if ($ip[1]) {
+	    expr $ip[1];
+	} else {
+	    expr jcs:output("[resolving hostname ", $response, " ... ]");
+	    var $hostname = jcs:hostname($response);
+	    if ($hostname) {
+		var $ip2 = jcs:parse-ip($response);
+		if ($ip2[1]) {
+		    expr $ip2[1];
+		} else {
+		    expr jcs:output(">>> error: invalid hostname");
+		    call get-remote-address;
+		}
+	    } else {
+		expr jcs:output(">>> error: invalid hostname");
+		call get-remote-address;
+	    }
+	}
+    } else {
+	expr jcs:output(">>> error: invalid hostname");
+	call get-remote-address;
+    }
+}
+
+template box-info ($info)
+{
+    var $swrpc = <get-software-information>;
+    var $swout = jcs:execute($info/connection, $swrpc);
+    var $host-name = jcs:first-of($swout/host-name, $info/target);
+    var $version = { call get-sw-version($swout); }
+
+    var $chrpc = <get-chassis-inventory>;
+    var $chout = jcs:execute($info/connection, $chrpc);
+
+    var $x1 = jcs:printf("\nremote endpoint %s is a %s running %s (S/N %s)",
+			 $host-name, $swout/product-model,
+			 $version, $chout/chassis[1]/serial-number);
+    expr jcs:output($x1);
+}
+
+<func:function name="wizard:generate-local"> {
+    param $config;
+    param $last;
+    param $opaque;
+    param $data;
+
+    if ($debug) {
+	expr jcs:output("in wizard:generate-local");
+	expr jcs:output("  ", $data/role, " :: ", exsl:object-type($config));
+	call jcs:dump($name = "config", $out = $config);
+	call jcs:dump($name = "opaque", $out = $opaque);
+    }
+
+    <func:result> {
+	call generate-guide-endpoint($opaque, $data,
+				     $conn = $local-connection);
+    }
+}
+
+<func:function name="wizard:generate-remote"> {
+    param $config;
+    param $last;
+    param $opaque;
+    param $data;
+
+    if ($debug) {
+	expr jcs:output("in generate-remote: ");
+    }
+
+    if ($debug && exsl:object-type($config) == "node-set") {
+	call jcs:dump($name = "config", $out = $config/../..);
+    }
+
+    <func:result> {
+	var $conn = $opaque/connection;
+	call generate-guide-endpoint($opaque, $data, $conn);
+    }
+}
+
+<func:function name="wizard:not-supported"> {
+    param $config;
+    param $last;
+    param $opaque;
+    param $data;
+
+    if ($debug) {
+	expr jcs:output("in not-supported: ");
+    }
+
+    <xsl:message terminate="yes"> "Not supported";
+}
+
+template generate-guide-endpoint ($opaque, $data, $conn)
+{
+    var $default = {
+	if ($data/role == "build") {
+	    var $rpc = <get-interface-information> {
+		<terse>;
+	    }
+	    var $iflist = jcs:execute($conn, $rpc);
+
+	    var $grelist =
+		$iflist/physical-interface[starts-with(name, "gr-")];
+
+	    if (not(jcs:empty($grelist))) {
+		expr jcs:output($data/indent, "Available tunnel interfaces:");
+		for-each ($grelist) {
+		    var $count = count(logical-interface);
+		    expr jcs:output($data/indent, "   ", name, "  (",
+				    $count, " tunnel(s) configured)");
+		    for-each (logical-interface) {
+			expr jcs:output($data/indent, "      ", name, ":  ",
+  address-family[address-family-name == "inet"]/interface-address[1]/ifa-local,
+					" (", description, ")");
+		    }
+
+		    if (position() == 1) {
+			var $unit = {
+			    if ($count == 0) {
+				expr "0";
+			    } else if ($count == 1) {
+				var $cur = logical-interface/name;
+				var $this = substring-after($cur, '.');
+				expr $this + 1;
+			    } else {
+				var $all := {
+				    for-each (logical-interface/name) {
+					<value> substring-after(., '.');
+				    }
+				}
+
+				var $cur = math:max($all/node());
+				if (string($cur) == "NaN") {
+				    <xsl:message terminate="true"> {
+					expr "max unit invalid for " _ name;
+				    }
+				}
+				expr $cur + 1;
+			    }
+			}
+			if ($debug) {
+			    expr jcs:output("default is '", name,
+					    "' '", $unit, "'");
+			}
+			expr name _ "." _ $unit;
+		    }
+		}
+
+	    } else {
+		expr jcs:output($data/indent,
+			      "no tunnel interfaces found on ", $opaque/peer);
+	    }
+	}
+    }
+
+    if ($debug) {
+	expr jcs:output("default is '", $default, "'");
+    }
+
+    <leaf title="Tunnel interface" path="interface" force="yes"> {
+	if ($default) {
+	    <xsl:attribute name="default"> $default;
+	}
+    }
+}
+
+<func:function name="wizard:validate-local-address"> {
+    param $response;
+    param $opaque;
+    param $data;
+
+    if ($debug) {
+	expr jcs:output("in validate-local-address");
+    }
+
+    <func:result> {
+	call validate-address($conn = $local-connection,
+				     $address = $response,
+				     $target = "this device",
+				     $data);
+    }
+}
+
+<func:function name="wizard:validate-remote-address"> {
+    param $response;
+    param $opaque;
+    param $data;
+
+    if ($debug) {
+	expr jcs:output("in validate-remote-address");
+    }
+
+    <func:result> {
+	call validate-address($conn = $opaque/connection,
+				     $address = $response,
+				     $target = $opaque/peer,
+				     $data);
+    }
+}
+
+template validate-address ($conn, $address, $target, $data)
+{
+    var $rpc = <get-route-information> {
+	<destination> $address;
+    }
+
+    var $res = jcs:execute($conn, $rpc);
+    var $rt = $res/route-table/rt/rt-entry[current-active];
+    var $proto = $rt/protocol-name;
+
+    if ($res/xnm:error) {
+	expr jcs:output("    error: ", $res/xnm:error/message);
+
+    } else if ($proto == "Local"
+	       || ($proto == "Direct" && $rt/nh/via == "lo0.0")) {
+	/* Return the address to indicate that this value is good */
+	expr $address;
+
+    } else {
+	expr jcs:output(">>>> error: address '", $address,
+			"' is not a local address for ", $target);
+	/*
+	 * We can add a "use it anyway" prompt here if needed.
+	 */
+    }
+}
+
+<func:function name="wizard:validate-prefix"> {
+    param $response;
+    param $opaque;
+    param $data;
+
+    if ($debug) {
+	expr jcs:output("in validate-prefix");
+    }
+
+    <func:result> {
+	var $pref = jcs:parse-ip($response);
+
+	if (not($pref[1])) {
+	    expr jcs:output(">>>> error: invalid prefix");
+	} else if ($pref[2] != "inet") {
+	    expr jcs:output(">>>> error: address must be IPv4 (not ",
+			    $pref[2], ")");
+	} else if ($pref[3] < 24) {
+	    expr jcs:output(">>>> error: prefix length must be > 24");
+	} else if ($pref[3] >= 32) {
+	    expr jcs:output(">>>> error: prefix length must be <= 32");
+	} else {
+	    expr $response;
+	}
+    }
+}

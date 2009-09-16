@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<script>
+  <title>tunnel.slax</title>
+  <author>phil.shafer</author>
+  <synopsis>
+	Make a GRE tunnel
+  </synopsis>
+  <coe>op</coe>
+  <type>interfaces</type>
+
+  <description>
+This script uses the wizard framework to get the configuration for
+a tunnel.  The tunnel is then configured on both end points.
+
+The IPSEC side isn't done (at all) but will follow the same flow.
+What else is needed?
+
+I check that the endpoint address as already configured (requiring
+a direct or loopback route to that address), but should I allow
+aliases or duplicate paths?  If the interface fe-0/2/0 on "rdu" is
+"10.5.16.2", will folks use this address of make a second one on
+the same interface?
+
+The "Link Prefix" is at a /24 to /31 with the local side given and
+the remote side one higher (so 10.11.22.1/30 becomes 10.11.22.2/30
+on the remote box).
+
+  </description>
+
+  <keyword>gre</keyword>
+  <keyword>ipsec</keyword>
+  <keyword>tunnel</keyword>
+  <keyword>wizard</keyword>
+  <keyword>framework</keyword>
+  <example>
+    <title>basic</title>
+    <description>Example session</description>
+    <config>example-1.conf</config>
+    <input>example-1.input</input>
+    <output>example-1.output</output>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

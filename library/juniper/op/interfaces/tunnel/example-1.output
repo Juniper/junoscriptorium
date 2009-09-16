@@ -1,0 +1,31 @@
+user@cli> show configuration | compare rollback 1
+[edit interfaces gr-1/2/0]
++    unit 3 {
++        description "Link from dent to rdu";
++        tunnel {
++            source 10.5.1.2;
++            destination 10.5.16.2;
++        }
++        family inet {
++            address 10.11.22.1/30;
++        }
++    }
+
+user@cli> 
+
+(and on the remote side:)
+
+user@cli> show configuration | compare rollback 1   
+[edit interfaces gr-1/2/0]
++    unit 3 {
++        description "Link from rdu to dent";
++        tunnel {
++            source 10.5.16.2;
++            destination 10.5.1.2;
++        }
++        family inet {
++            address 10.11.22.2/30;
++        }
++    }
+
+user@cli> 

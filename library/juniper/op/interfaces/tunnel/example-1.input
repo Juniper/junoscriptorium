@@ -1,0 +1,41 @@
+
+user@cli> op tunnel    
+Enter remote endpoint address [ipaddr]: 10.5.22.2
+[opening connection to 10.5.22.2 ... ]
+[connected]
+
+remote endpoint rdu is a m7i running 9.5R1 (S/N A6789)
+   Choose Style of tunnel [gre,ipsec]: gre
+      Enter Local Endpoint Address: 10.5.1.2
+      Enter Remote Endpoint Address: 10.5.16.2
+      Configure Numbered link? (default: no) [yes/no]: yes
+         Enter Link Prefix: 10.11.22.1/30
+      Entering data for Local Interface:
+         Available tunnel interfaces:
+            gr-1/2/0  (3 tunnel(s) configured)
+               gr-1/2/0.0:  10.3.2.1/30 (Link from dent to rdu)
+               gr-1/2/0.1:  10.6.5.5/30 (Link from dent to rdu)
+               gr-1/2/0.2:  10.3.222.1/30 (Link from dent to rdu)
+         Enter Tunnel interface (default: gr-1/2/0.3): 
+      Entering data for Remote Interface:
+         Available tunnel interfaces:
+            gr-1/2/0  (3 tunnel(s) configured)
+               gr-1/2/0.0:   ()
+               gr-1/2/0.1:  10.3.222.2/30 (Link from rdu to dent)
+               gr-1/2/0.2:  10.3.2.2/30 (Link from rdu to dent)
+         Enter Tunnel interface (default: gr-1/2/0.3): 
+
+Configuration:
+   Style of tunnel:                     GRE tunnel
+      Local Endpoint Address:           10.5.1.2
+      Remote Endpoint Address:          10.5.16.2
+      Numbered link:
+         Link Prefix:                   10.11.22.1/30
+      Local Interface:
+         Tunnel interface:              gr-1/2/0.3
+      Remote Interface:
+         Tunnel interface:              gr-1/2/0.3
+Is this configuration accurate? (default: no) [yes/no]: yes
+[loading local configuration ...]
+[loading remote configuration ...]
+[finished]

@@ -3,13 +3,14 @@ version 1.0;
 ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
 ns wizard extension = "http://xml.juniper.net/wizard";
 ns dyn extension = "http://exslt.org/dynamic";
-ns exslt = "http://exslt.org/common";
+ns exsl = "http://exslt.org/common";
 
 import "../import/lib-phil.slax";
 
 var $lib-wizard-version = 20090824;
 
 param $disallow-blank-line;
+param $debug;
 
 var $value-indent = 40; /* Where to break title/value boundary */
 var $new-indent = "   ";
@@ -29,15 +30,19 @@ var $typedefs := {
     }
 }
 
-template wizard-builder ($config, $guide, $title)
+template wizard-builder ($config, $guide, $title, $opaque = /null)
 {
-    call build-config($config, $guide, $title, $last = /null);
+    if ($debug) {
+	call jcs:dump($name = "pre-opaque", $out = $opaque);
+    }
+
+    call build-config($config, $guide, $title, $last = /null, $opaque);
 }
 
-template build-config ($config, $guide, $last, $title)
+template build-config ($config, $guide, $last, $title, $opaque)
 {
     var $new := {
-	call build($config, $last, $guide);
+	call build($config, $last, $guide, $opaque);
     }
 
     if (0) {
@@ -45,10 +50,10 @@ template build-config ($config, $guide, $last, $title)
     }
 
     expr jcs:output("\nConfiguration:");
-    call display-config($guide, $config = $new);
+    call display-config($guide, $config = $new, $opaque);
 
     var $response = {
-	call prompt($prompt = "Is this configuration accurate?",
+	call prompt($prompt = "Is this configuration accurate?", $opaque,
 		    $default = "no", $type = "yes/no");
     }
 
@@ -68,7 +73,7 @@ template build-config ($config, $guide, $last, $title)
 	    /* Return nothing */
 	} else {
 	    expr jcs:output("Please correct configuration data as needed");
-	    call build-config($config, $guide, $last = $new, $title);
+	    call build-config($config, $guide, $last = $new, $title, $opaque);
 	}
     }
 }
@@ -88,11 +93,13 @@ template banner-message ($banner-message)
  * "." == empty, since there's a PR for empty lines.
  * If the input is empty and there was a previous value, use it.
  */
-template prompt ($prompt, $previous, $node = /null,
+template prompt ($prompt, $previous, $node = /null, $opaque,
 		 $default = $node/@default, $mandatory = $node/@mandatory,
 		 $type = $node/@type, $range = $node/@range,
-		 $help = $node/help)
+		 $help = $node/help, $force = $node/@force, $indent = "")
 {
+    var $validator = $node/validator;
+
     var $fullprompt = {
 	expr $prompt;
 	if ($type == "secret") {
@@ -131,8 +138,8 @@ template prompt ($prompt, $previous, $node = /null,
 	    } else {
 		expr jcs:output(">>> invalid response: ",
 				"values were not identical");
-		call prompt($prompt, $previous, $node, $help,
-			    $default, $mandatory, $type);
+		call prompt($prompt, $previous, $node, $help, $opaque,
+			    $default, $mandatory, $type, $indent);
 	    }
 	}
     } else {
@@ -146,8 +153,8 @@ template prompt ($prompt, $previous, $node = /null,
 	    } else {
 	        expr jcs:output(">>> no help message is available");
 	    }
-	    call prompt($prompt, $previous, $node, $help,
-			$default, $mandatory, $type);
+	    call prompt($prompt, $previous, $node, $help, $opaque,
+			$default, $mandatory, $type, $indent);
 	    
 	} else if ($response == "") {
 	    if ($disallow-blank-line) {
@@ -163,31 +170,41 @@ template prompt ($prompt, $previous, $node = /null,
 		call abort($message = "Invalid blank line (sorry; use '.')");
 	    }
 
-	    if ($previous) {
+	    if (string-length($previous) > 0) {
 		/* Return the previous value */
 		expr $previous;
+	    } else if ($default && $force) {
+		/* Force creation of the default value */
+		expr $default;
 	    } else if ($type == "yes/no" || $type == "empty") {
-		if ($response == "yes" || $response == "no") {
-		    expr $response;
+		if ($default) {
+		    expr "";
 		} else {
 		    expr jcs:output("Please answer 'yes' or 'no'");
-		    call prompt($prompt, $previous, $node, $help,
-				$default, $mandatory, $type);
+		    call prompt($prompt, $previous, $node, $help, $opaque,
+				$default, $mandatory, $type, $indent);
 		}
+
 	    } else {
 		expr "";
 	    }
 
 	} else if ($response != ".") {
 	    if (not($type)) {
-		expr $response;
+		if ($validator) {
+		    call validator($response, $validator, $opaque,
+				   $prompt, $previous, $node, $help,
+				   $default, $mandatory, $type, $indent);
+		} else {
+		    expr $response;
+		}
 	    } else if ($type == "yes/no" || $type == "empty") {
 		if ($response == "yes" || $response == "no") {
 		    expr $response;
 		} else {
 		    expr jcs:output("Please answer 'yes' or 'no'");
-		    call prompt($prompt, $previous, $node, $help,
-				$default, $mandatory, $type);
+		    call prompt($prompt, $previous, $node, $help, $opaque,
+				$default, $mandatory, $type, $indent);
 		}
 	    } else if ($type == "integer") {
 		if ($range) {
@@ -196,8 +213,9 @@ template prompt ($prompt, $previous, $node = /null,
 			expr jcs:output(">>> invalid response: ",
 					"must be within range of ",
 					$re[2], "..", $re[3]);
-			call prompt($prompt, $previous, $node, $help,
-				    $default, $mandatory, $type, $range);
+			call prompt($prompt, $previous, $node, $help, $opaque,
+				    $default, $mandatory, $type, $range,
+				    $indent);
 		    } else {
 			expr $response;
 		    }
@@ -209,25 +227,60 @@ template prompt ($prompt, $previous, $node = /null,
 		var $td = $typedefs/node()[@name == $type];
 		if ($td && $td/match/regex) {
 		    var $re = jcs:regex($td/match/regex, $response);
-		    if ($re[1]) {
-			expr $response;
-		    } else {
+		    if (not($re[1])) {
 			expr jcs:output(">>> invalid response: ",
 					$td/match/message);
-			call prompt($prompt, $previous, $node, $help,
-				    $default, $mandatory, $type);
+			call prompt($prompt, $previous, $node, $help, $opaque,
+				    $default, $mandatory, $type, $indent);
+
+		    } else if ($validator) {
+			call validator($response, $validator, $opaque,
+				       $prompt, $previous, $node, $help,
+				       $default, $mandatory, $type, $indent);
+		    } else {
+			expr $response;
 		    }
 		} else {
-		    expr $response;
+		    if ($validator) {
+			call validator($response, $validator, $opaque,
+				       $prompt, $previous, $node, $help,
+				       $default, $mandatory, $type, $indent);
+		    } else {
+			expr $response;
+		    }
 		}
 	    }
-	} else if ($previous) {
+	} else if (string-length($previous) > 0) {
 	    expr $previous;
 	}
     }
 }
 
-template evaluate ($expression, $config, $last)
+template validator ($response, $validator,
+		    $prompt, $previous, $node, $help,
+		    $default, $mandatory, $type, $indent, $opaque)
+{
+    var $value = $validator _ "($response, $opaque)";
+    var $fixed = dyn:evaluate($value);
+    var $data := {
+	<role> "validate";
+	<indent> $indent;
+    }
+
+    if ($debug) {
+	expr jcs:output("validator got ", $fixed);
+    }
+
+    if (string-length($fixed) > 0) {
+	expr $fixed;
+    } else {
+	call prompt($prompt, $previous, $node, $help, $opaque,
+		    $default, $mandatory, $type, $indent);
+    }
+}
+
+template evaluate ($expression, $config, $last, $indent,
+		   $opaque, $role = "unknown")
 {
     /*
      * This is the odd case of "The RTF That Wouldn't Go Away".
@@ -237,24 +290,51 @@ template evaluate ($expression, $config, $last)
      * into my voodoo doll for the inventor of RTF.
      */
 
-    var $value = $expression _ "($config, $last)";
-    expr jcs:output("evaluate: ", $value);
+    /*
+     * $data gives us a mechanism for passing data into the functions
+     * without breaking them as we add parameters, since xslt will
+     * get upset if all parameters are not consumed.
+     */
+    var $data := {
+	<role> $role;
+	<indent> $indent;
+    }
+    var $value = $expression _ "($config, $last, $opaque, $data)";
+    if ($debug) {
+	expr jcs:output("evaluate: ", $value);
+    }
+
     var $rtf = dyn:evaluate($value);
-    expr jcs:output("evaluate: back");
+
+    if ($debug) {
+	expr jcs:output("evaluate: back");
+    }
+
     copy-of $rtf;
 }
 
-template build ($config, $last, $guide, $indent = $new-indent)
+template build ($config, $last, $guide, $indent = $new-indent, $opaque)
 {
-    if (guide-builder) {
+    if ($guide/guide-builder) {
 	var $new-guide := {
-	    call evaluate($expression = guide-builder, $config, $last);
+	    call evaluate($expression = $guide/guide-builder, $config,
+			  $last, $indent, $opaque, $role = "build");
 	}
 
-	call build-internal($config, $last, $guide = $new-guide, $indent);
+	if ($debug) {
+	    if ($new-guide/config) {
+		expr jcs:output("builder: new config:");
+		call jcs:dump($name = "new-config", $out = $new-guide/config);
+	    } else {
+		expr jcs:output("builder: no new config");
+	    }
+	}
+
+	call build-internal($config, $last, $guide = $new-guide,
+			    $indent, $opaque);
 
     } else {
-	call build-internal($config, $last, $guide, $indent);
+	call build-internal($config, $last, $guide, $indent, $opaque);
     }
 }
 
@@ -262,7 +342,7 @@ template build ($config, $last, $guide, $indent = $new-indent)
  * This is the core of the config builder.  Guided by $guide, we prompt
  * the user for information and assemble it into configuration.
  */
-template build-internal ($config, $last, $guide, $indent)
+template build-internal ($config, $last, $guide, $indent, $opaque)
 {
     for-each ($guide/node()) {
 	var $path = @path;
@@ -273,7 +353,7 @@ template build-internal ($config, $last, $guide, $indent)
 	    var $enable = {
 		if (@ask) {
 		    var $prompt = $indent _ "Configure " _ @title _ "?";
-		    var $previous = {
+		    var $previous := {
 			if ($this-last) {
 			    expr "yes";
 			} else if ($last) {
@@ -282,7 +362,7 @@ template build-internal ($config, $last, $guide, $indent)
 			    expr "yes";
 			}
 		    }
-		    call prompt($prompt, $previous,
+		    call prompt($prompt, $previous, $indent, $opaque,
 				$default = @default, $type = "yes/no");
 		    
 		} else {
@@ -305,9 +385,8 @@ template build-internal ($config, $last, $guide, $indent)
 		}
 
 		var $new := {
-		    call build($config = $this-config,
-			       $last = $this-last,
-			       $guide = ., $indent = $ind);
+		    call build($config = $this-config, $last = $this-last,
+			       $guide = ., $indent = $ind, $opaque);
 		}
 		if ($new/node()) {
 		    <xsl:element name=$path> {
@@ -318,7 +397,7 @@ template build-internal ($config, $last, $guide, $indent)
 
 	} else if (name() == "option") {
 	    var $prompt = $indent _ "Configure " _ @title _ "?";
-	    var $previous = {
+	    var $previous := {
 		if ($this-last) {
 		    expr "yes";
 		} else if ($last) {
@@ -328,14 +407,14 @@ template build-internal ($config, $last, $guide, $indent)
 		}
 	    }
 	    var $value = {
-		call prompt($prompt, $previous,
+		call prompt($prompt, $previous, $indent, $opaque,
 			    $default = @default, $type = "yes/no");
 	    }
 	    if ($value == "yes") {
 		var $new := {
-		    call build($config = $this-config,
-			       $last = $this-last,
-			       $guide = ., $indent = $indent _ $new-indent);
+		    call build($config = $this-config, $last = $this-last,
+			       $guide = ., $indent = $indent _ $new-indent,
+			       $opaque);
 		}
 		if ($new/node()) {
 		    <xsl:element name=$path> {
@@ -356,12 +435,13 @@ template build-internal ($config, $last, $guide, $indent)
 	    if (count($list/node()) <= 0) {
 		var $prompt = $indent _ "Configure " _ @title _ "?";
 		var $value = {
-		    call prompt($prompt, $default = "no", $type = "yes/no");
+		    call prompt($prompt, $indent, $opaque,
+				$default = "no", $type = "yes/no");
 		}
 		if ($value == "yes") {
 		    call manage-list($list, $guide = .,
 				$indent = $indent _ $new-indent,
-				$op = "first-add");
+				$op = "first-add", $opaque);
 		}
 	    } else {
 		call manage-list($list, $guide = .,
@@ -369,11 +449,11 @@ template build-internal ($config, $last, $guide, $indent)
 	    }
 
 	} else if (name() == "choice") {
-	    call manage-choice($guide = ., $config, $last, $indent);
+	    call manage-choice($guide = ., $config, $last, $indent, $opaque);
 
 	} else if (name() == "leaf") {
 	    var $prompt = $indent _ "Enter " _ @title;
-	    var $previous = {
+	    var $previous := {
 	        var $prev = jcs:first-of($this-last, $this-config);
 		if (@type == "empty") {
 		    if ($prev) {
@@ -385,7 +465,7 @@ template build-internal ($config, $last, $guide, $indent)
 	    }
 
 	    var $value = {
-		call prompt($prompt, $previous, $node = .);
+		call prompt($prompt, $previous, $node = ., $indent, $opaque);
 	    }
 	    if (@type == "empty") {
 		if ($value == "yes") {
@@ -396,8 +476,8 @@ template build-internal ($config, $last, $guide, $indent)
 		    <xsl:element name=$path> $value;
 		}
 	    }
-	} else if (name() == "guide") {
-	    /* ... */
+	} else if (name() == "config") {
+	    copy-of node();
 	}
     }
 }
@@ -405,10 +485,10 @@ template build-internal ($config, $last, $guide, $indent)
 /*
  * Manage a choice of multiple children
  */
-template manage-choice ($guide, $config, $last, $indent)
+template manage-choice ($guide, $config, $last, $indent, $opaque)
 {
     var $choice = {
-	call prompt-choice($guide, $config, $last, $indent);
+	call prompt-choice($guide, $config, $last, $indent, $opaque);
     }
 
     if ($choice) {
@@ -420,7 +500,7 @@ template manage-choice ($guide, $config, $last, $indent)
 	    var $new := {
 		call build($config = $this-config, $last = $this-last,
 			   $guide = $new-guide,
-			   $indent = $indent _ $new-indent);
+			   $indent = $indent _ $new-indent, $opaque);
 	    }
 	    if ($new) {
 		<xsl:element name=$new-guide/@path> {
@@ -429,7 +509,7 @@ template manage-choice ($guide, $config, $last, $indent)
 	    }
 	} else {
 	    expr jcs:output(">>> invalid option");
-	    call manage-choice($guide, $config, $last, $indent);
+	    call manage-choice($guide, $config, $last, $indent, $opaque);
 	}
     }
 }
@@ -437,7 +517,7 @@ template manage-choice ($guide, $config, $last, $indent)
 /*
  * Prompt for a choice
  */
-template prompt-choice ($guide, $config, $last, $indent)
+template prompt-choice ($guide, $config, $last, $indent, $opaque)
 {
     var $prompt = $indent _ "Choose " _ $guide/@title;
     var $type1 = {
@@ -447,7 +527,7 @@ template prompt-choice ($guide, $config, $last, $indent)
     }
     var $type = substring($type1, 2);
     var $default = $guide/@default;
-    var $previous = {
+    var $previous := {
 	for-each ($guide/node()) {
 	    var $path = @path;
 	    var $that = $last/node()[name() == $path];
@@ -457,7 +537,9 @@ template prompt-choice ($guide, $config, $last, $indent)
 	}
     }
 
-    var $response = { call prompt($prompt, $default, $previous, $type); }
+    var $response = {
+	call prompt($prompt, $default, $previous, $type, $indent, $opaque);
+    }
     if ($response && $response != "none") {
 	expr $response;
     }
@@ -469,9 +551,9 @@ template prompt-choice ($guide, $config, $last, $indent)
  * we build the config, so $list always has the config we
  * are building.
  */
-template manage-list ($list, $guide, $indent, $op)
+template manage-list ($list, $guide, $indent, $op, $opaque)
 {
-    if (0) {
+    if ($debug) {
 	expr jcs:output("manage-list: ", $op, " :: ", count($list));
 	call jcs:dump($name = "list", $out = $list);
     }
@@ -485,21 +567,22 @@ template manage-list ($list, $guide, $indent, $op)
 	    expr $op;
 	} else {
 	    call prompt($prompt = $indent _ "Enter option",
-			$default = "continue",
+			$default = "continue", $indent, $opaque,
 			$type = "add,delete,list,continue");
 	}
     }
 
     if ($operation == "list") {
-	call list-members($guide, $indent, $list = $list/node());
-	call manage-list($list, $guide, $indent);
+	call list-members($guide, $indent, $list = $list/node(), $opaque);
+	call manage-list($list, $guide, $indent, $opaque);
 	
     } else if ($operation == "first-add") {
-	var $add := { call make-list-member($list, $guide, $indent); }
+	var $add := { call make-list-member($list, $guide, $indent, $opaque); }
 	var $new := { call merge-lists($list, $add); }
 	var $prompt = $indent _ "Add another " _ $guide/key/@title;
 	var $more = {
-	    call prompt($prompt, $default = "no", $type = "yes/no");
+	    call prompt($prompt, $default = "no", $type = "yes/no",
+			$indent, $opaque);
 	}
 
 	var $op = {
@@ -507,16 +590,17 @@ template manage-list ($list, $guide, $indent, $op)
 		expr "first-add";
 	    }
 	}
-	call manage-list($list = $new, $guide, $indent, $op);
+	call manage-list($list = $new, $guide, $indent, $op, $opaque);
 
     } else if ($operation == "add") {
 	var $add := { call make-list-member($list, $guide, $indent); }
 	var $new := { call merge-lists($list, $add); }
-	call manage-list($list = $new, $guide, $indent);
+	call manage-list($list = $new, $guide, $indent, $opaque);
 
     } else if ($operation == "delete") {
-	var $name = { call prompt($prompt = $indent _ "Enter "
-				  _ $guide/key/@title _ " to delete"); }
+	var $name = { call prompt($indent, $prompt = $indent _ "Enter "
+				  _ $guide/key/@title _ " to delete",
+				  $opaque); }
 
 	var $old = $list/node()[name == $name];
 	if ($old) {
@@ -529,18 +613,18 @@ template manage-list ($list, $guide, $indent, $op)
 	} else {
 	    expr jcs:output(">>> ", $guide/key/@title, " '", $name,
 			    "' was not found");
-	    call manage-list($list, $guide, $indent);
+	    call manage-list($list, $guide, $indent, $opaque);
 	}
 
     } else if ($operation == "continue" || $operation == "") {
 	copy-of $list;
     } else {
 	expr jcs:output(">>> invalid option");
-	call manage-list($list, $guide, $indent);
+	call manage-list($list, $guide, $indent, $opaque);
     }
 }
 
-template list-members ($list, $indent, $guide)
+template list-members ($list, $indent, $guide, $opaque)
 {
     expr jcs:output($indent, $guide/@title, ":");
     if (count($list) == 0) {
@@ -553,22 +637,23 @@ template list-members ($list, $indent, $guide)
 	    expr jcs:output($line, $pad, name);
 
 	    call display-config($config = ., $guide,
-				$indent = $indent _ $new-indent _ $new-indent);
+				$indent = $indent _ $new-indent _ $new-indent,
+				$opaque);
 	}
     }
 }
 
-template make-list-member ($list, $guide, $indent)
+template make-list-member ($list, $guide, $indent, $opaque)
 {
     var $prompt = $indent _ "Enter " _ $guide/key/@title;
-    var $name := { call prompt($prompt); }
+    var $name := { call prompt($prompt, $indent, $opaque); }
 
     var $this = $list[name == $name];
 
     <xsl:element name=$guide/@path> {
 	<name> $name;
 	call build($config = /null, $last = $this,
-		   $guide = ., $indent = $indent _ $new-indent);
+		   $guide = ., $indent = $indent _ $new-indent, $opaque);
     }
 }
 
@@ -576,24 +661,6 @@ template merge-lists ($list, $add)
 {
     var $rest = $list/node()[name != $add/node()/name];
     var $new = $rest | $add/node();
-
-    if (0) {
-	call jcs:dump($name = "list", $out = $list);
-	call jcs:dump($name = "add", $out = $add);
-	for-each ($add/node()/name) {
-	    expr jcs:output("add name ", .);
-	}
-	expr jcs:output("add: [", $add/node()/name, "] ", name($add/node()));
-        call jcs:dump($name = "rest", $out = $rest);
-	call jcs:dump($name = "new", $out = $new);
-	for-each ($list/node()) {
-	    expr jcs:output("[", name, "/", name(), "]");
-	    if (name != $add/node()/name) {
-	        expr jcs:output("   match");
-	    }
-	}
-	expr jcs:output("count ", count($list), "/", count($rest));
-    }
 
     copy-of $new;
 }
@@ -603,23 +670,26 @@ var $padding = "                                                    ";
 /*
  * Display the configuration in simple format
  */
-template display-config ($guide, $config, $indent = $new-indent)
+template display-config ($guide, $config, $indent = $new-indent, $opaque)
 {
     if (guide-builder) {
 	var $new-guide := {
-	    call evaluate($expression = guide-builder, $config, $last = /null);
+	    call evaluate($expression = guide-builder, $config, $indent,
+			  $last = /null, $opaque, $role = "display");
 	}
 
-	call display-config-internal($guide = $new-guide, $config, $indent);
+	call display-config-internal($guide = $new-guide, $config,
+				     $indent, $opaque);
 
     } else {
-	call display-config-internal($guide, $config, $indent);
+	call display-config-internal($guide, $config, $indent, $opaque);
     }
 }
 
-template display-config-internal ($guide, $config, $indent = $new-indent)
+template display-config-internal ($guide, $config, $indent = $new-indent,
+				  $opaque)
 {
-    if (false) {
+    if ($debug) {
 	expr jcs:output("display: ", name($config), " ", count($config));
 	call jcs:dump($name = "new", $out = $config);
     }
@@ -639,7 +709,7 @@ template display-config-internal ($guide, $config, $indent = $new-indent)
 		    }
 		}
 		call display-config($config = $config/node()[name() == $path],
-				    $guide = ., $indent = $ind);
+				    $guide = ., $indent = $ind, $opaque);
 	    }
 
 	} else if (name() == "option") {
@@ -650,7 +720,7 @@ template display-config-internal ($guide, $config, $indent = $new-indent)
 		expr jcs:output($line, $pad, "yes");
 		call display-config($config = $config/node()[name() == $path],
 				    $guide = .,
-				    $indent = $indent _ $new-indent);
+				    $indent = $indent _ $new-indent, $opaque);
 	    } else {
 		expr jcs:output($line, $pad, "no");
 	    }
@@ -668,7 +738,8 @@ template display-config-internal ($guide, $config, $indent = $new-indent)
 
 		    call display-config($guide = .,
                                 $config = $config/node()[name() == $path],
-				$indent = $indent _ $new-indent _ $new-indent);
+				$indent = $indent _ $new-indent _ $new-indent,
+				$opaque);
 		}
 		*/
 	    }
@@ -685,7 +756,8 @@ template display-config-internal ($guide, $config, $indent = $new-indent)
 		    expr jcs:output($line, $pad, @title);
 
 		    call display-config($config = $that, $guide = .,
-					$indent = $indent _ $new-indent);
+					$indent = $indent _ $new-indent,
+					$opaque);
 		}
 	    }
 
