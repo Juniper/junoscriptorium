@@ -136,7 +136,7 @@ template prompt ($prompt, $previous, $node = /null, $opaque,
 	    if ($response2 == $response) {
 		expr $response;
 	    } else {
-		expr jcs:output(">>> invalid response: ",
+		expr jcs:output(">>>> invalid response: ",
 				"values were not identical");
 		call prompt($prompt, $previous, $node, $help, $opaque,
 			    $default, $mandatory, $type, $indent);
@@ -151,7 +151,7 @@ template prompt ($prompt, $previous, $node = /null, $opaque,
 		    expr jcs:output(.);
 		}
 	    } else {
-	        expr jcs:output(">>> no help message is available");
+	        expr jcs:output(">>>> no help message is available");
 	    }
 	    call prompt($prompt, $previous, $node, $help, $opaque,
 			$default, $mandatory, $type, $indent);
@@ -180,10 +180,14 @@ template prompt ($prompt, $previous, $node = /null, $opaque,
 		if ($default) {
 		    expr "";
 		} else {
-		    expr jcs:output("Please answer 'yes' or 'no'");
+		    expr jcs:output(">>>> answer must be 'yes' or 'no'");
 		    call prompt($prompt, $previous, $node, $help, $opaque,
 				$default, $mandatory, $type, $indent);
 		}
+	    } else if ($mandatory) {
+		expr jcs:output(">>>> missing mandatory value");
+		call prompt($prompt, $previous, $node, $help, $opaque,
+			    $default, $mandatory, $type, $indent);
 
 	    } else {
 		expr "";
@@ -202,7 +206,7 @@ template prompt ($prompt, $previous, $node = /null, $opaque,
 		if ($response == "yes" || $response == "no") {
 		    expr $response;
 		} else {
-		    expr jcs:output("Please answer 'yes' or 'no'");
+		    expr jcs:output(">>>> answer must be 'yes' or 'no'");
 		    call prompt($prompt, $previous, $node, $help, $opaque,
 				$default, $mandatory, $type, $indent);
 		}
@@ -210,7 +214,7 @@ template prompt ($prompt, $previous, $node = /null, $opaque,
 		if ($range) {
 		    var $re = jcs:regex("([0-9]+)-([0-9]+)", $range);
 		    if ($re[1] && ($response < $re[2] || $response > $re[3])) {
-			expr jcs:output(">>> invalid response: ",
+			expr jcs:output(">>>> invalid response: ",
 					"must be within range of ",
 					$re[2], "..", $re[3]);
 			call prompt($prompt, $previous, $node, $help, $opaque,
@@ -228,7 +232,7 @@ template prompt ($prompt, $previous, $node = /null, $opaque,
 		if ($td && $td/match/regex) {
 		    var $re = jcs:regex($td/match/regex, $response);
 		    if (not($re[1])) {
-			expr jcs:output(">>> invalid response: ",
+			expr jcs:output(">>>> invalid response: ",
 					$td/match/message);
 			call prompt($prompt, $previous, $node, $help, $opaque,
 				    $default, $mandatory, $type, $indent);
@@ -252,6 +256,10 @@ template prompt ($prompt, $previous, $node = /null, $opaque,
 	    }
 	} else if (string-length($previous) > 0) {
 	    expr $previous;
+	} else if ($mandatory) {
+	    expr jcs:output(">>>> missing mandatory value");
+	    call prompt($prompt, $previous, $node, $help, $opaque,
+			$default, $mandatory, $type, $indent);
 	}
     }
 }
@@ -508,7 +516,7 @@ template manage-choice ($guide, $config, $last, $indent, $opaque)
 		}
 	    }
 	} else {
-	    expr jcs:output(">>> invalid option");
+	    expr jcs:output(">>>> invalid option");
 	    call manage-choice($guide, $config, $last, $indent, $opaque);
 	}
     }
@@ -611,7 +619,7 @@ template manage-list ($list, $guide, $indent, $op, $opaque)
 			    "' has been deleted");
 	    call manage-list($list = $rest, $guide, $indent);
 	} else {
-	    expr jcs:output(">>> ", $guide/key/@title, " '", $name,
+	    expr jcs:output(">>>> ", $guide/key/@title, " '", $name,
 			    "' was not found");
 	    call manage-list($list, $guide, $indent, $opaque);
 	}
@@ -619,7 +627,7 @@ template manage-list ($list, $guide, $indent, $op, $opaque)
     } else if ($operation == "continue" || $operation == "") {
 	copy-of $list;
     } else {
-	expr jcs:output(">>> invalid option");
+	expr jcs:output(">>>> invalid option");
 	call manage-list($list, $guide, $indent, $opaque);
     }
 }

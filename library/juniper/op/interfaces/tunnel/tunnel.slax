@@ -19,10 +19,12 @@ param $show;
 var $guide := {
     <choice title="Style of tunnel"> {
 	<container choice="gre" title="GRE tunnel" path="gre"> {
-	    <leaf title="Local Endpoint Address" path="source"> {
+	    <leaf title="Local Endpoint Address" path="source"
+	                       mandatory="yes"> {
 		<validator> "wizard:validate-local-address";
 	    }
-	    <leaf title="Remote Endpoint Address" path="destination"> {
+	    <leaf title="Remote Endpoint Address" path="destination"
+	                       mandatory="yes"> {
 		<validator> "wizard:validate-remote-address";
 	    }
 	    <container ask="yes" default="no"
