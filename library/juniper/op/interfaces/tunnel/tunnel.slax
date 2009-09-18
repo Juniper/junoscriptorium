@@ -16,29 +16,42 @@ import "../import/lib-wizard.slax";
 param $debug;
 param $show;
 
+var $base-guide := {
+    <leaf title="Local Endpoint Address" path="source"
+                         mandatory="yes"> {
+	<validator> "wizard:validate-local-address";
+    }
+    <leaf title="Remote Endpoint Address" path="destination"
+	                       mandatory="yes"> {
+	<validator> "wizard:validate-remote-address";
+    }
+    <container ask="yes" default="no"
+    title="Numbered link" path="link"> {
+
+	<leaf title="Link Prefix" path="prefix"> {
+	    <validator> "wizard:validate-prefix";
+	}
+    }
+}
+
 var $guide := {
     <choice title="Style of tunnel"> {
 	<container choice="gre" title="GRE tunnel" path="gre"> {
-	    <leaf title="Local Endpoint Address" path="source"
-	                       mandatory="yes"> {
-		<validator> "wizard:validate-local-address";
-	    }
-	    <leaf title="Remote Endpoint Address" path="destination"
-	                       mandatory="yes"> {
-		<validator> "wizard:validate-remote-address";
-	    }
-	    <container ask="yes" default="no"
-	            title="Numbered link" path="link"> {
-
-		<leaf title="Link Prefix" path="prefix"> {
-		    <validator> "wizard:validate-prefix";
-		}
-	    }
+	    copy-of $base-guide;
 	    <container title="Local Interface" path="local"> {
-		<guide-builder> "wizard:generate-local";
+		<guide-builder iftype="gr"> "wizard:generate-local";
 	    }
 	    <container title="Remote Interface" path="remote"> {
-		<guide-builder> "wizard:generate-remote";
+		<guide-builder iftype="gr"> "wizard:generate-remote";
+	    }
+	}
+	<container choice="ipip" title="IP-IP tunnel" path="ipip" iftype="ip"> {
+	    copy-of $base-guide;
+	    <container title="Local Interface" path="local"> {
+		<guide-builder iftype="ip"> "wizard:generate-local";
+	    }
+	    <container title="Remote Interface" path="remote"> {
+		<guide-builder iftype="ip"> "wizard:generate-remote";
 	    }
 	}
 	<container choice="ipsec" title="IP-SEC tunnel" path="ipsec"> {
@@ -85,17 +98,21 @@ template add
     }
 
     if ($new/gre) {
-	call add-gre($gre = $new/gre, $info);
+	call add-tunnel($config = $new/gre, $info);
+    } else if ($new/ipip) {
+	call add-tunnel($config = $new/ipip, $info);
+    } else {
+	expr jcs:output("no config found");
     }
 }
 
-template add-gre ($gre, $info)
+template add-tunnel ($config, $info)
 {
     var $local := {
-	call gen-config($local = "yes", $gre, $info);
+	call gen-config($local = "yes", $config, $info);
     }
     var $remote := {
-	call gen-config($local = false, $gre, $info);
+	call gen-config($local = false, $config, $info);
     }
 
     if ($show) {
@@ -112,13 +129,13 @@ template add-gre ($gre, $info)
     expr jcs:output("[finished]");
 }
 
-template gen-config ($local, $gre, $info)
+template gen-config ($local, $config, $info)
 {
     var $interface = {
 	if ($local) {
-	    expr $gre/local/interface;
+	    expr $config/local/interface;
 	} else {
-	    expr $gre/remote/interface;
+	    expr $config/remote/interface;
 	}
     }
     var $ifname = substring-before($interface, ".");
@@ -145,20 +162,20 @@ template gen-config ($local, $gre, $info)
 		    <description> $desc;
 		    <tunnel> {
 			if ($local) {
-			    <source> $gre/source;
-			    <destination> $gre/destination;
+			    <source> $config/source;
+			    <destination> $config/destination;
 			} else {
-			    <source> $gre/destination;
-			    <destination> $gre/source;
+			    <source> $config/destination;
+			    <destination> $config/source;
 			}
 		    }
-		    if ($gre/link/prefix) {
+		    if ($config/link/prefix) {
 			<family> {
 			    <inet> {
 				<address> {
 				    <name> {
 					call gen-address($local,
-						   $prefix = $gre/link/prefix);
+						   $prefix = $config/link/prefix);
 				    }
 				}
 			    }
@@ -273,15 +290,14 @@ template box-info ($info)
     param $opaque;
     param $data;
 
+    var $iftype = $data/guide/container/guide-builder/@iftype _ "-";
+
     if ($debug) {
 	expr jcs:output("in wizard:generate-local");
-	expr jcs:output("  ", $data/role, " :: ", exsl:object-type($config));
-	call jcs:dump($name = "config", $out = $config);
-	call jcs:dump($name = "opaque", $out = $opaque);
     }
 
     <func:result> {
-	call generate-guide-endpoint($opaque, $data,
+	call generate-guide-endpoint($opaque, $data, $iftype,
 				     $conn = $local-connection);
     }
 }
@@ -292,17 +308,15 @@ template box-info ($info)
     param $opaque;
     param $data;
 
+    var $iftype = $data/guide/container/guide-builder/@iftype _ "-";
+
     if ($debug) {
 	expr jcs:output("in generate-remote: ");
     }
 
-    if ($debug && exsl:object-type($config) == "node-set") {
-	call jcs:dump($name = "config", $out = $config/../..);
-    }
-
     <func:result> {
 	var $conn = $opaque/connection;
-	call generate-guide-endpoint($opaque, $data, $conn);
+	call generate-guide-endpoint($opaque, $data, $conn, $iftype);
     }
 }
 
@@ -319,21 +333,21 @@ template box-info ($info)
     <xsl:message terminate="yes"> "Not supported";
 }
 
-template generate-guide-endpoint ($opaque, $data, $conn)
+template generate-guide-endpoint ($opaque, $data, $conn, $iftype)
 {
     var $default = {
 	if ($data/role == "build") {
 	    var $rpc = <get-interface-information> {
 		<terse>;
 	    }
-	    var $iflist = jcs:execute($conn, $rpc);
+	    var $results = jcs:execute($conn, $rpc);
 
-	    var $grelist =
-		$iflist/physical-interface[starts-with(name, "gr-")];
+	    var $iflist =
+		$results/physical-interface[starts-with(name, $iftype)];
 
-	    if (not(jcs:empty($grelist))) {
+	    if (not(jcs:empty($iflist))) {
 		expr jcs:output($data/indent, "Available tunnel interfaces:");
-		for-each ($grelist) {
+		for-each ($iflist) {
 		    var $count = count(logical-interface);
 		    expr jcs:output($data/indent, "   ", name, "  (",
 				    $count, " tunnel(s) configured)");

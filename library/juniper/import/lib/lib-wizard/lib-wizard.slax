@@ -287,7 +287,7 @@ template validator ($response, $validator,
     }
 }
 
-template evaluate ($expression, $config, $last, $indent,
+template evaluate ($expression, $config, $last, $indent, $guide,
 		   $opaque, $role = "unknown")
 {
     /*
@@ -306,6 +306,9 @@ template evaluate ($expression, $config, $last, $indent,
     var $data := {
 	<role> $role;
 	<indent> $indent;
+	<guide> {
+	    copy-of $guide;
+	}
     }
     var $value = $expression _ "($config, $last, $opaque, $data)";
     if ($debug) {
@@ -325,7 +328,7 @@ template build ($config, $last, $guide, $indent = $new-indent, $opaque)
 {
     if ($guide/guide-builder) {
 	var $new-guide := {
-	    call evaluate($expression = $guide/guide-builder, $config,
+	    call evaluate($expression = $guide/guide-builder, $config, $guide,
 			  $last, $indent, $opaque, $role = "build");
 	}
 
@@ -683,7 +686,7 @@ template display-config ($guide, $config, $indent = $new-indent, $opaque)
     if (guide-builder) {
 	var $new-guide := {
 	    call evaluate($expression = guide-builder, $config, $indent,
-			  $last = /null, $opaque, $role = "display");
+			  $last = /null, $opaque, $role = "display", $guide);
 	}
 
 	call display-config-internal($guide = $new-guide, $config,
