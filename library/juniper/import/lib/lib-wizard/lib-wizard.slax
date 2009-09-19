@@ -5,7 +5,7 @@ ns wizard extension = "http://xml.juniper.net/wizard";
 ns dyn extension = "http://exslt.org/dynamic";
 ns exsl = "http://exslt.org/common";
 
-import "../import/lib-phil.slax";
+import "../import/lib-util.slax";
 
 var $lib-wizard-version = 20090824;
 
