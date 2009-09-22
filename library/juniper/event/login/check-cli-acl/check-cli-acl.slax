@@ -1,0 +1,121 @@
+/*
+ * YOU MUST ACCEPT THE TERMS OF THIS DISCLAIMER TO USE THIS SOFTWARE.
+ *
+ * JUNIPER IS WILLING TO MAKE THE INCLUDED SCRIPTING SOFTWARE AVAILABLE TO YOU
+ * ONLY UPON THE CONDITION THAT YOU ACCEPT ALL OF THE TERMS CONTAINED IN THIS
+ * DISCLAIMER. PLEASE READ THE TERMS AND CONDITIONS OF THIS DISCLAIMER CAREFULLY.
+ *
+ * THE SOFTWARE CONTAINED IN THIS FILE IS PROVIDED "AS IS".  JUNIPER MAKES NO
+ * WARRANTIES OF ANY KIND WHATSOEVER WITH RESPECT TO SOFTWARE. ALL EXPRESS OR
+ * IMPLIED CONDITIONS, REPRESENTATIVES AND WARRANTIES, INCLUDING ANY WARRANTY
+ * OF NON-INFRINGEMENT OR WARRANTY OF MERCHANTABILITY OR FITNESS FOR A 
+ * PARTICULAR PURPOSE, ARE HEREBY DISCLAIMED AND EXCLUDED TO THE EXTENT
+ * ALLOWED BY APPLICABLE LAW.
+ *
+ * IN NO EVENT WILL JUNIPER BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR
+ * FOR DIRECT, SPECIAL, INDIRECT, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE DAMAGES
+ * HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY ARISING OUT OF THE
+ * USE OF OR INABILITY TO USE THE SOFTWARE, EVEN IF JUNIPER HAS BEEN ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGES.
+ *
+ * 
+ * Author        : Roy Lee
+ * Version       : 1.0
+ * Last Modified : 2008-12-01
+ * 
+ * Description   : check-cli-acl.slax
+ * This event script is written to restrict the cli access with a given login 
+ * from an authorized subnet only. This can be easily extended to multiple
+ * authorized subnets, or use 0.0.0.0/32 to deny any access. 
+ *
+ *
+ * Below is a sample event policy configuration which will be triggered
+ * when the administrative user "adminX" has login to the device via CLI. 
+ * The name of the user and the authorized subnet are the two arguments passed 
+ * to the event-script.
+ *
+ * ---
+ * event-options { 
+ *     policy cli-for-admin-user {
+ *         events UI_LOGIN_EVENT;
+ *         attributes-match {
+ *             UI_LOGIN_EVENT.username matches "admin1|admin2";
+ *         }
+ *         then {
+ *             event-script check-cli-acl.slax {
+ *                 arguments {
+ *                     username "{$$.username}";
+ *                     auth-subnet "172.17.27.0/24";
+ *                 }
+ *             }       
+ *         }
+ *     }
+ * }
+ * ---
+ *
+ * When a CLI login with the matching username is found, the script
+ * will compare its source IP with the authorized subnet. It will forcibly
+ * log out the CLI user who is not connected from the authorized subnet.  
+ *
+ * If the requirement is to completely disallow CLI login for a given username 
+ * from any subnet, specify the value "0.0.0.0/32" as the auth-subnet argument.
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+
+param $username;
+param $auth-subnet;
+
+match / {
+    <op-script-results> {
+         
+        /* 
+         * "show system users no resolve" command displays 
+         *  only the user which has TTY assigned to it,
+         *  which means the users who are logged in 
+         *  through the CLI.
+         */ 
+
+        var $cmd1 = <command> "show system users no-resolve";
+        var $out1 = jcs:invoke($cmd1);
+        
+        for-each ($out1/uptime-information/user-table/user-entry[user=$username]) {
+            var $ipaddr = from;
+      
+            /*
+             * Process the authorized subnet params using jcs:parse-ip(),
+             * then extract the subnet and prefix, i.e.
+             *     auth-ip[3] is the prefix, 
+             *     auth-ip[4] is the subnet
+             */
+            var $auth-ip = jcs:parse-ip($auth-subnet);
+
+            /*
+             * Append the prefix to ipaddr and
+             * then parse it
+             */
+            var $temp = $ipaddr _ "/" _ $auth-ip[3];
+            var $user-ip = jcs:parse-ip($temp);
+
+            /*
+             * Now match the subnet
+             */
+            if ($user-ip[4] != $auth-ip[4]) {
+                var $logout = {
+                    <command> 'request system logout user ' _ $username _ " terminal " _ tty;
+                }
+
+                var $result = jcs:invoke($logout);
+                expr jcs:output("Logging out cli user ", $username);
+                expr jcs:output(" connected from an unauthorized subnet.");
+            }
+        }
+    }          
+}
+

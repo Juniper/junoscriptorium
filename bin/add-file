@@ -337,11 +337,11 @@ will vary with the type of script, but some examples are:\
     my $rp = "$home";
     foreach my $member (@rp) {
 	$rp .= "/" . $member;
-	run("svn add -N $rp") || die unless -d "$rp/.svn";
+	run("cd $home; svn add -N $rp") || die unless -d "$rp/.svn";
     }
 
-    run("svn add -N $fullpath/*") || die;
-    my $mime = "svn propset svn:mime-type";
+    run("cd $home; svn add -N $fullpath/*") || die;
+    my $mime = "cd $home; svn propset svn:mime-type";
     run("$mime text/xml $fullpath/$basename.xml") || die;
     run("$mime text/download $fullpath/$basename.$ext") || die;
     run("$mime text/download $fullpath/$basename.xsl") || die
@@ -368,26 +368,26 @@ will vary with the type of script, but some examples are:\
             print AFILE make_xml_author();
             close AFILE;
 
-	    run("svn add -N $adir") || die unless -d "$adir/.svn";
-	    run("svn add -N $afile") || die;
+	    run("cd $home; svn add -N $adir") || die unless -d "$adir/.svn";
+	    run("cd $home; svn add -N $afile") || die;
 	}
     }
 
-    run("svn diff");
+    run("cd $home; svn diff");
 
     $_ = prompt("yes/no", "'yes' or 'no'",
                 "Edit the xml file?");
     if (/^y/) {
 	$editor = $ENV{EDITOR} || "vi";
 	run("$editor $fullpath/$basename.xml");
-	run("svn diff");
+	run("cd $home; svn diff");
     }
 
     $_ = prompt("yes/no", "'yes' or 'no'",
                 "Commit these changes?");
     if (/^y/) {
         print "committing changes ...\n";
-        run("svn commit -m 'Added new script: $basename'") || die;
+        run("cd $home; svn commit -m 'Added new script: $basename'") || die;
 
 	$url = "http://junoscriptorium.googlecode.com/svn/trunk/"
 	    . $relpath . "/" . $basename . ".xml";
