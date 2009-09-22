@@ -9,7 +9,10 @@
   <type>login</type>
 
   <description>
-This event script is to restrict the CLI access with a given login from an authorized subnet only. This can be easily extended to multiple subnets, or use  0.0.0.0/32 to deny any access. It uses jcs:parse-ip extension function.
+This event script is to restrict the CLI access with a given login
+from an authorized subnet only. This can be easily extended to
+multiple subnets, or use  0.0.0.0/32 to deny any access. It uses
+jcs:parse-ip extension function.
 
   </description>
 
