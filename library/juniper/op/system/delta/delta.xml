@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<script>
+  <title>delta.slax</title>
+  <author>phil</author>
+  <synopsis>
+	Compare the 'show' output in pre/post-check phases for delta identification
+  </synopsis>
+  <coe>op</coe>
+  <type>system</type>
+
+  <description>
+This script is called in two passes. On the first pass, it is invoked without the filename argument and outputs data to be saved. At a later point, the script is invoked a second time, but this time the name of the saved file from the first pass is passed in as an argument. The data from this file is compared with the currently values and errors can be reported as needed. We use 'show system uptime" here as a simple example
+
+  </description>
+
+  <keyword>delta</keyword>
+  <example>
+    <title>Output</title>
+    <description>Comparing the 'show" output in pre-check and post-check phase, to confirm if there is any delta resulted from a maintenance operation</description>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
