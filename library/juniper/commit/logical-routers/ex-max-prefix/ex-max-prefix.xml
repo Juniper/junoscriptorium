@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<script>
+  <title>ex-max-prefix.slax</title>
+  <author>phil</author>
+  <synopsis>
+	Move from "route limit" (deprecated) to "prefix limit"
+  </synopsis>
+  <coe>commit</coe>
+  <type>logical-routers</type>
+
+  <description>
+Update a hundred boxes with a small change can be effectively done via a commit script, which converts [...maximum-routes] to [...maximum-prefixes]. Important for routes learned from multiple paths, especially for route reflectors
+
+  </description>
+
+  <keyword>maximum-routes</keyword>
+  <keyword>maximum-prefixes</keyword>
+  <keyword>deprecated</keyword>
+  <example>
+    <title>Configuration</title>
+    <description>Configuration required from this commit script</description>
+    <config>example-1.conf</config>
+    <output>example-1.output</output>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

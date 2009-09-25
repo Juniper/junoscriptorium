@@ -1,0 +1,48 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $script-name = "ex-max-prefix.slax";
+
+match configuration {
+    for-each (.//maximum-routes) {
+	var $content = {
+	    <maximum-prefixes> {
+		copy-of *;
+	    }
+	    <maximum-routes delete="delete">;
+        }
+        var $message = "Updating 'maximum-routes' to 'maximum-prefixes'";
+        call jcs:emit-change($dot = .., $message, $content);
+    }
+
+    var $base = <system> {
+	<scripts> {
+	    <commit> {
+		<file delete="delete"> {
+		    <name> $script-name;
+		}
+	    }
+	}
+    }
+
+    var $script-statement = system/scripts/op[name == $script-name];
+
+    var $content = {
+	if ($script-statement/@group) {
+	    <groups> {
+		<name> $script-statement/@group;
+		copy-of $base;
+	    }
+	} else {
+	    copy-of $base;
+	}
+    }
+
+    var $message = "Removing script: " _ $script-name;
+    call jcs:emit-change($dot = ., $message, $content);
+}

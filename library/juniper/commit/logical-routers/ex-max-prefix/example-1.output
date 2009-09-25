@@ -1,0 +1,18 @@
+Add a commit script that performs the change (even deletes itself). It also uses the 'refresh' feature to install the script
+
+[edit]
+user@cli# set system sripts commit file ex-max-prefix.slax source srv:cs/ex-max-prefix.slax refresh
+refreshing 'ex-max-prefix.slax' from 'srv:cs/ex-max-prefix.slax'
+ex-max-prefix.slax	100% 1010  1.0KB/s  00:00
+
+[edit]
+user@cli# commit
+[edit logical-routers foo routing-options rib inet.0 undocumented maximum-routes]
+  warning: Updating 'maximum-routes' to 'maximum-prefixes'
+[edit routing-options rib inet.1 undocumented maximum-routes]
+  warning: Updating 'maximum-routes' to 'maximum-prefixes'
+[edit]
+  warning: Removing script: ex-max-prefix.slax
+commit complete
+
+
