@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<script>
+  <title>deny-last.slax</title>
+  <author>phil.shafer</author>
+  <synopsis>
+	Move an "any/any" reject or deny term to the last term
+  </synopsis>
+  <coe>commit</coe>
+  <type>security</type>
+
+  <description>
+Many security policy lists have a blanket reject/deny term as their
+last term, so that if nothing matches the previous terms, it's not
+allowed.  But if a user adds a new term, the new term is inserted
+by default at the end of the list of terms, preventing it from
+doing its job.
+
+This script moves such a term to the proper position as the last term.
+
+Note that this script will not work with config groups, since they
+are always the last terms.
+
+  </description>
+
+  <keyword>security</keyword>
+  <keyword>policies</keyword>
+  <keyword>last</keyword>
+  <keyword>term</keyword>
+  <example>
+    <title>basic config</title>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

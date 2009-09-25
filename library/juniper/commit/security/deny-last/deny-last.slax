@@ -1,0 +1,36 @@
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match configuration {
+    for-each (security/policies/policy) {
+        /* Count the number of policies. */
+        var $policy-count = count(policy);
+
+        /* Find all "match any" "then reject/deny" policies
+           that are not at the end. */
+        for-each (policy[match/source-address=="any" &&
+                         match/destination-address=="any" &&
+                         match/application=="any" &&
+                         (then/deny || then/reject) &&
+                         position() != $policy-count]) {
+            /* Move the policy to the end. */
+            call jcs:emit-change() {
+                with $dot = ..;
+                with $content = {
+                    <from-zone-name> ../from-zone-name;
+                    <to-zone-name> ../to-zone-name;
+                    <policy insert="after" name=../policy[position() == $policy-count]/na
+me> {
+                        <name> name;
+                    }
+                }
+                with $message="Moved deny/reject any term '" _ name _ "' to the end of th
+e policy chain.";
+            }
+        }
+    }
+}
