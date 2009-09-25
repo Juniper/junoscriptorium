@@ -13,10 +13,10 @@ This script is called in two passes. On the first pass, it is invoked without th
 
   </description>
 
-  <keyword>delta</keyword>
   <example>
-    <title>Output</title>
-    <description>Comparing the 'show" output in pre-check and post-check phase, to confirm if there is any delta resulted from a maintenance operation</description>
+    <title>Sample output</title>
+    <description>The delta is reported</description>
+    <output>example-1.output</output>
   </example>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"

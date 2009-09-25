@@ -1,0 +1,70 @@
+Usage:
+
+user@cli> op delta | display xml | save /tmp/save.xml    
+Wrote 59 lines of output to '/tmp/save.xml'
+
+user@cli> op delta filename /tmp/save.xml 
+old 1222115000, new 1222115050, delta 50
+
+% more /tmp/save.xml
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/9.4I0/junos">
+    <system-uptime-information xmlns="http://xml.juniper.net/junos/9.4I0/junos">
+        <current-time>
+            <date-time junos:seconds="1222115000">
+                2008-09-22 16:23:20 EDT
+            </date-time>
+        </current-time>
+        <system-booted-time>
+            <date-time junos:seconds="1222091374">
+                2008-09-22 09:49:34 EDT
+            </date-time>
+            <time-length junos:seconds="23626">
+                06:33:46
+            </time-length>
+        </system-booted-time>
+        <protocols-started-time>
+            <date-time junos:seconds="1222096904">
+                2008-09-22 11:21:44 EDT
+            </date-time>
+            <time-length junos:seconds="18096">
+                05:01:36
+            </time-length>
+        </protocols-started-time>
+        <last-configured-time>
+            <date-time junos:seconds="1222112273">
+                2008-09-22 15:37:53 EDT
+            </date-time>
+            <time-length junos:seconds="2727">
+                00:45:27
+            </time-length>
+            <user>
+                regress
+            </user>
+        </last-configured-time>
+        <uptime-information>
+            <date-time junos:seconds="1222115000">
+                4:23PM
+            </date-time>
+            <up-time junos:seconds="23656">
+                6:34
+            </up-time>
+            <active-user-count junos:format="7 users">
+                7
+            </active-user-count>
+            <load-average-1>
+                0.00
+            </load-average-1>
+            <load-average-5>
+                0.00
+            </load-average-5>
+            <load-average-15>
+                0.00
+            </load-average-15>
+        </uptime-information>
+    </system-uptime-information>
+    <cli>
+        <banner></banner>
+    </cli>
+</rpc-reply>
+
+
