@@ -1,0 +1,43 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "lib-graph.slax";
+
+param $logical-router;
+
+match / {
+    <op-script-results> {
+	var $raw-stats = {
+	    call get-rpd-stats();
+	}
+	var $stats = ext:node-set($raw-stats);
+	call star-graph($stats = $stats/graph,
+			$name = "Task", $value = "Bytes");
+    }
+}
+
+template get-rpd-stats () {
+    var $rpc = <command> {
+	expr "show task memory detail";
+	if ($logical-router) {
+	    expr " logical-router " _ $logical-router;
+	}
+    }
+    var $out = jcs:invoke($rpc);
+
+    for-each ($out/task-memory-malloc-usage-report) {
+	<graph> {
+	    for-each (task-malloc-list/task-malloc) {
+		<item> {
+		    <name> tm-name;
+		    <value> tm-max-alloc-bytes;
+		}
+	    }
+	    <total> task-memory-total-bytes;
+	}
+    }
+}

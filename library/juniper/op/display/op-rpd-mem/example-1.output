@@ -1,0 +1,15 @@
+user@cli> op op-rpd-mem 
+Bytes	Task			Graph
+114888	KRT			: *******'
+ 97309	--System--		: ******
+ 76319	OSPFv2			: *****
+ 74748	BGP RT Background	: *****
+ 70940	--Anonymous--		: *****
+ 66876 OSPFv2 I/O./var/run	: ****'
+ 66704 LDP I/O./var/run/pp	: ****'
+ 65555 BFD I/O./var/run/bf	: ****
+ 65544 BGP rsync		: ****
+ 65535 MPLSOAMD I/O./var/r	: ****
+ 10620 SNMP Subagent ./var/	: '
+  9988 -- sockaddr --		: ' 
+Total: 678884

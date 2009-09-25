@@ -1,0 +1,68 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+param $screen-width = 80;
+param $separator = " : ";
+param $debug;
+
+var $stars =
+"**********************************************************************";
+var $bangs =
+"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
+
+template star-graph($stats, $name = "Name", $value = "Value") {
+    param $header-format = "%-8s %-20s%s";
+    param $format = "%8s %-20s";
+
+    var $max = $stats/total;
+    var $threshold = floor($max * 0.80);
+    var $low = floor($max div 100);
+
+    <output> jcs:printf($header-format, $value, $name, " Graph");
+    for-each ($stats/item) {
+	<xsl:sort select="value" data-type="number" order="descending">;
+	if (value >= $low) {
+	    var $title = jcs:printf($format,
+				    value, substring(name, 0, 20));
+	    call star-graph-line($title, $title-width = 30, $value = value,
+			    $max, $threshold);
+	}
+    }
+    <output> "Total: " _ $max;
+}
+
+template star-graph-line($title, $title-width = 10, $value, $max, $threshold,
+		    $max-width = $screen-width) {
+    var $width = $max-width - $title-width - string-length($separator);
+    var $per = $max div $width;
+    var $num = floor($value div $per);
+
+    var $threshold-num = floor($threshold div $per);
+    var $bang-num = {
+	if ($value < $threshold) {
+	    expr 0;
+	} else {
+	    expr $num - $threshold-num + 1;
+	}
+    }
+
+    var $star-num = $num - $bang-num;
+    var $star-string = substring($stars, 0, $star-num + 1);
+    var $bang-string = substring($bangs, 0, $bang-num + 1);
+
+    var $extra = {
+	if ($value - (floor($value div $per) * $per) >= $per div 2) {
+	    if ($value > $threshold) {
+		expr ":";
+	    } else {
+		expr "-";
+	    }
+	}
+    }
+
+    <output> jcs:printf("%-*s%s%s%s%s\n", $title-width, $title, $separator,
+			    $star-string, $bang-string, $extra);
+}
