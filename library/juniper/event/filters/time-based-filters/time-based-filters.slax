@@ -1,0 +1,1184 @@
+/*
+ * Author        : Curtis Call
+ * File          : time-based-filters.slax
+ * Version       : 1.1
+ * Last Modified : August 7, 2009
+ * Platform      : all
+ * Release       : 9.3 and above
+ * Minimum Revisions:
+ * JUNOS 9.3:  (9.3R5 or 9.3S equivalent)
+ * JUNOS 9.4:  (9.4R4)
+ * JUNOS 9.5:  (9.5R3)
+ * JUNOS 9.6:  (9.6R2)
+ * JUNOS 10.0: (10.0R1)
+ *
+ * Description   : time-based-filters.slax and cs-time-based-filters.slax
+ * time-based-filters.slax and cs-time-based-filters.slax are an event script 
+ * and commit script pair used when a time-based stateless firewall filter is 
+ * desired.  They function by deactivating the filter terms at designated 
+ * periods and activating them at the proper time. This is all performed 
+ * automatically by the scripts, the only action that the operator has to take
+ * is to load the script files, enable them, and mark the filter terms with
+ * the appropriate macros which provide instructions on when the terms should
+ * be enabled and disabled.
+ */ 
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Macro Field Names */
+var $start-time-field = "start-time";
+var $stop-time-field = "stop-time";
+
+/* Configuration items */
+var $active-range-macro = "active-time-range";
+var $inactive-range-macro = "inactive-time-range";
+
+/* Status values */
+var $active = "active";
+var $inactive = "inactive";
+
+/* Valid start-time or stop-time DAYS */
+var $weekdays = "weekdays";
+var $weekends = "weekends";
+var $sunday = "sunday";
+var $monday = "monday";
+var $tuesday = "tuesday";
+var $wednesday = "wednesday";
+var $thursday = "thursday";
+var $friday = "friday";
+var $saturday = "saturday";
+var $sun = "sun";
+var $mon = "mon";
+var $tue = "tue";
+var $wed = "wed";
+var $thu = "thu";
+var $fri = "fri";
+var $sat = "sat";
+
+/* Misc script variables */ 
+var $syslog-level = "daemon.error";
+var $true = "true";
+var $false = "false";
+var $commit-script-name = "cs-time-based-filters.slax";
+var $event-script-name = "time-based-filters.slax";
+
+/* Open connection here to workaround PR. */
+var $connection = jcs:open();
+
+/* RE Mastership variables */
+var $master = "master";
+var $backup = "backup";
+var $linecard = "linecard";
+var $unknown = "unknown";
+
+/* Determine the master state globally */
+var $local-re = { call get-local-re(); }
+var $re-slot = { call get-slot-number( $re = $local-re ); }
+var $re-state = { call get-re-state( $slot = $re-slot ); }
+
+/* The version of the event and the commit script MUST match. */
+var $event-script-version = "1.1";
+
+match / {
+        
+    /* Send RE State to Trace File */
+    var $trace-message = $script _ ": Local RE State: " _ $re-state;
+    expr jcs:trace( $trace-message );
+        
+    /* 
+     * Check if this is a valid version or not (see note at top of script).  If
+     * invalid version then log a syslog indicating such and exit.
+     */
+    var $valid-version = { call is-valid-version(); }
+    if( $valid-version == $true ) {
+        call main();
+    }
+    else {
+        expr jcs:syslog( "external.error", "The time-based-filters script is not supported in this JUNOS version.");
+    }
+ 
+    /* Close the connection - absorb any error message in case the connection was already closed */
+    var $close-result = jcs:close( $connection );
+ }
+        
+        
+template main() {
+    <event-script-results> {
+    
+        /* 
+         * First check if we are master or backup, the backup re will pause a minute
+         * to allow the master to correct the configuration first.  The backup will only
+         * modify the config if the master didn't for some reason.
+         */
+         if( $re-state != $master ) {
+            /* Send message to trace file - notify that we are pausing */
+            expr jcs:trace( "Script is running on backup RE - will pause for one minute." );
+            expr jcs:sleep(60);
+         }
+         /* If it comes up as unknown then there is an error in the RE template logic */
+         if( $re-state == $unknown ) {
+            var $message = $script _ " could not determine RE state.  RE templates need to be corrected.";
+            expr jcs:syslog( $syslog-level, $message );
+            expr jcs:trace( $syslog-level, $message );
+         }
+    
+        /* Get the current committed configuration - not inherited because we need all the groups and inactive elements */
+        var $get-config-rpc =   <get-configuration database="committed"> {
+                                    <configuration> {
+                                        <groups>;
+                                        <logical-systems>;
+                                        <firewall>;
+                                    }
+                                }
+        var $configuration = jcs:execute($connection, $get-config-rpc );
+        
+        /* Error Check, syslog any present errors and close the script */
+        if( $configuration/..//xnm:error ) {
+            var $message = $script _ " had an error loading the configuration.";
+            expr jcs:syslog( $syslog-level, $message );
+            <xsl:message terminate="yes"> "Halting due to error.";
+        }
+        
+        /* Gather any needed configuration changes */
+        var $load-configuration = { call load-terms-and-generate-changes( $configuration ); }
+        
+        /* Is there anything to commit? Otherwise the script will end */
+        if( string-length( $load-configuration ) > 0 ) {
+
+            /* Recursive template which retries until commit completes or it gives up */       
+            call configuration-loop( $load-configuration, $get-config-rpc, $attempt = 1 );
+        }
+        
+    }
+}
+
+/*
+ * Used by event script to first load all the firewall terms and then perform the
+ * check for configuration changes.  If any changes are needed they will be written to
+ * the result tree.
+ */
+template load-terms-and-generate-changes( $configuration ) {
+    /* Look for macros in firewall stanza */
+    var $firewall-macros = $configuration/firewall/filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $firewall-family-macros = $configuration/firewall/family//filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $groups-firewall-macros = $configuration/groups/firewall/filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $groups-firewall-family-macros = $configuration/groups/firewall/family//filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $logical-systems-firewall-macros = $configuration/logical-systems/firewall/filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $logical-systems-firewall-family-macros = $configuration/logical-systems/firewall/family//filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $groups-logical-systems-firewall-macros = $configuration/groups/logical-systems/firewall/filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $groups-logical-systems-firewall-family-macros = $configuration/groups/logical-systems/firewall/family//filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+
+    /* Combine them all into a single node set */
+    var $firewall-terms = $firewall-macros | $firewall-family-macros | $groups-firewall-macros | $groups-firewall-family-macros |
+                          $logical-systems-firewall-macros | $logical-systems-firewall-family-macros | $groups-logical-systems-firewall-macros |
+                          $groups-logical-systems-firewall-family-macros;
+
+    /* Look for any configuration changes that are needed based on all the firewall terms */
+    call generate-config-changes( $firewall-terms );
+}
+
+/*
+ * This template will attempt to commit the configuration.  If it fails then
+ * it will retry five minutes later.  If failures continue it will keep pausing
+ * and retrying every five minutes until 25 minutes have passed.  After 25 minutes
+ * of failures the script will give up.  Note that since the script can be triggered 
+ * every fifteen minutes this means that potentially 2 scripts could be running at
+ * the same time.
+ */
+template configuration-loop( $load-configuration, $get-config-rpc, $attempt ) {
+    /* Try to commit the changes */
+    var $commit-success = { call do-commit( $connection, $load-configuration ); }
+            
+    /* If it fails then syslog a message, sleep 5 minutes and try again */
+    if( $commit-success == $false ) {
+        /* Have we attempted too many times? Maximum of 5 retries (25 minutes) */
+        if( $attempt > 5 ) {
+            /* Give up */
+            var $message = $script _ " configuration changes could not be made after " _ $attempt _ " attempts. - Script is exiting.";
+            expr jcs:syslog( $syslog-level, $message );
+        }
+        else {
+            var $message = $script _ " configuration change failure on attempt #" _ $attempt _ " - retry in 5 minutes.";
+            expr jcs:syslog( $syslog-level, $message );
+            expr jcs:sleep(300);
+
+            /* Get new configuration changes in case something happened while we slept */
+            var $configuration2 = jcs:execute($connection, $get-config-rpc );
+            var $load-configuration2 = { call load-terms-and-generate-changes( $configuration = $configuration2 ); }
+            
+            /* Is a change still needed?  It might have been fixed while we waited... */
+            if( string-length( $load-configuration2 ) > 0 ) {
+                call configuration-loop( $load-configuration = $load-configuration2, $get-config-rpc, $attempt = $attempt + 1 );
+            }
+        }
+    }
+}
+
+/*
+ * Returns all the needed configuration changes.  This will be enclosed in a 
+ * <change> element if run by cs-time-based-filters, otherwise it will be properly
+ * enclosed within a <configuration> element which is within a <load-configuration>
+ * element.
+ * The firewall terms contain all the active and inactive terms that utilize the 
+ * time-based-filter macro. 
+ */
+template generate-config-changes( $firewall-terms ) {
+
+    /* Figure out the day of the week, hour, and minute */
+    var $day-of-week = { call get-day-of-week(); }
+    var $hour = { call get-hour(); }
+    var $minute = { call get-minute(); }
+    
+    /* Combine the hour + minute for comparison purposes */
+    var $combined-time = $hour _ $minute;
+
+    /* 
+     * Go through each filter term that has the time-based-filter macro applied.
+     * Any needed configuration changes will be assigned to $config-changes by
+     * the process-term template.
+     */
+    var $config-changes = {
+        for-each( $firewall-terms ) {
+            call process-term( $term = ., $day-of-week, $combined-time );
+        }
+    }
+    
+    /* A length > 0 means that config changes are present */
+    if( string-length( $config-changes ) > 0 ) {
+        /* If called by the commit script then embed in a change element */
+        if( $script == $commit-script-name ) {
+            <change> {
+                copy-of $config-changes;
+            }
+        }
+        else { /* Otherwise embed in <configuration> and <load-configuration> */
+            <load-configuration> {
+                <configuration> {
+                    copy-of $config-changes;
+                }
+            }
+        }
+    }
+}
+
+/* 
+ * Determines if the term needs to be activated or deactivated based and returns
+ * the needed configuration (if any).
+ */
+template process-term( $term, $day-of-week, $combined-time ) {
+    
+    /* Retrieve the time range macros */
+    var $time-range-macros = $term/apply-macro[starts-with(name, $active-range-macro) or starts-with(name, $inactive-range-macro)];
+
+    /* Default status is the opposite of the term macros */
+    var $default-status = {
+        if( starts-with( $time-range-macros[1]/name, $active ) ) {
+            expr $inactive;
+        }
+        else {
+            expr $active;
+        }
+    }
+    
+    /* Determine what the new status should be based on the time of day */
+    var $new-status = { call determine-status( $time-range-macros, $default-status, $day-of-week, $combined-time ); }
+        
+    /* Determine the current status of the term in the configuration */
+    var $current-status = {
+        if( $term/@inactive == $inactive ) {
+            expr $inactive;
+        }
+        else {
+            expr $active;
+        }
+    }
+        
+    /* Does new status = current status?  If not then fix it! */
+    if( $new-status != $current-status ) {
+        var $term-change = {
+            if( $new-status == $active ) {
+                /* Syslog the change! */
+                expr jcs:syslog( "external.info", "time-based-filters script activating term ", $term/name );
+                <term active="active"> {
+                    <name> $term/name;
+                }
+            }
+            else {
+                expr jcs:syslog( "external.info", "time-based-filters script deactivating term ", $term/name );
+                <term inactive="inactive"> {
+                    <name> $term/name;
+                }
+            }
+        }
+        /* Have jcs:emit-change generate the change - it will process the hierarchy */
+        var $config-change := { call jcs:emit-change( $dot = $term/.., $content = $term-change ); }
+        
+        /* Dump the contents of the <change> element - that is all we need for the configuration change */
+        copy-of $config-change/change/*;
+    }
+}
+
+/*
+ * This template determines what the status should be based on the current time.  It goes through
+ * each time-range macro and determines if it is a match for the current time.  The first match
+ * will be returned.  Otherwise the default-status will be used.
+ */
+template determine-status( $time-range-macros, $default-status, $day-of-week, $combined-time ) {
+
+    /* Build status XML hierarchy based on matching of the time-range-macros */
+    var $status-nodes := {
+        for-each( $time-range-macros ) {
+            var $matches-time-range = { call within-time-ranges( $macro = ., $day-of-week, $combined-time ); }
+            if( $matches-time-range == $true ) {
+                /* Return the opposite of the default status */
+                if( $default-status == $active ) {
+                    <status> $inactive;
+                }
+                else {
+                    <status> $active;
+                }
+            }
+        }
+        /* Add the default-status */
+        <status> $default-status;
+    }
+    
+    /* Return the first status - either the first match or the default status*/
+    expr $status-nodes/status[1];
+}
+
+/* 
+ * Returns $true if the time is within the time range or $false if it isn't 
+ */
+template within-time-ranges( $macro, $day-of-week, $combined-time ) {
+            
+    /* Does it have a valid start time? */
+    var $start-time-range = $macro/data[name == $start-time-field]/value;
+    var $start-time = { call get-time-from-range( $range = $start-time-range ); }
+    var $valid-start-time = { call is-valid-time-range( $range = $start-time-range ); }
+                        
+    /* Does it have a valid stop time? */
+    var $stop-time-range = $macro/data[name == $stop-time-field]/value;
+    var $stop-time = { call get-time-from-range( $range = $stop-time-range ); }
+    var $valid-stop-time = { call is-valid-time-range( $range = $stop-time-range ); }
+            
+    /* Is the start-time and stop-time pair valid? */
+    var $valid-range-pair = { call is-valid-range-pair( $start-range = $start-time-range, $stop-range = $stop-time-range ); }
+    
+    /* If everything is valid then check - otherwise return $false */
+    if( $valid-start-time == $true and $valid-stop-time == $true and $valid-range-pair == $true ) {
+
+        var $filter-start-hour = substring-before( $start-time, ":" );
+        var $filter-start-minute = substring-after( $start-time, ":" );
+        var $filter-stop-hour = substring-before( $stop-time, ":" );
+        var $filter-stop-minute = substring-after( $stop-time, ":" );
+        
+        /* Combine them into one number */
+        var $combined-start-time-raw = $filter-start-hour _ $filter-start-minute;
+        var $combined-stop-time-raw = $filter-stop-hour _ $filter-stop-minute;
+        
+        /* Remove leading 0... */
+        var $combined-start-time = {
+            if( starts-with( $combined-start-time-raw, "0" ) ) {
+                expr substring-after( $combined-start-time-raw, "0" );
+            }
+            else {
+                expr $combined-start-time-raw;
+            }
+        }
+        var $combined-stop-time = {
+            if( starts-with( $combined-stop-time-raw, "0" ) ) {
+                expr substring-after( $combined-stop-time-raw, "0" );
+            }
+            else {
+                expr $combined-stop-time-raw;
+            }
+        }
+
+        /*
+         * Determine the type of range: every day or specific days.  It is safe
+         * to only look at the $start-time-range since the range pair has already
+         * been verified.
+         */
+        var $is-every-day = { call is-every-day-range( $range = $start-time-range ); }
+        var $is-specific-day = { call is-specific-day-range( $range = $start-time-range ); }
+        
+        if( $is-every-day == $true ) {
+
+            /* Reversed Times? */
+            var $reversed = {
+                if( $combined-start-time > $combined-stop-time ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+
+            if( $reversed == $false ) {
+                /* Current Time must be greater than or equal to start time and less than stop time */
+                if( $combined-time >= $combined-start-time and $combined-stop-time > $combined-time ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+            else {
+                /* check if our time is later than start time */
+                if( $combined-time >= $combined-start-time ) {
+                    expr $true;
+                }
+                /* Otherwise, check if the current time is less than the stop time */
+                else if( $combined-stop-time > $combined-time ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+        }
+        /* Weekdays */
+        else if( starts-with( $start-time-range, $weekdays ) ) {
+            if( $day-of-week == $sunday or $day-of-week == $saturday ) {
+                expr $false;
+            }
+            else {
+                /* reverse style isn't supported - so only need to check this style */
+                /* Current Time must be greater than or equal to start time and less than stop time */
+                if( $combined-time >= $combined-start-time and $combined-stop-time > $combined-time ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+        }
+        /* Weekends */
+        else if( starts-with( $start-time-range, $weekends ) ) {
+            if( $day-of-week != $sunday and $day-of-week != $saturday ) {
+                expr $false;
+            }
+            else {
+                /* reverse style isn't supported - so only need to check this style */
+                /* Current Time must be greater than or equal to start time and less than stop time */
+                if( $combined-time >= $combined-start-time and $combined-stop-time > $combined-time ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+        }
+        /* Specific Dates */
+        else if( $is-specific-day == $true ) {
+        
+            /* First three letters are the day of week */
+            var $start-day-of-week = substring( $start-time-range, 1, 3 ); 
+            var $stop-day-of-week = substring( $stop-time-range, 1, 3 ); 
+        
+            /* prepend the day value to the combined time */
+            var $specific-day-start-time = { call prepend-day-to-combined-time( $day = $start-day-of-week, $combined-time = $combined-start-time ); }
+            var $specific-day-stop-time = { call prepend-day-to-combined-time( $day = $stop-day-of-week, $combined-time = $combined-stop-time ); }
+            var $specific-day-combined-time = { call prepend-day-to-combined-time( $day = $day-of-week, $combined-time ); }
+            
+            /* Determine if it is reversed or not */
+            /* Reversed Times? */
+            var $reversed = {
+                if( $specific-day-start-time > $specific-day-stop-time ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+
+            if( $reversed == $false ) {
+                /* Current Time must be greater than or equal to start time and less than stop time */
+                if( $specific-day-combined-time >= $specific-day-start-time and $specific-day-stop-time > $specific-day-combined-time ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+            else {
+                /* check if our time is later than start time */
+                if( $specific-day-combined-time >= $specific-day-start-time ) {
+                    expr $true;
+                }
+                /* Otherwise, check if the current time is less than the stop time */
+                else if( $specific-day-stop-time > $specific-day-combined-time ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+        }
+        else {
+            <xsl:message> "Unrecognized range: " _ $start-time-range;
+            expr $false;
+        }
+    }
+    else {
+        expr $false;
+    }
+}
+
+/*
+ * Prepends a 1 through 7 (Sunday through Saturday) for the day of week, this way
+ * we can compare times between different dates.  Include a 0 in front of any
+ * single digit numbers to ensure that the comparison is valid. 
+ */
+ template prepend-day-to-combined-time( $day, $combined-time ) {
+    var $day-string = {
+        if( starts-with( $day,  $sun ) ) {
+            expr "1";
+        }
+        else if( starts-with( $day, $mon ) ) {
+            expr "2";
+        }
+        else if( starts-with( $day, $tue ) ) {
+            expr "3";
+        }
+        else if( starts-with( $day, $wed ) ) {
+            expr "4";
+        }
+        else if( starts-with( $day, $thu ) ) {
+            expr "5";
+        }
+        else if( starts-with( $day, $fri ) ) {
+            expr "6";
+        }
+        else if( starts-with( $day, $sat ) ) {
+           expr "7";
+        }
+    }
+    
+    /* Does a zero need to be prepended?  Do with single digit hours like 300 */
+    if( string-length( $combined-time ) == 3 ) {
+        expr $day-string _ "0" _ $combined-time;
+    }
+    else {
+        expr $day-string _ $combined-time;
+    }
+}
+
+/* 
+ * Returns $true if it is an every day style time range: HH:MM,
+ * (does not perform error checking) 
+ */
+template is-every-day-range( $range ) {
+    /* Look at the first digit, if it is a number then it's every day style */
+    var $first-char = substring( $range, 1, 1 );
+    if( string( number( $first-char ) ) != "NaN" ) {
+        expr $true;
+    }
+    else {
+        expr $false;
+    }
+}
+
+/* 
+ * Returns $true if it is a specific day (does not perform error checking) 
+ */
+template is-specific-day-range( $range ) {
+    if( starts-with( $range, $sun ) ) {
+        expr $true;
+    }
+    else if( starts-with( $range, $mon ) ) {
+        expr $true;
+    }
+    else if( starts-with( $range, $tue ) ) {
+        expr $true;
+    }
+    else if( starts-with( $range, $wed ) ) {
+        expr $true;
+    }
+    else if( starts-with( $range, $thu ) ) {
+        expr $true;
+    }
+    else if( starts-with( $range, $fri ) ) {
+        expr $true;
+    }
+    else if( starts-with( $range, $sat ) ) {
+        expr $true;
+    }
+    else {
+        expr $false;
+    }
+}
+
+/* If time is length of four than add a 0 to the front in case they did it like 1:30 instead of 01:30 */
+template adjust-time( $time ) {
+    if( string-length( $time ) == 4 ) {
+        expr "0" _ $time;
+    }
+    else {
+        expr $time;
+    }
+}
+
+/* Returns $true if it is in format ##:##, or $false otherwise */
+template is-valid-time( $time ) {
+    /* Does it have a : */
+    if( contains( $time, ":" ) ) {
+        var $first-raw = substring-before( $time, ":" );
+        /* Remove leading 0 if present */
+        var $first = {
+            /* Handle the 0 hour */
+            if( $first-raw == "00" or $first-raw == "0" ) { 
+                expr "0";
+            }
+            /* Otherwise, get rid of the leading 0 for other hours before 10 */
+            else if( starts-with( $first-raw, "0" ) ) {
+                expr substring( $first-raw, 2, 1 );
+            }
+            else {
+                expr $first-raw;
+            }
+        }
+        var $second = substring-after( $time, ":" );
+        /* They must be double digits (first can be single digits) */
+        if( string-length( $first ) >= 1 and string-length( $second ) == 2 ) {
+            /* They must both be numbers */
+            if( string(number($first)) != "NaN" and string(number($second)) != "NaN" ) {
+                /* first must be less than 24 and second must be 00, 15, 30, or 45 */
+                if( $first >= 0 and 24 >= $first and ( $second == "00" or $second == "15" or $second == "30" or $second == "45" ) ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+            else {
+                expr $false;
+            }
+        }
+        else {
+            expr $false;
+        }
+    }
+    else {
+        expr $false;
+    }
+}
+
+/* Checks if the pair of ranges are valid - assumes that each single range is valid */
+template is-valid-range-pair( $start-range, $stop-range ) {
+
+    var $start-number = { call get-number-string-from-range( $range = $start-range ); }
+    var $stop-number = { call get-number-string-from-range( $range = $stop-range ); }
+
+    /* Does one have a DAY and the other doesn't? */
+    if( contains( $start-range, " " ) and not( contains( $stop-range, " " ) ) ) {
+        expr $false;
+    }
+    else if( contains( $stop-range, " " ) and not( contains( $start-range, " " ) ) ) {
+        expr $false;
+    }
+    else if( starts-with( $start-range, $weekdays ) and not( starts-with( $stop-range, $weekdays ) ) ) {
+        expr $false;
+    }
+    else if( starts-with( $stop-range, $weekdays ) and not( starts-with( $start-range, $weekdays ) ) ) {
+        expr $false;
+    }
+    else if( starts-with( $start-range, $weekends ) and not( starts-with( $stop-range, $weekends ) ) ) {
+        expr $false;
+    }
+    else if( starts-with( $stop-range, $weekends ) and not( starts-with( $start-range, $weekends ) ) ) {
+        expr $false;
+    }
+    /* $weekends and $weekdays schedules don't support reversed scheduling */
+    else if( (starts-with( $start-range, $weekends ) or starts-with( $start-range, $weekdays ) ) and $start-number > $stop-number ) {
+        expr $false;
+    }
+    else {
+        expr $true;
+    }
+}
+
+/* Returns the time value as a number string - 08:00 becomes 800 - returns 0 if invalid */
+template get-number-string-from-range( $range ) {
+    var $time-string = { call get-time-from-range( $range ); }
+    
+    /* Remove : */
+    if( contains( $time-string, ":" ) ) {
+        var $time-number = translate( $time-string, ":", "" );
+        
+        /* Remove initial zero */
+        var $final-time = {
+            if( starts-with( $time-number, "0" ) ) {
+                expr substring-after( $time-number, "0" );
+            }
+            else {
+                expr $time-number;
+            }
+        }
+        
+        /* If a valid number then return it - otherwise return 0 */
+        if( string( number( $final-time ) ) != "NaN" ) {
+            expr $final-time;
+        }
+        else {
+            expr "0";
+        }
+    }
+    else {
+        expr "0";
+    }
+}
+
+/* Checks if the time range is valid */
+template is-valid-time-range( $range ) {
+    /*
+     * Valid range formats:
+     * DAY HH:MM
+     * HH:MM
+     * So max of one space that needs to be removed
+     */
+     
+     /* Does it start with a day? */
+     if( contains( $range, " " ) ) {
+        var $temp-day = substring-before( $range, " " );
+        /* convert to lower case */
+        var $day = { call to-lower-case( $string = $temp-day ); }
+        
+        /* Is it one of the permitted days? */
+        if( $day == $weekdays or $day or $weekends or $day == $sunday or
+            $day == $monday or $day == $tuesday or $day == $wednesday or
+            $day == $thursday or $day == $friday or $day == $saturday or
+            $day == $sun or $day == $mon or $day == $tue or $day == $wed
+            or $day == $thu or $day == $fri or $day == $sat ) {
+            
+            var $time = { call get-time-from-range( $range ); }
+            call is-valid-time( $time );
+        }
+        else {
+            expr $false;
+        }
+     }
+     /* Otherwise, is it a valid time? */
+     else {
+        call is-valid-time( $time = $range );
+     }
+}
+
+/* Pulls out the time from the range, return blank if invalid time, do not adjust time automatically (prepend a 0) */
+template get-time-from-range( $range ) {
+    /*
+     * Valid range formats:
+     * DAY HH:MM
+     * HH:MM
+     * So max of one space that needs to be removed
+     */
+    var $time = {
+        if( contains( $range, " " ) ) {
+            expr substring-after( $range, " " );
+        }
+        else {
+            expr $range;
+        }
+    }
+    var $temp-time = { call adjust-time( $time ); }
+    /* Is it a valid time? */
+    var $result = { call is-valid-time( $time = $temp-time ); }
+    
+    if( $result == $true) {
+        expr $time;
+    }
+    else {
+        expr "";
+    }
+}
+
+/* 
+ * Retrieve the current hour from $localtime
+ */
+template get-hour() {
+    /* Format is Tue Jan 20 14:07:33 2009 */
+    var $first-slice = substring-before( $localtime, ":" );
+    expr substring( $first-slice, string-length( $first-slice ) - 1, 2 );
+}
+
+/* 
+ * Retrieve the current minute from $localtime
+ */
+template get-minute() {
+    /* Format is Tue Jan 20 14:07:33 2009 */
+    var $first-slice = substring-after( $localtime, ":" );
+    expr substring-before( $first-slice, ":" );
+}
+
+/*
+ * Retrieve the current day from $localtime and return the global variable that represents it
+ */
+template get-day-of-week() {
+    if( starts-with( $localtime, "Sun" ) ) {
+        expr $sunday;
+    }
+    else if( starts-with( $localtime, "Mon" ) ) {
+        expr $monday;
+    }
+    else if( starts-with( $localtime, "Tue" ) ) {
+        expr $tuesday;
+    }
+    else if( starts-with( $localtime, "Wed" ) ) {
+        expr $wednesday;
+    }
+    else if( starts-with( $localtime, "Thu" ) ) {
+        expr $thursday;
+    }
+    else if( starts-with( $localtime, "Fri" ) ) {
+        expr $friday;
+    }
+    else if( starts-with( $localtime, "Sat" ) ) {
+        expr $saturday;
+    }
+    else {
+        /* Default to Monday */
+        expr $monday;
+        /* Log an error to report the problem */
+        var $message = $script _ " is unable to determine the day of the week.";
+        expr jcs:syslog( $syslog-level, $message );
+    }
+}
+
+/* 
+ * Attempts an exclusive commit.  If it succeeds then return $true, otherwise return $false
+ */
+template do-commit( $connection, $load-configuration ) {
+    
+    /* Lock the configuration database */
+    var $lock-config = <lock-configuration>;
+    var $lock-results = jcs:execute( $connection, $lock-config );
+    
+    /* Was there an error locking?  Then we cannot go on, return false */
+    if( not( jcs:empty( $lock-results/..//xnm:error ) ) ) {
+        var $message = $script _ " unable to lock configuration database.";
+        expr jcs:syslog( $syslog-level, $message );
+        expr $false;
+    }
+    else {
+        /* Load the configuration changes */
+        var $load-results = jcs:execute( $connection, $load-configuration );
+        
+        /* Was there an error loading? */
+        if( not( jcs:empty( $load-results/..//xnm:error ) ) ) {
+            var $message = $script _ " unable to load exclusive configuration changes.";
+            expr jcs:syslog( $syslog-level, $message );
+            expr $false;
+        }
+        else {
+            /* Commit the configuration */
+            var $commit-configuration =     <commit-configuration> {
+                                                /* Only synchronize is we are master */
+                                                if( $re-state == $master ) {
+                                                    <synchronize>;
+                                                }
+                                            }
+            var $commit-results = jcs:execute( $connection, $commit-configuration );
+        
+            /* Was there an error committing? */
+            if( not( jcs:empty( $commit-results/..//xnm:error ) ) ) {
+                var $message = $script _ " unable to commit exclusive changes.";
+                expr jcs:syslog( $syslog-level, $message );
+                expr $false;
+            }
+            else {
+                /* Unlock the database */
+                var $unlock-results = jcs:execute( $connection, "unlock-configuration" );
+                
+                /* Was there an error unlocking?  The commit already was successful, so just syslog about it */
+                if( not( jcs:empty( $unlock-results/..//xnm:error ) ) ) {
+                    var $message = $script _ " unable to unlock configuration database.";
+                    expr jcs:syslog( $syslog-level, $message );
+                }
+                
+                /* Close the connection */
+                var $close-results = jcs:close( $connection );
+                
+                /* Was there an error closing the connection?  The commit already was successful, so just syslog about it */
+                if( not( jcs:empty( $close-results/..//xnm:error ) ) ) {
+                    var $message = $script _ " unable to close connection.";
+                    expr jcs:syslog( $syslog-level, $message );
+                }
+                
+                /* Report success */
+                expr $true;
+            }
+        }
+    }
+}
+
+/* 
+ * Returns "master", "backup", or "linecard" (EX only) (or "unknown" if we can't figure it out)
+ * $slot is the slot number 0-9 
+ */
+template get-re-state( $slot ) {
+    /* EX3200 specific */
+    if( starts-with( $product, "ex32" ) ) {
+        /* Always master */
+        expr $master;
+    }
+    /* EX4200 specific */
+    else if( starts-with( $product, "ex42" ) ) {
+        /* Determine based on "show virtual chassis */
+        var $virtual-chassis = jcs:execute($connection, "get-virtual-chassis-information");
+        var $fpc-slot =$virtual-chassis/member-list/member[member-id==$slot]; 
+        /* Does it have slot information?  If not then it's a single slot machine so return master */
+        var $master-state = { call to-upper-case( $string = $fpc-slot/member-role ); }
+        if( starts-with( $master-state, "MASTER" ) ) {
+            expr $master;
+        }
+        else if( starts-with( $master-state, "BACKUP" ) ) {
+            expr $backup;
+        }
+        else if( starts-with( $master-state, "LINECARD" ) ) {
+            expr $linecard;
+        }
+        else {
+            expr $unknown;
+        }
+    }
+    else {
+        /* Determine state based on show chassis routing-engine */
+        var $routing-engine-info = jcs:execute($connection, "get-route-engine-information" );
+
+        /* Does it have slot information?  If not then it's a single slot machine so return master */
+        var $master-state = { call to-upper-case( $string = $routing-engine-info/route-engine[slot == $slot]/mastership-state ); }
+        if( not( $routing-engine-info/route-engine/slot ) ) {
+		    expr $master;
+        }
+        else if( $master-state == "MASTER" ) {
+            expr $master;
+        }
+        else if( $master-state == "BACKUP" ) {
+            expr $backup;
+        }
+        else {
+            expr $unknown;
+        }
+    }
+}
+
+/* 
+ * Returns slot # based on re# - simple template but prevents mistakes.
+ * Returns ? if it can't tell
+ */
+template get-slot-number( $re ) {
+    if( string-length( $re ) == 0 ) {
+        expr "?";
+    }
+    else {
+        var $last-char = substring( $re, string-length( $re ), 1 );
+        /* Is it a number? */
+        if( string( number( $last-char ) ) != "NaN" ) {
+            expr $last-char;
+        }
+        else {
+            expr "?";
+        }
+    }
+}
+
+/* 
+ * Returns "re#" or "unknown" if it can't tell
+ */
+template get-local-re() {
+    /* EX3200 specific */
+    if( starts-with( $product, "ex32" ) ) {
+        /* Always re0 */
+        expr "re0";
+    }
+    /* EX4200 specific */
+    else if( starts-with( $product, "ex42" ) ) {
+        /* Determine based on "show virtual chassis */
+        var $virtual-chassis = jcs:execute($connection, "get-virtual-chassis-information");
+        if( $virtual-chassis/member-list/member[contains(member-role,"*")]/member-id ) {
+            expr "re" _ $virtual-chassis/member-list/member[contains(member-role,"*")]/member-id;
+        }
+        else {
+            expr "unknown";
+        }
+    }
+    else {
+        /* Determine based on show chassis routing-engine - presence of load-average */
+        var $routing-engine-info = jcs:execute($connection, "get-route-engine-information" );
+
+        /* Does it have slot information?  If not then it's a single slot machine so return re0 */
+        if( not( $routing-engine-info/route-engine/slot ) ) {
+		    expr "re0";
+        }
+        /* Does only re0 have the load-average-one tag?  That indicates the current RE. */
+        else if( $routing-engine-info/route-engine[slot == "0"]/load-average-one and
+                jcs:empty($routing-engine-info/route-engine[slot == "1"]/load-average-one) ) {
+		    expr "re0";
+        }
+        /* Does only re1 have the load-average-one tag?  That indicates the current RE. */
+        else if( $routing-engine-info/route-engine[slot == "1"]/load-average-one and
+                jcs:empty($routing-engine-info/route-engine[slot == "0"]/load-average-one) ) {
+		    expr "re1";
+        }
+        /* Default to unknown */
+        else {
+		    expr "unknown";
+        }
+    }
+}
+
+/*
+ * Converts the provided string into upper case
+ */ 
+template to-upper-case( $string = "" ) {
+    expr translate( $string, "abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ" );
+}
+
+/*
+ * Converts the provided string into lower case
+ */ 
+template to-lower-case( $string = "" ) {
+    expr translate( $string, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz" );
+}
+
+/*
+ * Return $true if no time-zone is configured or it is a UTC varient.  Otherwise return $false.
+ */
+template is-utc-time-zone() {
+    if( jcs:empty( system/time-zone ) ) {
+        expr $true;
+    }
+    else if( system/time-zone == "UTC" ) {
+        expr $true;
+    }
+    else if( system/time-zone == "UCT" ) {
+        expr $true;
+    }
+    else if( system/time-zone == "Universal" ) {
+        expr $true;
+    }
+    else if( system/time-zone == "Zulu" ) {
+        expr $true;
+    }
+    else if( system/time-zone == "GMT" ) {
+        expr $true;
+    }
+    else if( system/time-zone == "Greenwich" ) {
+        expr $true;
+    }
+    else {
+        expr $false;
+    }
+}
+
+/*
+ * It is necessary to verify that the version in use has the fix for a PR.
+ * Check the build date.  Return $true if the version is good and $false otherwise
+ */
+template is-valid-version() {
+    /* Get version and build date */
+    var $get-version-rpc = {
+        <get-software-information> {
+            <detail>;
+            /* Add local tag when using the ex4200 so we don't get the other FPC info */
+            if( starts-with( $product, "ex42" ) ) {
+                <local>;
+            }
+        }
+    }
+    var $version = jcs:invoke( $get-version-rpc );
+    
+    /* Pull out eventd, that is what we'll work with */
+    var $eventd-version = $version/..//software-information/version-information[component == "EVENTD"];
+    
+    /* If it's blank then it must be invalid */
+    if( jcs:empty( $eventd-version ) ) {
+        expr $false;
+    }
+    else {
+        var $version-number = $eventd-version/major _ "." _ $eventd-version/minor;
+        var $release-type = $eventd-version/release-category;
+        var $build-number = $eventd-version/build-number;
+        var $build-date = translate( substring-before( $eventd-version/build-date, " " ), "-", "" );
+        
+        /* Write this to trace file */
+        expr jcs:trace( "Version: ", $version-number, " Release Type: ", $release-type, " Build Date: ", $build-date );
+        
+        /* If less then 9.3 then it isn't valid */
+        if( 9.3 > $version-number ) {
+            expr $false;
+        }
+        else if( $version-number == 9.3 ) {
+            /* R4 and below are invalid */
+            if( $release-type == "R" and 5 > build-number ) {
+                expr $false;
+            }
+            /* If built before this date then it isn't valid */
+            else if( 20090730 > $build-date ) {
+                expr $false;
+            }
+            else {
+                expr $true;
+            }
+        }
+        else if( $version-number == 9.4 ) {
+            /* R3 and below are invalid */
+            if( $release-type == "R" and 4 > build-number ) {
+                expr $false;
+            }
+            /* If built before this date then it isn't valid */
+            else if( 20090730 > $build-date ) {
+                expr $false;
+            }
+            else {
+                expr $true;
+            }
+        }
+        else if( $version-number == 9.5 ) {
+            /* R2 and below are invalid */
+            if( $release-type == "R" and 3 > build-number ) {
+                expr $false;
+            }
+            /* If built before this date then it isn't valid */
+            else if( 20090729 > $build-date ) {
+                expr $false;
+            }
+            else {
+                expr $true;
+            }
+        }
+        else if( $version-number == 9.6 ) {
+            /* R1 is invalid */
+            if( $release-type == "R" and 2 > build-number ) {
+                expr $false;
+            }
+            /* If built before this date then it isn't valid */
+            else if( 20090701 > $build-date ) {
+                expr $false;
+            }
+            else {
+                expr $true;
+            }
+        }
+        else if( $version-number == 10.0 ) {
+            /* If built before this date then it isn't valid */
+            if( 20090623 > $build-date ) {
+                expr $false;
+            }
+            else {
+                expr $true;
+            }
+        }
+        else {
+            /* Beyond 10.0 we're fine */
+            expr $true;
+        }
+    }
+}
