@@ -1,0 +1,440 @@
+/*
+ * Author        : Curtis Call
+ * File          : cs-time-based-filters.slax
+ * Version       : 1.1
+ * Last Modified : August 7, 2009
+ * Platform      : all
+ * Release       : 9.3 and above
+ * Minimum Revisions:
+ * JUNOS 9.3:  (9.3R5 or 9.3S equivalent)
+ * JUNOS 9.4:  (9.4R4)
+ * JUNOS 9.5:  (9.5R3)
+ * JUNOS 9.6:  (9.6R2)
+ * JUNOS 10.0: (10.0R1)
+ *
+ * Description   : time-based-filters.slax and cs-time-based-filters.slax
+ * time-based-filters.slax and cs-time-based-filters.slax are an event script 
+ * and commit script pair used when a time-based stateless firewall filter is 
+ * desired.  They function by deactivating the filter terms at designated 
+ * periods and activating them at the proper time. This is all performed 
+ * automatically by the scripts, the only action that the operator has to take
+ * is to load the script files, enable them, and mark the filter terms with
+ * the appropriate macros which provide instructions on when the terms should
+ * be enabled and disabled.
+ */ 
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Import from the time-based-filters.slax script */
+import "../event/time-based-filters.slax";
+
+/* 
+ * This is needed here instead of in the junos.xsl import file because there is
+ * a match / in the imported event file as well.
+ */
+match / {
+    <commit-script-results> {
+        apply-templates commit-script-input/configuration;
+    }
+}
+
+/* Configuration items */
+var $time-based-filters-event-prepend = "time-based-filters-event";
+var $time-based-filters-policy = "time-based-filters-policy";
+var $time-based-filters-group = "time-based-filters-group";
+
+/* The version of the event and commit script MUST match. */
+var $commit-script-version = "1.1"; 
+
+match configuration {
+
+    /* 
+    * First of all, make sure the event and commit script version match if they
+    * do not then terminate immediately.
+    */
+    if( $commit-script-version != $event-script-version ) {
+        <xsl:message terminate="yes"> "Your " _ $commit-script-name _ " version is different from your " _ $event-script-name _ " version.";
+    }
+    
+    /*
+     * Error if there is a non-UTC time-zone configured.  This is unsupported with
+     * this script.
+     */
+    var $valid-time-zone = { call is-utc-time-zone(); }
+    if( $valid-time-zone == $false ) {
+        <xsl:message terminate="yes"> "JUNOS devices using the cs-time-based-filters script must use the UTC time-zone.";
+    }
+    
+    /* 
+     * Check if this is a valid version or not (see note at top of script).  If
+     * invalid version then log a xnm:warning and syslog indicating such and exit.
+     */
+     var $valid-version = { call is-valid-version(); }
+     if( $valid-version == $true ) {
+        call main();
+     }
+     else {
+        <xnm:warning> {
+            <message> "The cs-time-based-filters script is not supported in this JUNOS version.";
+        }
+        <syslog> {
+            <message> "The cs-time-based-filters script is not supported in this JUNOS version.";
+        }
+     }
+}
+
+template main() {
+    /* Record pointer to event-options */
+    var $event-options = event-options;
+    
+    /* Record pointer to top */
+    var $configuration = .;
+
+    /* Pull in candidate configuration - for inactive elements */
+    var $get-candidate-rpc =    <get-configuration database="candidate"> {
+                                    <configuration> {
+                                        <groups>;
+                                        <event-options>;
+                                        <firewall>;
+                                        <logical-systems>;
+                                    }
+                                }
+    var $candidate-configuration = jcs:invoke( $get-candidate-rpc );
+    
+    /* Look for macros in firewall stanza */
+    var $firewall-macros = $candidate-configuration/firewall/filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $firewall-family-macros = $candidate-configuration/firewall/family//filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $groups-firewall-macros = $candidate-configuration/groups/firewall/filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $groups-firewall-family-macros = $candidate-configuration/groups/firewall/family//filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $logical-systems-firewall-macros = $candidate-configuration/logical-systems/firewall/filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $logical-systems-firewall-family-macros = $candidate-configuration/logical-systems/firewall/family//filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $groups-logical-systems-firewall-macros = $candidate-configuration/groups/logical-systems/firewall/filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+    var $groups-logical-systems-firewall-family-macros = $candidate-configuration/groups/logical-systems/firewall/family//filter/term[starts-with(apply-macro/name, $active-range-macro) or starts-with(apply-macro/name, $inactive-range-macro)];
+
+    /* Combine them all into a single node set */
+    var $firewall-terms = $firewall-macros | $firewall-family-macros | $groups-firewall-macros | $groups-firewall-family-macros |
+                          $logical-systems-firewall-macros | $logical-systems-firewall-family-macros | $groups-logical-systems-firewall-macros |
+                          $groups-logical-systems-firewall-family-macros;
+    
+    /* Go through each macro - look for errors - generate time-based events if needed */
+    for-each( $firewall-terms ) {
+        
+        var $term-name = name;
+        /* time range macros */
+        var $time-range-macros = ./apply-macro[starts-with(name, $active-range-macro) or starts-with(name, $inactive-range-macro)];
+            
+        /* Verify the group of time range macros first, they need to either start with active or inactive... */
+        
+        var $default-status = {
+            if( starts-with( $time-range-macros[1]/name , $active ) ) {
+                expr $inactive;
+            }
+            else {
+                expr $active;
+            }
+        }
+        
+        var $valid-range-group = {
+            if( $default-status == $active and $time-range-macros/name[starts-with(., $active)] ) {
+                expr $false;
+            }
+            else if( $default-status == $inactive and $time-range-macros/name[starts-with(., $inactive)] ) {
+                expr $false;
+            }
+            else {
+                expr $true;
+            }
+        }
+        
+        if( $valid-range-group == $false ) {
+            <xnm:error> {
+                call jcs:edit-path();
+                <message> $term-name _ " cannot have both active and inactive time ranges.";
+            }
+        }
+
+        /* Go through all time ranges, look for errors */
+        for-each( $time-range-macros ) {
+
+            var $range-status = {
+                /* The opposite of the default status */
+                if( $default-status == $active ) {
+                    expr $inactive;
+                }
+                else {
+                    expr $active;
+                }
+            }
+            
+            /* Does it have a valid start time? */
+            var $start-time-range = data[name == $start-time-field]/value;
+            var $start-time-raw = { call get-time-from-range( $range = $start-time-range ); }
+            var $start-time = { call adjust-time( $time = $start-time-raw ); }
+            var $valid-start-time = { call is-valid-time-range( $range = $start-time-range ); }
+            if( $valid-start-time == $false ) {
+                <xnm:error> {
+                    call jcs:edit-path();
+                    call jcs:statement( $dot = data[name == $start-time-field]/value );
+                    <message> $term-name _ " does not have a valid " _ $start-time-field _ " defined in their " _ ./name _ " macro.";
+                }
+            }
+            
+           
+            /* Does it have a valid stop time? */
+            var $stop-time-range = data[name == $stop-time-field]/value;
+            var $stop-time-raw = { call get-time-from-range( $range = $stop-time-range ); }
+            var $stop-time = { call adjust-time( $time = $stop-time-raw ); }
+            var $valid-stop-time = { call is-valid-time-range( $range = $stop-time-range ); }
+            if( $valid-stop-time == $false ) {
+                <xnm:error> {
+                    call jcs:edit-path();
+                    call jcs:statement( $dot = data[name == $stop-time-field ]/value );
+                    <message> $term-name _ " does not have a valid " _ $stop-time-field _ " defined in their " _ ./name _ " macro.";
+                }
+            }
+            
+            /* Is the start-time and stop-time pair valid? */
+            var $valid-range-pair = { call is-valid-range-pair( $start-range = $start-time-range, $stop-range = $stop-time-range ); }
+            if( $valid-range-pair == $false ) {
+                <xnm:error> {
+                    call jcs:edit-path();
+                    <message> $term-name _ " does not have a valid time range pair: " _ $start-time-range _ " " _ $stop-time-range;
+                }
+            }
+            
+            /* 
+            * Now check if there is already a time-based event defined for the start-time and stop-time
+            * and if they are already setup for the event script.
+            *
+            */
+
+            /* Create a node-set so we can loop through the next section */
+            var $time-events := {
+                if( $valid-range-pair == $true and $valid-start-time == $true ) {
+                    <time> $start-time;
+                }
+                if( $valid-range-pair == $true and $valid-stop-time == $true ) {
+                    /* Translate a 24:00 to a 00:00 */
+                    if( $stop-time == "24:00" ) {
+                        <time> "00:00";
+                    }
+                    else {
+                        <time> $stop-time;
+                    }
+                }
+            }
+         
+            /* Create time events if needed */
+            for-each( $time-events/time ) {
+                var $time-event-name = $time-based-filters-event-prepend _ "-" _ .;
+                var $time-event-value = . _ ":00";
+                /* Does the time event already exist?  Then check it's time */
+                if( $event-options/generate-event[name==$time-event-name] ) {
+                    /* Check it's value, if it isn't the right time then send an error */
+                    if( not( starts-with( $event-options/generate-event[name==$time-event-name]/time-of-day, $time-event-value ) ) ) {
+                        <xnm:error> {
+                            call jcs:edit-path($dot = $event-options/generate-event[name==$time-event-name]);
+                            call jcs:statement($dot = $event-options/generate-event[name==$time-event-name]/time-of-day);
+                            <message> "Needed time event is already defined but with the wrong time.";
+                        }
+                    }
+                }
+                else { /* It doesn't exist... create it... */
+                    <change> {
+                        <groups> {
+                            <name> $time-based-filters-group;
+                            <event-options> {
+                                <generate-event> {
+                                    <name> $time-event-name;
+                                    <time-of-day> $time-event-value;
+                                }
+                            }
+                        }
+                    }
+                }
+            
+                /* Verify that apply flags omit is present in the group, if not then add it */
+                if( jcs:empty( $candidate-configuration/groups[name==$time-based-filters-group]/undocumented/apply-flags/omit ) ) {
+                    <change> {
+                        <groups> {
+                            <name> $time-based-filters-group;
+                            <undocumented> {
+                                <apply-flags> {
+                                    <omit>;
+                                }
+                            }
+                        }
+                    }
+                }
+            
+                /* Verify that the apply group is present in event-options */
+                if( jcs:empty( $candidate-configuration/event-options[apply-groups == $time-based-filters-group] ) ) {
+                    <change> {
+                        <event-options> {
+                            <apply-groups> $time-based-filters-group;
+                        }
+                    }
+                }
+            
+                /* Is the event policy already defined? If not then create it, this could happen multiple times when first created */
+                if( jcs:empty( $event-options/policy[name == $time-based-filters-policy]/then/event-script[name == $event-script-name ] ) ) {
+                    <change> {
+                        <groups> {
+                            <name> $time-based-filters-group;
+                            <event-options> {
+                                <policy> {
+                                    <name> $time-based-filters-policy;
+                                    <then> {
+                                        <event-script> {
+                                            <name> $event-script-name;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            
+                /* Is the event script line present?  If not then create it */
+                if( jcs:empty( $event-options/event-script/file[name == $event-script-name] ) ) {
+                    <change> {
+                        <groups> {
+                            <name> $time-based-filters-group;
+                            <event-options> {
+                                <event-script> {
+                                    <file> {
+                                        <name> $event-script-name;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                /* Is the event already defined as an event in the time-based-filters event policy? */
+                if( jcs:empty( $event-options/policy[name == $time-based-filters-policy][events == $time-event-name ] ) ) {
+                    /* If not already defined then define it */
+                    <change> {
+                        <groups> {
+                            <name> $time-based-filters-group;
+                            <event-options> {
+                                <policy> {
+                                    <name> $time-based-filters-policy;
+                                    <events> $time-event-name;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /* Go through each time-based-access event and delete it if no longer needed */
+    for-each( $event-options/generate-event[starts-with( name, $time-based-filters-event-prepend ) ] ) {
+        var $term-matches-event = { call term-matches-event( $firewall-terms, $event-time = time-of-day ); }
+        
+        /* If it matches no shift starts nor shift stops then delete it */
+        if( $term-matches-event == $false ) {
+            <change> {
+                <groups> {
+                    <name> $time-based-filters-group;
+                    <event-options> {
+                        <generate-event delete="delete"> {
+                            <name> name;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /* Go through each event in the event policy and delete it if no longer needed */
+    var $full-prepend = $time-based-filters-event-prepend _ "-";
+    for-each( $event-options/policy[name==$time-based-filters-policy]/events ) {
+        var $event-time = substring-after( .,  $full-prepend); 
+        var $term-matches-event = { call term-matches-event( $firewall-terms, $event-time ); }
+
+        /* Delete it if not present */
+        if( $term-matches-event == $false  ) {
+            <change> {
+                <groups> {
+                    <name> $time-based-filters-group;
+                    <event-options> {
+                        <policy> {
+                            <name> $time-based-filters-policy;
+                            <events delete="delete"> .;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /* Delete the entire group if it isn't needed any longer - if no firewall terms then it isn't needed */
+    if( jcs:empty( $firewall-terms ) ) {
+        if( not( jcs:empty( event-options/policy[name==$time-based-filters-policy] ) ) ) {
+            <change> {
+                <groups delete="delete"> {
+                    <name> $time-based-filters-group;
+                }
+            }
+            <change> {
+                <event-options> {
+                    <apply-groups delete="delete"> $time-based-filters-group;
+                }
+            }
+        }
+    }
+    
+    /* Now run the event script template and make any changes to the filter terms that are needed */
+    call generate-config-changes( $firewall-terms );
+    
+}
+
+/* Searches through firewall terms looking for a match to the time in the event time-of-day, returns $true or $false */
+template term-matches-event( $firewall-terms, $event-time ) {
+    /* Adjust in case it starts with a 0 like 08:00, so we can try 8:00 also */
+    var $adjusted-time = {
+        if( starts-with( $event-time, "0" ) ) {
+            expr substring-after( $event-time, "0" );
+        }
+        else {
+            expr $event-time;
+        }
+    }
+    var $response = {
+        for-each( $firewall-terms/apply-macro[starts-with(name, $active-range-macro) or starts-with(name, $inactive-range-macro)]/data[name == $start-time-field or name == $stop-time-field ] ) {
+            var $macro-time = { call get-time-from-range( $range = value ); }
+            
+            /* Adjust the firewall times to convert the 24:00 to a 00:00 */ 
+            var $adjusted-macro-time = {
+                if( $macro-time == "24:00" ) {
+                    expr "00:00";
+                }
+                else {
+                    expr $macro-time;
+                }
+            }
+            
+            if( starts-with( $event-time, $adjusted-macro-time ) or starts-with( $adjusted-time, $adjusted-macro-time ) ) {
+                expr $true;
+            }
+        }
+    }
+    /* Return $true or $false based on the result of the $response */
+    if( contains( $response, $true ) ) {
+        expr $true;
+    }
+    else {
+        expr $false;
+    }
+}
+
+

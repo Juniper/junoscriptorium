@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<script>
+  <title>cs-time-based-filters.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	This time-based filter script will automatically execute at the start and stop times specified and will activate or deactivate the firewall terms whose state should be changed.
+  </synopsis>
+  <coe>commit</coe>
+  <type>filters</type>
+
+  <description>
+  Companion to time-based-filters.slax event script.  These two scripts can be used together to cause firewall filters to be
+activated and deactivated at configured times.
+
+  </description>
+
+  <keyword>commit</keyword>
+  <keyword>slax</keyword>
+  <keyword>firewall</keyword>
+  <keyword>filters</keyword>
+  <keyword>time</keyword>
+  <keyword>time-based</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
