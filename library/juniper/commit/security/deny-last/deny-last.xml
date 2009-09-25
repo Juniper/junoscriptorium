@@ -29,6 +29,7 @@ are always the last terms.
   <example>
     <title>basic config</title>
     <config>example-1.conf</config>
+    <output>example-1.output</output>
   </example>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"

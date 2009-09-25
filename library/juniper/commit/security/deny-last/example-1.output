@@ -1,0 +1,87 @@
+[edit]
+lab@host1-a# show security policies    
+from-zone untrust to-zone trust {
+    policy allow-ftp {
+        match {
+            source-address any;
+            destination-address any;
+            application junos-ftp;
+        }
+        then {
+            permit;
+        }
+    }
+    policy deny-any {
+        match {
+            source-address any;
+            destination-address any;
+            application any;
+        }
+        then {
+            deny;
+            log {
+                session-init;
+            }
+        }
+    }
+    policy allow-smtp {
+        match {
+            source-address any;
+            destination-address any;
+            application junos-smtp;
+        }
+        then {
+            permit;
+        }
+    }
+}
+default-policy {
+    permit-all;
+}
+
+[edit]
+lab@host1-a# commit                    
+[edit security policies policy policy deny-any]
+  warning: Moved deny/reject any term 'deny-any' to the end of the policy chain.
+commit complete
+
+[edit]
+lab@host1-a# show security policies    
+from-zone untrust to-zone trust {
+    policy allow-ftp {
+        match {
+            source-address any;
+            destination-address any;
+            application junos-ftp;
+        }
+        then {
+            permit;
+        }
+    }
+    policy allow-smtp {
+        match {
+            source-address any;
+            destination-address any;
+            application junos-smtp;
+        }
+        then {
+            permit;
+        }
+    }
+    policy deny-any {
+        match {
+            source-address any;
+            destination-address any;
+            application any;
+        }
+        then {
+            deny;
+            log {
+                session-init;
+            }
+        }
+    }
+}
+default-policy {
+    permit-all;
+}
