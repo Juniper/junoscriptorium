@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<script>
+<title>uplink-check.slax</title>
+<author>jpanagos</author>
+<synopsis>
+Check to make sure that no interface with "CORE" or "core" in the description is disabled.
+</synopsis>
+<coe>commit</coe>
+<type>interfaces</type>
+
+<description>
+This commit-script checks to ensure that no interface with "CORE" or "core" in the descriptiong is disabled.
+
+</description>
+
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>

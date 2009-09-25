@@ -1,0 +1,31 @@
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+/*
+ * This commit-script checks to make sure that no interface with "CORE"
+ * or "core" in the description is disabled.
+ */ 
+
+match configuration {
+        for-each (interfaces/interface) {
+                var $int = name;
+                var $desc = description;
+                var $disable = count(node()[name() == "disable"]);
+                if (contains($desc, "SCOR") || contains($desc, "scor")) {
+                        if ($disable == 1) {
+                                <xnm:warning> {
+                                        <message> {
+                                                expr "SCOR uplink ";
+                                                expr $int;
+                                                expr " is disabled";
+                                        }
+                                }
+                        }
+                }
+        }
+}
