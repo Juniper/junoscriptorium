@@ -17,8 +17,8 @@ Update a hundred boxes with a small change can be effectively done via a commit 
   <keyword>maximum-prefixes</keyword>
   <keyword>deprecated</keyword>
   <example>
-    <title>Configuration</title>
-    <description>Configuration required from this commit script</description>
+    <title>Example</title>
+    <description>This is a simple example of how the script is invoked</description>
     <config>example-1.conf</config>
     <output>example-1.output</output>
   </example>
