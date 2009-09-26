@@ -3,7 +3,8 @@
   <title>cs-time-based-filters.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Activates/Deactivates firewall filter terms based on configured time-ranges
+	Activates/Deactivates firewall filter terms based on configured time-ranges.
+    (Must be used in combination with time-based-filters.slax).
   </synopsis>
   <coe>commit</coe>
   <type>filters</type>
