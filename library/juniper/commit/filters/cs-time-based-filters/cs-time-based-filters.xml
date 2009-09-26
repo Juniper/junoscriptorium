@@ -9,7 +9,7 @@
   <type>filters</type>
 
   <description>
-    time-based-filters.slax and cs-time-based-filters.slax are an event script 
+    <![CDATA[time-based-filters.slax and cs-time-based-filters.slax are an event script 
     and commit script pair used when a time-based stateless firewall filter is 
     desired.  They function by deactivating the filter terms at designated 
     periods and activating them at the proper time. This is all performed 
@@ -157,7 +157,7 @@
 
     error: Your cs-time-based-filters.slax version is different from your time-based-filters.slax version.
     error: 2 errors reported by commit scripts
-    error: commit script failure
+    error: commit script failure]]>
   </description>
 
   <keyword>commit</keyword>
