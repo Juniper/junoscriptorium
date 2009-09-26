@@ -8,7 +8,7 @@
   <coe>commit</coe>
   <type>filters</type>
 
-  <Description>
+  <description>
     <![CDATA[time-based-filters.slax and cs-time-based-filters.slax are an event script 
     and commit script pair used when a time-based stateless firewall filter is 
     desired.  They function by deactivating the filter terms at designated 
