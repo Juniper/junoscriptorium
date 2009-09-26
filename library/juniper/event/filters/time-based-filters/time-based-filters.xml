@@ -3,23 +3,223 @@
   <title>time-based-filters.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Enable/Disable firewall filter terms based on time and day
+	Activates/Deactivates firewall filter terms based on configured time-ranges.
   </synopsis>
   <coe>event</coe>
   <type>filters</type>
 
   <description>
-Time-based configuration event scripts work best if combined with a commit script. Commit script can immediately set the configuration correctly as of commit time instead of forcing the users to wait hours until the event script fixes the config for them. In addition, the commit script can automatically generate time-of-day events so that the configuration changes happen exactly at the time desired rather than just within an hour.
+    <![CDATA[time-based-filters.slax and cs-time-based-filters.slax are an event script 
+    and commit script pair used when a time-based stateless firewall filter is 
+    desired.  They function by deactivating the filter terms at designated 
+    periods and activating them at the proper time. This is all performed 
+    automatically by the scripts, the only action that the operator has to take
+    is to load the script files, enable them, and mark the filter terms with
+    the appropriate macros which provide instructions on when the terms should
+    be enabled and disabled.
+
+    * Minimum JUNOS version is 9.3.  In addition, due to PR 452398 this script can
+    * only be used with the following JUNOS versions as of the dailies mentioned:
+    * JUNOS 9.3:  20090730 (9.3R5)
+    * JUNOS 9.4:  20090730 (9.4R4)
+    * JUNOS 9.5:  20090729 (9.5R3)
+    * JUNOS 9.6:  20090701 (9.6R2)
+    * JUNOS 10.0: 20090623 (10.0B1)
   
+    (Must be used in combination with cs-time-based-filters.slax).
 
+    
+    Installation
+    ------------
+    1. Copy the time-based-filters.slax script to the /var/db/scripts/event
+    directory on all REs.
+
+    2. Copy the cs-time-based-filters.slax script to the /var/db/scripts/commit
+    directory on all REs.
+
+    3. Configure: set system scripts commit file cs-time-based-filters.slax
+
+    This is all that is required to setup the time-based-filters scripts.  No
+    event policy configuration is necessary, the commit script will 
+    automatically generate all needed configuration.
+
+
+    Time-Based Stateless Firewall Filters
+    -------------------------------------
+    To mark a filter as a time-based filter it is necessary to add either
+    the "active-time-range" or "inactive-time-range" macro under the filter
+    term and specify a start-time and stop-time for the term.
+
+    start-time - The beginning time for the time-range
+
+    stop-time - The ending time for the time-range
+
+    Valid formats for start-time and stop-time are the following:
+
+    HH:MM - The time occurs every day at the specified HH:MM (in 24 hour format).
+
+    "weekdays HH:MM" - The time occurs Mon-Fri at the specified time
+
+    "weekends HH:MM" - The time occurs Sat-Sun at the specified time
+
+    "day HH:MM" where day = sat, sun, mon, etc - The time occurs on the given day
+    at the specified time.
+
+    MM must be 00, 15, 30, or 45.  HH should be from 00 to 24.  If HH is 24 then
+    MM must be 00.
+
+    Reversed time-ranges, where the stop-time occurs before the start-time (because
+    the start-time begins at night and the stop-time occurs in the morning) are not
+    allowed when using "weekdays" or "weekends".
+
+    The default status of the term is the opposite of the selected time-range.  If
+    active-time-range is used, then the default status outside of the given time-range
+    is inactive.  The reverse is true for an inactive-time-range.
+
+    Multiple time-ranges can be specified by appending a -# to each macro (the name
+    must be unique).  They must all be of the same type within a term, either inactive
+    or active.
+
+
+    Reserved Configuration
+    ----------------------
+    The scripts reserve the following configuration elements and they will add
+    and delete them as needed:
+    groups time-based-filters-group
+    generate-event time-based-filters-event*
+    policy time-based-filters-policy
+
+
+    Restrictions & Misc
+    -------------------
+    Only the UTC time-zone is supported due to PR 459078.  Using a different time-zone
+    will result in a commit error.
+
+    A maximum of 10 unique times can be supported per JUNOS device.  Going beyond this
+    will result in a commit error.
+
+    Be careful that all filter terms are not deactivated at the same time, if that
+    occurs then the commit will fail.
+
+    Counters in a time-based term will lose their value when the term is deactivated.
+
+    The commit script will enforce the correct term status as part of the commit 
+    process as well.  This means that it is not necessary to wait until the start/stop 
+    of a term's time-range to have the term's status set correct.
+
+    If you ever manually change your system time, then you need to do a "commit
+    full" or "restart event-process" or "request system scripts event-scripts reload"
+    because your time-of-day events will be off time.
+
+    This should work for filters of any address family defined under firewall or groups 
+    as well as logical-systems.
+
+    Term activations or deactivations will result in a syslog message to the external
+    facility with severity info:
+    Jul 30 13:51:02  r2d2-re0 cscript: time-based-filters script activating term weekdays
+    Jul 30 13:51:02  r2d2-re0 cscript: time-based-filters script deactivating term default
+
+
+    Dual-RE Systems
+    ---------------
+    On dual-re systems you need to copy the scripts into their respective directories
+    and enable the commit script (set system scripts commit file ...) on both REs.
+
+    Time must be synchronized between the two REs.  It is recommended that both REs
+    are synchronized to a NTP server.
+
+    The script will run on both REs but it will pause for a minute on the backup RE
+    to allow the master RE to make the configuration change.  If there is a
+    communication problem then the backup RE will make the needed configuration change
+    but it will not synchronize its commit (unless the configuration forces it to).
+
+
+    Problems
+    --------
+    The event script will attempt an exclusive commit at the start and stop
+    times configured.  If other users are editing the configuration then
+    the exclusive commit will fail and this will be logged into the syslog:
+
+    Jan  4 04:00:01  EX2 cscript: %DAEMON-3: time-based-filters.slax unable to lock configuration database.
+    Jan  4 04:00:01  EX2 cscript: %DAEMON-3: time-based-filters.slax configuration change failure on attempt #1 - retry in 5 minutes.
+
+    This is sent to the daemon facility at severity error.  The script waits
+    five more minutes before trying again.  This will continue every five
+    minutes until the commit succeeds or until the maximum attempts of six has 
+    been reached at which point the script will terminate and log this:
+
+    Jan  4 04:25:06  EX2 cscript: %DAEMON-3: time-based-filters.slax unable to lock configuration database.
+    Jan  4 04:25:06  EX2 cscript: %DAEMON-3: time-based-filters.slax configuration changes could not be made after 6 attempts. - Script is exiting.
+
+
+    The commit script and event script work together so it is essential that
+    they are using the same version.  If the commit script detects that there
+    is a different event script version in use then it will fail the commit and 
+    report:
+
+    error: Your cs-time-based-filters.slax version is different from your time-based-filters.slax version.
+    error: 2 errors reported by commit scripts
+    error: commit script failure]]>
   </description>
+  <example>
+    <title>Example time-range macros</title>
+    <description>
+     <![CDATA[This filter term should only be active from 8:00am to 5:00pm
+     term day-term {
+         apply-macro active-time-range {
+             start-time 08:00;
+             stop-time 17:00;
+         }
+         ...
+     }
 
+     This term should be inactive from 3:00pm to 6:00pm
+     term not-afternoon-term {
+         apply-macro inactive-time-range {
+             start-time 15:00;
+             stop-time 18:00;
+         }
+         ...
+     }
+
+     This term should be active from monday to wednesday from 12:00am to 12:00am
+     term multiple-days {
+         apply-macro active-time-range {
+             start-time "mon 00:00";
+             stop-time "wed 24:00";
+         }
+         ...
+     }
+
+     This term should be active from 5:00pm to 8:00pm on weekdays
+     term night {
+         apply-macro active-time-range {
+             start-time "weekdays 17:00";
+             stop-time "weekdays 20:00";
+         }
+         ...
+     }
+
+     This term should be active from 10am-12pm and 2pm-4pm
+     term multi-range {
+         apply-macro active-time-range-1 {
+             start-time 10:00;
+             stop-time 12:00;
+         }
+         apply-macro active-time-range-2 {
+             start-time 14:00;
+             stop-time 16:00;
+         }
+         ...
+     }]]>
+    </description>
+  </example>
+  <keyword>event</keyword>
+  <keyword>slax</keyword>
+  <keyword>firewall</keyword>
+  <keyword>filters</keyword>
   <keyword>time</keyword>
   <keyword>time-based</keyword>
-  <keyword>event</keyword>
-  <keyword>commit</keyword>
-  <keyword>firewall</keyword>
-  <keyword>filter</keyword>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
