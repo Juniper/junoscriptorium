@@ -43,6 +43,7 @@
 
 
   <Configuration>
+    <description>
     <![CDATA[To mark a filter as a time-based filter it is necessary to add either
     the "active-time-range" or "inactive-time-range" macro under the filter
     term and specify a start-time and stop-time for the term.
@@ -85,6 +86,7 @@
     groups time-based-filters-group
     generate-event time-based-filters-event*
     policy time-based-filters-policy]]>
+    </description>
   </Configuration>
 
 
