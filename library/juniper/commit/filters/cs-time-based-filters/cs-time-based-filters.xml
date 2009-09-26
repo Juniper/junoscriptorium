@@ -4,7 +4,6 @@
   <author>curtisstephencall</author>
   <synopsis>
 	Activates/Deactivates firewall filter terms based on configured time-ranges.
-    (Must be used in combination with time-based-filters.slax).
   </synopsis>
   <coe>commit</coe>
   <type>filters</type>
@@ -27,6 +26,8 @@
     * JUNOS 9.6:  20090701 (9.6R2)
     * JUNOS 10.0: 20090623 (10.0B1)
   
+    (Must be used in combination with time-based-filters.slax).
+
     
     Installation
     ------------
