@@ -24,10 +24,12 @@
     * JUNOS 9.4:  20090730 (9.4R4)
     * JUNOS 9.5:  20090729 (9.5R3)
     * JUNOS 9.6:  20090701 (9.6R2)
-    * JUNOS 10.0: 20090623 (10.0B1)]]>
-
-  <Installation>
-    <![CDATA[1. Copy the time-based-filters.slax script to the /var/db/scripts/event
+    * JUNOS 10.0: 20090623 (10.0B1)
+  
+    
+    Installation
+    ------------
+    1. Copy the time-based-filters.slax script to the /var/db/scripts/event
     directory on all REs.
 
     2. Copy the cs-time-based-filters.slax script to the /var/db/scripts/commit
@@ -37,13 +39,12 @@
 
     This is all that is required to setup the time-based-filters scripts.  No
     event policy configuration is necessary, the commit script will 
-    automatically generate all needed configuration.]]>
-  </Installation>
-  </description>
+    automatically generate all needed configuration.
 
 
-  <configuration>
-    <![CDATA[To mark a filter as a time-based filter it is necessary to add either
+    Time-Based Stateless Firewall Filters
+    -------------------------------------
+    To mark a filter as a time-based filter it is necessary to add either
     the "active-time-range" or "inactive-time-range" macro under the filter
     term and specify a start-time and stop-time for the term.
 
@@ -84,12 +85,12 @@
     and delete them as needed:
     groups time-based-filters-group
     generate-event time-based-filters-event*
-    policy time-based-filters-policy]]>
-  </configuration>
+    policy time-based-filters-policy
 
 
-  <Misc>
-    <![CDATA[Only the UTC time-zone is supported due to PR 459078.  Using a different time-zone
+    Restrictions & Misc
+    -------------------
+    Only the UTC time-zone is supported due to PR 459078.  Using a different time-zone
     will result in a commit error.
 
     A maximum of 10 unique times can be supported per JUNOS device.  Going beyond this
@@ -128,12 +129,12 @@
     The script will run on both REs but it will pause for a minute on the backup RE
     to allow the master RE to make the configuration change.  If there is a
     communication problem then the backup RE will make the needed configuration change
-    but it will not synchronize its commit (unless the configuration forces it to).]]>
-  </Misc>
+    but it will not synchronize its commit (unless the configuration forces it to).
 
 
-  <Problems>
-    <![CDATA[The event script will attempt an exclusive commit at the start and stop
+    Problems
+    --------
+    The event script will attempt an exclusive commit at the start and stop
     times configured.  If other users are editing the configuration then
     the exclusive commit will fail and this will be logged into the syslog:
 
@@ -157,7 +158,7 @@
     error: Your cs-time-based-filters.slax version is different from your time-based-filters.slax version.
     error: 2 errors reported by commit scripts
     error: commit script failure]]>
-  </Problems>
+  </description>
   <example>
     <title>Example time-range macros</title>
     <description>
