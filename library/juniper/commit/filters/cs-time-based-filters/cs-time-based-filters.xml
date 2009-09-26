@@ -25,7 +25,7 @@
     * JUNOS 9.5:  20090729 (9.5R3)
     * JUNOS 9.6:  20090701 (9.6R2)
     * JUNOS 10.0: 20090623 (10.0B1)]]>
-  </description>
+  </Description>
 
   <Installation>
     <![CDATA[1. Copy the time-based-filters.slax script to the /var/db/scripts/event
