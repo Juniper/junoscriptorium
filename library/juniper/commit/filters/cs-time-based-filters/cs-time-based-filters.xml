@@ -3,7 +3,7 @@
   <title>cs-time-based-filters.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Activiates/Deactivates firewall filter terms based on configured time-ranges.
+	Activates/Deactivates firewall filter terms based on configured time-ranges
   </synopsis>
   <coe>commit</coe>
   <type>filters</type>
@@ -159,7 +159,59 @@
     error: 2 errors reported by commit scripts
     error: commit script failure]]>
   </description>
+  <example>
+    <title>Example time-range macros</title>
+    <description>
+     <![CDATA[This filter term should only be active from 8:00am to 5:00pm
+     term day-term {
+         apply-macro active-time-range {
+             start-time 08:00;
+             stop-time 17:00;
+         }
+         ...
+     }
 
+     This term should be inactive from 3:00pm to 6:00pm
+     term not-afternoon-term {
+         apply-macro inactive-time-range {
+             start-time 15:00;
+             stop-time 18:00;
+         }
+         ...
+     }
+
+     This term should be active from monday to wednesday from 12:00am to 12:00am
+     term multiple-days {
+         apply-macro active-time-range {
+             start-time "mon 00:00";
+             stop-time "wed 24:00";
+         }
+         ...
+     }
+
+     This term should be active from 5:00pm to 8:00pm on weekdays
+     term night {
+         apply-macro active-time-range {
+             start-time "weekdays 17:00";
+             stop-time "weekdays 20:00";
+         }
+         ...
+     }
+
+     This term should be active from 10am-12pm and 2pm-4pm
+     term multi-range {
+         apply-macro active-time-range-1 {
+             start-time 10:00;
+             stop-time 12:00;
+         }
+         apply-macro active-time-range-2 {
+             start-time 14:00;
+             stop-time 16:00;
+         }
+         ...
+     }]]>
+    </description>
+  </example>
   <keyword>commit</keyword>
   <keyword>slax</keyword>
   <keyword>firewall</keyword>
