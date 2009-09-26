@@ -85,7 +85,7 @@
     groups time-based-filters-group
     generate-event time-based-filters-event*
     policy time-based-filters-policy]]>
-  </description>
+  </Configuration>
 
 
   <Misc>
