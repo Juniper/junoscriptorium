@@ -9,7 +9,7 @@
   <type>debug</type>
 
   <description>
-One common problem with writing large SLAX scripts is the difficulty in isolating the location of the inevitable syntax errors.  Unterminated comments or strings and other syntax problems tend to cause cascading errors, which do not point clearly to the line where the problem occurred.
+<![CDATA[One common problem with writing large SLAX scripts is the difficulty in isolating the location of the inevitable syntax errors.  Unterminated comments or strings and other syntax problems tend to cause cascading errors, which do not point clearly to the line where the problem occurred.
 
  
 
@@ -82,10 +82,8 @@ Line 635: Possible missing bracket
 
 
 Minimum JUNOS Version: 9.4.
-
 Latest Script Version: 1.42
-
-SHA-256 Checksum: b165914b2409c6aaa69b3f97a72dd225cdb6c882391ff436ae5f50d31487000e
+SHA-256 Checksum: b165914b2409c6aaa69b3f97a72dd225cdb6c882391ff436ae5f50d31487000e]]>
 
   </description>
 
