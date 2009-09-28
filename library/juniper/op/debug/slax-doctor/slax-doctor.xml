@@ -51,10 +51,8 @@ Latest Script Version: 1.42
 SHA-256 Checksum: b165914b2409c6aaa69b3f97a72dd225cdb6c882391ff436ae5f50d31487000e]]>
   </description>
   <example>
-    <title>Example time-range macros</title>
     <description>
-     <![CDATA[Here is an example:
-
+     <![CDATA[
 user@JUNOS> op slax-doctor filename /var/db/scripts/op/demo-safe-file-get.slax
 ->Total lines in /var/db/scripts/op/demo-safe-file-get.slax = 650
 ->Found 13 templates in script file
