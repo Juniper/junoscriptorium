@@ -9,7 +9,7 @@
   <type>debug</type>
 
   <description>
-<![CDATA[One common problem with writing large SLAX scripts is the difficulty in isolating the location of the inevitable
+    <![CDATA[One common problem with writing large SLAX scripts is the difficulty in isolating the location of the inevitable
          syntax errors.  Unterminated comments or strings and other syntax problems tend to cause cascading errors, which
          do not point clearly to the line where the problem occurred.
 
