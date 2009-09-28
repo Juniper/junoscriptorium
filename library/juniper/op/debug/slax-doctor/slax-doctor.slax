@@ -1,0 +1,758 @@
+/*
+ * Author        : Curtis Call
+ * Version       : 1.42
+ * Last Modified : September 28, 2009
+ * Platform      : all
+ * Release       : 9.4 and above
+ * License       : Public Domain
+ *
+ * Description   : slax-doctor detects common SLAX syntax errors that can be hard
+ * to locate manually and can cause confusing error messages.
+ *
+ * While not perfect, the following errors will typically be caught:
+ * - Unterminated comments
+ * - Unterminated strings
+ * - Lines that lack proper termination
+ * - Mixed up parenthesis and curly braces
+ * - Missing brackets
+ * - Missing parenthesis
+ * - Unknown parameters included in template calls
+ * - Missing default-less parameters in template calls
+ * - Trying to treat template parameters like function arguments
+ * - Trying to treat function arguments like template parameters
+ * - Missing call statements when redirecting template results to variables
+ * - Missing namespaces for <func:function> function names
+ *
+ * Caveats:
+ * - Comment delimiters within quotes will cause false errors
+ * - Comment delimiters within comments will cause false errors
+ * - Brackets, parenthesis, and braces within quotes will cause false errors
+ * - Equal signs within quotes passed as function arguments will cause false errors
+ * - More than one single-line comment within a line will cause false errors
+ * - Location paths with /* will cause false errors
+ * - Parameter checking only works within parenthesis, not using the with statement
+ * - Code lines that are split across multiple file lines could cause false errors
+ *
+ * Revisions:
+ * 1.1 - Don't complain about missing jcs templates because they are included in
+ * junos.xsl.
+ * 1.2 - Switched from jcs:invoke() to jcs:execute() because it performs much faster
+ * for bulk operations.  Also cleared up the status output.
+ * 1.3 - Clarified error message when parameters look incorrect, it could be a false
+ * error, so insert a "might"
+ *     - Added check for missing call statement when redirecting template results to
+ * a variable.
+ * 1.4 - Added check for closing curly brace on lines where it likely was mistakenly
+ * added (will result in false errors for scripts where the closing brace is not
+ * typically put on a line by itself.)
+ * 1.41 - Added check for back function argument syntax
+ *      - Added check for missing namespace on <func:function> function name
+ * 1.42 - Fixed function argument syntax check to not mistake templates for functions
+ *
+ */ 
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns str = "http://exslt.org/strings";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "filename";
+        <description> "Script filename to check";
+    }
+}
+
+param $filename;
+
+/* Single session for all SNMP operations */
+var $connection = jcs:open();
+
+var $comment-start-instance = "Doctor-Comment-Start";
+var $base-index-instance = "Doctor-Base-Index";
+
+/* The size of lines that should be processed at the same time - is the recursion boundary */
+var $line-chunk-size = 100;
+
+match / {
+
+    /* Check minimum version */
+    call check-version( $minimum-version = "9.4", $failure-message = "Sorry, the SLAX Doctor needs JUNOS 9.4 or above." );
+
+    /* Retrieve from prompt if not specified as an argument */
+    var $script-file = {
+        if( string-length( $filename) == 0 ) {
+            var $name = jcs:input( "Enter script filename to check: " );
+            expr $name;
+        }
+        else {
+            expr $filename;
+        }
+    }
+
+    /* Open the file */
+    var $show-file-rpc = {
+        <file-show> {
+            <filename> $script-file;
+        }
+    }
+    
+    var $show-file-contents = jcs:execute( $connection, $show-file-rpc );
+    
+    /* Exit if an error */
+    if( $show-file-contents/..//xnm:error ) {
+        <xsl:message terminate="yes"> "Invalid script file";
+    }
+    
+    var $lines = jcs:break-lines( $show-file-contents );
+    
+    /* Assemble a string of all characters except for the quote (space won't be recorded due to whitespace trimming) */
+    var $no-quote = {
+        for-each( $ascii/char[num != 34 ] ) {
+            expr sym;
+        }
+    }
+
+    /* Assemble a string of all characters except {(}) (space and tab won't be recorded) */
+    var $no-containers = {
+        for-each( $ascii/char[sym != "{" && sym != "}" && sym != "(" && sym != ")" ] ) {
+            expr sym;
+        }
+    }
+    
+    /* Assemble a string of all characters except {(}) and ; (space and tab won't be recorded) */
+    var $no-containers-or-semi-colon = {
+        for-each( $ascii/char[sym != "{" && sym != "}" && sym != "(" && sym != ")" && sym != ";" ] ) {
+            expr sym;
+        }
+    }
+
+    /* Set the comment start to -1 to indicate no comment */
+    call write-integer( $name = $comment-start-instance, $integer = -1 );
+
+    /* Set the base index at 0 */
+    call write-integer( $name = $base-index-instance, $integer = 0 );
+    
+    /* Announce the total lines, minus 1 for the extra blank line added */
+    var $total = count( $lines ) - 1;
+    expr jcs:output( "->Total lines in ", $script-file, " = ", $total );
+    
+    /* Load the templates so they can be referenced line by line */
+    var $templates := { call load-templates( $lines ); }
+    expr jcs:output( "->Found ", count( $templates/template ), " templates in script file" );
+    
+    /* Load the functions so they can be referenced line by line */
+    var $functions := { call load-functions( $lines ); }
+    expr jcs:output( "->Found ", count( $functions/function ), " functions in script file" );
+
+    /* Check for duplicate functions - also report about missing namespaces */
+    call check-for-duplicate-functions( $functions );
+    
+    expr jcs:output( "->SLAX Doctor - starting line by line checkup...");
+
+    
+    for-each( $lines[ position() mod $line-chunk-size == 1 ] ) {
+    
+        var  $base-index = { call read-integer( $name = $base-index-instance ); }
+
+        /* Retrieve a chunk of a hundred lines */
+        var $chunk = $lines[ position() > $base-index && $base-index + $line-chunk-size >= position() ];
+        
+        /* Record the comment status */
+        var $comment-line = { call read-integer( $name = $comment-start-instance ); }
+
+        /* Announce position */
+        var $adjusted-position = $base-index + 1;
+        var $adjusted-max = $adjusted-position + $line-chunk-size;
+        expr jcs:output( "[Processing lines ", $adjusted-position, "-", $adjusted-max, "]" );
+
+        var $new-comment-line = { call process-lines( $chunk, $base-index, $no-quote, $no-containers, $no-containers-or-semi-colon, $templates, $comment-line, $index = 1 ); }
+    
+        /* Store the comment line */
+        call write-integer( $name = $comment-start-instance, $integer = $new-comment-line );
+        
+        /* Advance the base-index */
+        call write-integer( $name = $base-index-instance, $integer = $base-index + $line-chunk-size );
+    }
+    
+    /* Check if there is an open comment */
+    var $comment-line = { call read-integer( $name = $comment-start-instance ); }
+    if( $comment-line != -1 ) {
+        var $real-line = $comment-line - 1;
+        expr jcs:output( "Possible unterminated comment at line ", $real-line );
+    }
+    
+    expr jcs:output( "->Checkup Done!" );
+    
+    /* Cleanup */
+    call clear-integer( $name = $comment-start-instance );
+    call clear-integer( $name = $base-index-instance );
+    expr jcs:close( $connection );
+}
+
+/*
+ * Parses $functions XML structure looking for dups
+ */
+template check-for-duplicate-functions( $functions ) {
+    for-each( $functions/function ) {
+        var $outer-position = position();
+        var $outer-name = name;
+        
+        if( not( contains( name, ":" ) ) ) {
+            expr jcs:output( "Function ", name, " is missing its namespace" );
+        }
+        
+        for-each( $functions/function ) {
+        
+            if( position != $outer-position ) {
+            
+                if( name == $outer-name ) {
+                    expr jcs:output( "Function ", name, " is declared more than once" );
+                }
+            }
+        }
+    }
+}
+
+/*
+ * Processes the given line. Compares the included parameters against the 
+ * parameters gathered within $templates and reports unknown parameters as well 
+ * as missing default-less parameters.
+ */
+template check-parameters( $line, $real-line, $templates ) {
+
+    var $after-call = substring-after( $line, "call " );
+    var $before-parenthesis = substring-before( $after-call, "(" );
+    var $template-name = normalize-space( $before-parenthesis );
+            
+    if( jcs:empty( $templates/template[name == $template-name] ) ) {
+        /* Don't complain about any jcs: functions because they are in import.xsl */
+        if( not( starts-with( $template-name, "jcs:" ) ) ) {
+            expr jcs:output("Line ", $real-line, ": Template ", $template-name, " is not in script file" );
+        }
+    }
+    else {
+        var $after-parenthesis = substring-after( $line, "(" );
+        var $parameter-string = { call substring-before-last( $string = $after-parenthesis, $pattern = ")" ); }
+            
+        var $parameters = jcs:split( ",", $parameter-string );
+        var $template = $templates/template[name == $template-name];
+        var $included := {
+            for-each( $parameters ) {
+                var $name-raw = {
+                    if( contains( ., "=" ) ) {
+                        expr substring-before( ., "=" );
+                    }
+                    else {
+                        expr .;
+                    }
+                }
+                var $name = normalize-space( $name-raw );
+               
+                if( string-length( $name ) > 0 ) {
+                    /* If it doesn't start with a $ then it isn't a parameter */
+                    if( not( starts-with( $name, "$" ) ) ) {
+                        expr jcs:output( "Line ", $real-line, ": Template parameter value might not be assigned correctly" );
+                    }
+                    else if( jcs:empty( $template/parameter[name == $name] ) ) {
+                        expr jcs:output( "Line ", $real-line, ": Unknown template parameter ", $name, " for template ", $template-name );
+                    }
+                    else {
+                        <name> $name;
+                    }
+                }
+            }
+        }
+        /* Compare against the non-default parameters for the template */
+        for-each( $template/parameter[ jcs:empty( has-default ) ] ) {
+            var $parameter-name = name;
+            if( jcs:empty( $included[name == $parameter-name] ) ) {
+                expr jcs:output( "Line ", $real-line, ": Template ", $template-name, " called without parameter ", $parameter-name, " (It has no default)" );
+            }
+        }
+    }
+}
+
+/*
+ * Pulls out all the declared templates and records their parameters.  Uses
+ * this XML format:
+ * <template> {
+ *     <name> "template-name";
+ *     <parameter> {
+ *         <name> "parameter-name";
+ *         <has-default>; - Included when the parameters has a default value
+ *     }
+ * }
+ */
+template load-templates( $lines ) {
+    
+    for-each( $lines ) {
+        var $line = normalize-space( . );
+        
+        if( starts-with( $line, "template" ) ) {
+            <template> {
+                var $after-template = substring-after( $line, "template " );
+                var $before-brace = {
+                    if( contains( $after-template, "{" ) ) {
+                        expr substring-before( $after-template, "{" );
+                    }
+                    else {
+                        expr $after-template;
+                    }
+                }
+                var $before-parenthesis = {
+                    if( contains( $before-brace, "(" ) ) {
+                        expr substring-before( $before-brace, "(" );
+                    }
+                    else {
+                        expr $before-brace;
+                    }
+                }
+                <name> normalize-space( $before-parenthesis );
+                
+                var $after-parenthesis = substring-after( $line, "(" );
+                var $parameter-string = substring-before( $after-parenthesis, ")" );
+                
+                var $parameters = jcs:split( ",", $parameter-string );
+                for-each( $parameters ) {
+                    var $has-default = contains( ., "=" );
+                    var $name-raw = {
+                        if( contains( ., "=" ) ) {
+                            expr substring-before( ., "=" );
+                        }
+                        else {
+                            expr .;
+                        }
+                    }
+                    var $name = normalize-space( $name-raw );
+                    if( string-length( $name ) > 0 ) {
+                        <parameter> {
+                            <name> $name;
+                            if( $has-default ) {
+                                <has-default>;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/*
+ * Pulls out all the declared functions.  Uses this XML format:
+ * <function> {
+ *     <name> "function-name";
+ * }
+ */
+template load-functions( $lines ) {
+    
+    for-each( $lines ) {
+        var $line = normalize-space( . );
+        var $test-string = "<func:function name"; /* "> */
+        if( starts-with( $line, $test-string ) ) {
+            <function> {
+                var $quote-raw = {
+                    expr "\"";
+                }
+                var $quote = {
+                    /* Do this because of PR 436699 */
+                    if( string-length( $quote-raw ) == 2 ) {
+                        expr substring( $quote-raw, 2, 1 );
+                    }
+                    else {
+                        expr $quote-raw;
+                    }
+                }
+                var $after-quote = substring-after( $line, $quote );
+                var $before-quote = substring-before( $after-quote, $quote );
+                <name> $before-quote;
+            }
+        }
+    }
+}
+
+/*
+ * Returns the substring before the last occurrence of $pattern
+ */
+template substring-before-last( $string, $pattern ) {
+
+    /* Is pattern at the end? */
+    var $pattern-length = string-length( $pattern );
+    var $string-length = string-length( $string );
+    
+    var $slice = substring( $string, $string-length - $pattern-length + 1 );
+
+    if( $string-length == 0 ) {
+        expr "";
+    }
+    else if( $slice == $pattern ) {
+        expr substring( $string, 1, $string-length - $pattern-length - 1 );
+    }
+    else {
+        call substring-before-last( $string = substring( $string, 1, $string-length - 1 ), $pattern );
+    }
+}
+
+template count-substring( $string, $substring, $count = 0 ) {
+    if( contains( $string, $substring ) ) {
+        var $before = substring-before( $string, $substring );
+        var $after = substring-after( $string, $substring );
+        call count-substring( $string = $before _ $after, $substring, $count = $count + 1 );
+    }
+    else {
+        expr $count;
+    }
+}
+
+template process-lines( $chunk, $base-index, $no-quote, $no-containers, $no-containers-or-semi-colon, $templates, $comment-line, $index ) {
+    
+    /* Get the current line */
+    var $line = $chunk[ $index ];
+
+    /* The actual line in the output - including the added blank line at the beginnig */
+    var $current-line = $base-index + $index;
+    
+    /* The reported line in the output - after removing the added blank line */
+    var $real-line = $current-line - 1;
+    var $real-comment-line = $comment-line - 1;
+    
+    /* Look for starting and ending comment delimiters */
+    var $comment-start = contains( $line, "/*" );
+    var $comment-stop = contains( $line, "*/" );
+
+    /* Check comments, return the $comment-line variable */
+    var $new-comment-line = {    
+        /* Look for a /* when a comment is already in progress */
+        if( $comment-line != -1 && $comment-start ) {
+            /* Record an error */
+            expr jcs:output( "Line ", $real-comment-line, ": Possible unterminated comment detected at line ", $real-line );
+            
+            /* Change the comment position to the current line if the comment wasn't stopped */
+            if( not( $comment-stop ) ) {
+                expr $current-line;
+            }
+            else {
+                /* comment stopped so set it to -1 */
+                expr -1;
+            }
+        }
+        else if( $comment-start && not( $comment-stop ) ) {
+            /* Record the starting comment */
+            expr $current-line;
+        }
+        /* Look for a stopped comment with no start comment */
+        else if( $comment-stop && not( $comment-start) && $comment-line == -1 ) {
+            /* Record an error */
+            expr jcs:output( "Line ", $real-line, ": Comment stop with no comment start" );
+            /* Comment remains at -1 */
+            expr -1;
+        }
+        /* Stop the comment */
+        else if( $comment-stop && $comment-line > -1 ) {
+            expr -1;
+        }
+        else {
+            expr $comment-line;
+        }
+    }
+    
+    /* Only perform the other checks if they aren't part of a multi-line comment and the line has some length to it */
+    if( string-length( $line ) > 0 && ( $comment-line == -1 && ( not( $comment-start ) || $comment-stop  ) ) ) {
+    
+        var $check-string = {
+            /* Single line comment is there, remove it */
+            if( $comment-start && $comment-stop  ) {
+                expr substring-before( $line, "/*" );
+                expr substring-after( $line, "*/" );
+            }
+            else {
+                expr $line;
+            }
+        }
+        /* For when no extra whitespace is desired */
+        var $normalized-check-string = normalize-space( $check-string );
+    
+        /* Check quotes */
+        /* Translate everything except quotes to nothing - do this because of the quote PR */
+        var $only-quotes-raw = translate( $check-string, $no-quote, "" );
+    
+        /* Remove spaces and tabs now because the no-quotes string didn't remove them */
+        var $only-quotes = translate( $only-quotes-raw, " \t", "" );
+        if( string-length( $only-quotes ) mod 2 == 1 ) {
+            expr jcs:output( "Line ", $real-line, ": Possible unterminated quote" );
+        }
+        
+        /* Check line termination */
+        if( string-length( $normalized-check-string ) > 0 ) {
+            var $end-1 = substring( $normalized-check-string, string-length( $normalized-check-string) );
+            var $end-2 = substring( $normalized-check-string, string-length( $normalized-check-string) - 1 );
+            var $end-3 = substring( $normalized-check-string, string-length( $normalized-check-string) - 2 );
+            var $end-4 = substring( $normalized-check-string, string-length( $normalized-check-string) - 3 );
+        
+            /* Allow it to be either { } _ + - / , ; || | && and or mod div */
+            if( $end-1 != "{" && $end-1 != "}" && $end-1 != "_" && $end-1 != "+" && $end-1 != "-" && $end-1 != "/" &&
+                $end-1 != ";" && $end-1 != "," && $end-1 != "|" && $end-2 != "||" && $end-2 != "&&" && $end-3 != " or" && 
+                $end-4 != " and" && $end-4 != " mod" && $end-4 != " div" ) {
+
+                expr jcs:output( "Line ", $real-line, ": Check line termination" );
+            }
+        }
+        
+        /* Look for ( where { should be or ) where } should be */
+        /* Get rid of all spaces and tabs */
+        var $no-white-space = translate( $check-string, " \t", "" );
+        
+        /* This first check could be seen when using ( instead of } in a RTF variable assignment from a template */
+        if( contains( $no-white-space, "=(call" ) ) {
+            expr jcs:output( "Line ", $real-line, ": Possible use of opening parenthesis instead of opening curly brace" ); 
+        }
+        
+        /* This second check could be seen when using ) instead of } in a RTF variable assignment from a template */
+        if( contains( $no-white-space, ");)" ) ) {
+            expr jcs:output( "Line ", $real-line, ": Possible use of closing parenthesis instead of closing curly brace" ); 
+        }
+        
+        /* Look for ({ or }) */
+        /* Get rid of everything except for ({}) */
+        var $only-container = translate( $no-white-space, $no-containers, "" );
+        
+        if( contains( $only-container, "({" ) || contains( $only-container, "})" ) ) {
+            expr jcs:output( "Line ", $real-line, ": Possible incorrect parenthesis and curly brace usage" );
+        }
+        
+        /* Look for )}; */
+        /* Get rid of everything except for ({}) */
+        var $only-container-or-semi-colon = translate( $no-white-space, $no-containers-or-semi-colon, "" );
+        
+        if( contains( $only-container-or-semi-colon, ")};" ) ) {
+            expr jcs:output( "Line ", $real-line, ": Possible incorrect semi-colon placement" );
+        }
+        /* Look for )} with no semi-colon */
+        /* Get rid of everything except for ({}); */
+        else if( contains( $only-container-or-semi-colon, ")}" ) ) {
+            expr jcs:output( "Line ", $real-line, ": Possible missing semi-colon" );
+        }
+
+        /* Look for a } in a line that isn't alone, and that doesn't also contain a { */
+        if( string-length( $no-white-space ) > 1 && contains( $no-white-space, "}" ) && not( contains( $no-white-space, "{" ) ) ) {
+            expr jcs:output( "Line ", $real-line, ": Possible extra closing curly brace." );
+        }
+        
+        /* Check for missing call statements in single-line template to variable assignments */
+        /* i.e. var $example = { get-value(); } */
+        if( contains( $no-white-space, "var" ) && contains( $no-white-space, "={" ) &&
+            contains( $no-white-space, ");}" ) && not( contains( $no-white-space, "{call" ) ) ) {
+        
+            expr jcs:output( "Line ", $real-line, ": Possible missing call statement" );
+        }
+        
+        /* Check for invalid function argument syntax */
+        /* i.e. var $example = function( $var = "something" ); */
+        if( ( starts-with( $no-white-space, "var" ) || starts-with( $no-white-space, "expr" ) ) && not( contains( $no-white-space, "{call" ) ) ) {
+            var $equal-sign-count = { call count-substring( $string = $no-white-space, $substring = "=" ); }
+            var $equality-check-count = { call count-substring( $string = $no-white-space, $substring = "==" ); }
+            
+            /* Don't get confused by equality checks */
+            var $final-equal-sign-count = $equal-sign-count - ( $equality-check-count * 2 );
+            
+            if( $final-equal-sign-count > 1 || ( starts-with( $no-white-space, "expr" ) && $final-equal-sign-count == 1 ) ) {
+                expr jcs:output( "Line ", $real-line, ": Possible bad function argument syntax (ignore if equal sign is inside quotes)" );
+            }
+        }
+        
+        /* Verify that func:function names have a : in them */
+        if( contains( $no-white-space, "func:function"  ) ) { 
+            var $colon-count = { call count-substring( $string = $no-white-space, $substring = ":" ); }
+            
+            if( 2 > $colon-count ) {
+                expr jcs:output( "Line ", $real-line, ": Possible missing namespace in function name" );
+            }
+        }
+
+        /* Bracket and parenthesis count checks */
+        
+        var $end-1 = substring( $no-white-space, string-length( $no-white-space ) );
+
+        /* A complete line starts with param, call, var, for-each, expr, templatee, if, or < and ends with ; } or {     > */
+        var $complete-line = ( (starts-with( $no-white-space, "param" ) || starts-with( $no-white-space, "var" ) || starts-with( $no-white-space, "for-each" ) || starts-with( $no-white-space, "call" ) ||
+                                starts-with( $no-white-space, "expr") || starts-with( $no-white-space, "template" ) || starts-with( $no-white-space, "if" ) || starts-with( $no-white-space, "<" ) )
+                                && ( $end-1 == ";" || $end-1 == "{" || $end-1 == "}" ) ); /* "> */
+                                
+        if( $complete-line ) {
+            /* Check for miscount of [ and ] */
+            var $opening-bracket-count = { call count-substring( $string = $no-white-space, $substring = "[" ); }
+            var $closing-bracket-count = { call count-substring( $string = $no-white-space, $substring = "]" ); }
+            if( $opening-bracket-count != $closing-bracket-count  ) {
+                expr jcs:output( "Line ", $real-line, ": Possible missing bracket" );
+            }
+        
+            /* Check for miscount of ( and  )  */
+            var $opening-parenthesis-count = { call count-substring( $string = $no-white-space, $substring = "(" ); }
+            var $closing-parenthesis-count = { call count-substring( $string = $no-white-space, $substring = ")" ); }
+            if( $closing-parenthesis-count != $opening-parenthesis-count ) {
+                expr jcs:output( "Line ", $real-line, ": Possible missing parenthesis" );
+            }
+            
+            /* Check for back to back opening braces {{ this probably shouldn't happen */
+            if( contains( $no-white-space, "{{" ) ) {
+                expr jcs:output( "Line ", $real-line, ": Possible extra curly brace" );
+            }
+        }
+        
+        /* Check the parameters of lines with template calls in them */
+        if( ( contains( $check-string, " call " ) || contains( $check-string, "{call" )  ) && ( contains( $check-string, "(" ) || contains( $check-string, "{" ) ) ) {
+            call check-parameters( $line = $check-string, $real-line, $templates );
+        }
+    }
+    
+    /* Recurse through the chunk... */
+    if( count( $chunk ) >= $index + 1 ) {
+        call process-lines( $chunk, $base-index, $no-quote, $no-containers, $no-containers-or-semi-colon, $templates, $comment-line = $new-comment-line, $index = $index + 1 );
+    }
+    else {
+        /* Otherwise, output the current value of $new-comment-line */
+        expr $new-comment-line;
+    }
+}
+
+
+/*
+ * Writes the given $integer to the Utility Mib using the instance $name
+ */
+template write-integer( $name, $integer ) {
+
+    var $rpc = {
+        <request-snmp-utility-mib-set> {
+            <instance> $name;
+            <object-type> "integer";
+            <object-value> $integer;
+        }
+    }
+    var $results = jcs:execute( $connection, $rpc );
+
+}
+
+
+/*
+ * Clears the integer in the Utility Mib using the instance $name
+ */
+template clear-integer( $name ) {
+
+    var $rpc = {
+        <request-snmp-utility-mib-clear> {
+            <instance> $name;
+            <object-type> "integer";
+        }
+    }
+    var $results = jcs:execute( $connection, $rpc );
+
+}
+
+
+/*
+ * Reads the instance $name integer from the Utility Mib, converts it to oid form first
+ */
+template read-integer( $name ) {
+    var $oid-name = { call build-oid-name( $name, $type = "integer" ); }
+    
+    var $rpc = {
+        <get-snmp-object> {
+            <snmp-object-name> $oid-name;
+        }
+    }
+    var $object = jcs:execute( $connection, $rpc );
+    expr $object/snmp-object/object-value;
+    
+}
+
+
+/*
+ * This template takes the $instance name and converts it to an oid name for its value.
+ * The type should be specified as well, either "string", "counter", "counter64",
+ * "integer", or "unsigned-integer".
+ * This is used with <get-snmp-object>
+ */
+template build-oid-name( $name, $type ) {
+
+    /* Build the type portion of the name */
+    var $string-portion = {
+        if( $type == "string" ) {
+            expr "jnxUtilStringValue";
+        }
+        else if( $type == "counter" ) {
+            expr "jnxUtilCounter32Value";
+        }
+        else if( $type == "integer" ) {
+            expr "jnxUtilIntegerValue";
+        }
+        else if( $type == "counter64" ) {
+            expr "jnxUtilCounter64Value";
+        }
+        else if( $type == "counter" ) {
+            expr "jnxUtilUintValue";
+        }
+    }
+
+    /* Split the name into characters */    
+    var $characters = str:tokenize( $name, "" );
+    
+    var $number-portion = {
+        for-each( $characters ) {
+    
+            /* Convert the characters to their ASCII code equivalent */
+            var $char = .;
+            var $ascii-char = $ascii/char[ sym == $char ];
+            expr "." _ $ascii-char/num;
+        }
+    }
+    
+    /* Return the full string */
+    expr $string-portion _ $number-portion;
+}
+
+
+var $ascii := {
+<char> { <num> 32; <sym> " "; }<char> { <num> 33; <sym> "!"; }<char> { <num> 34; <sym> "\""; }<char> { <num> 35; <sym> "#"; }<char> { <num> 36; <sym> "$"; }
+<char> { <num> 37; <sym> "%"; }<char> { <num> 38; <sym> "&"; }<char> { <num> 39; <sym> "'"; }<char> { <num> 40; <sym> "("; }<char> { <num> 41; <sym> ")"; }
+<char> { <num> 42; <sym> "*"; }<char> { <num> 43; <sym> "+"; }<char> { <num> 44; <sym> ","; }<char> { <num> 45; <sym> "-"; }<char> { <num> 46; <sym> "."; }
+<char> { <num> 47; <sym> "/"; }<char> { <num> 48; <sym> "0"; }<char> { <num> 49; <sym> "1"; }<char> { <num> 50; <sym> "2"; }<char> { <num> 51; <sym> "3"; }
+<char> { <num> 52; <sym> "4"; }<char> { <num> 53; <sym> "5"; }<char> { <num> 54; <sym> "6"; }<char> { <num> 55; <sym> "7"; }<char> { <num> 56; <sym> "8"; }
+<char> { <num> 57; <sym> "9"; }<char> { <num> 58; <sym> ":"; }<char> { <num> 59; <sym> ";"; }<char> { <num> 60; <sym> "<"; }<char> { <num> 61; <sym> "="; } /* >" */
+<char> { <num> 62; <sym> ">"; }<char> { <num> 63; <sym> "?"; }<char> { <num> 64; <sym> "@"; }<char> { <num> 65; <sym> "A"; }<char> { <num> 66; <sym> "B"; }
+<char> { <num> 67; <sym> "C"; }<char> { <num> 68; <sym> "D"; }<char> { <num> 69; <sym> "E"; }<char> { <num> 70; <sym> "F"; }<char> { <num> 71; <sym> "G"; }
+<char> { <num> 72; <sym> "H"; }<char> { <num> 73; <sym> "I"; }<char> { <num> 74; <sym> "J"; }<char> { <num> 75; <sym> "K"; }<char> { <num> 76; <sym> "L"; }
+<char> { <num> 77; <sym> "M"; }<char> { <num> 78; <sym> "N"; }<char> { <num> 79; <sym> "O"; }<char> { <num> 80; <sym> "P"; }<char> { <num> 81; <sym> "Q"; }
+<char> { <num> 82; <sym> "R"; }<char> { <num> 83; <sym> "S"; }<char> { <num> 84; <sym> "T"; }<char> { <num> 85; <sym> "U"; }<char> { <num> 86; <sym> "V"; }
+<char> { <num> 87; <sym> "W"; }<char> { <num> 88; <sym> "X"; }<char> { <num> 89; <sym> "Y"; }<char> { <num> 90; <sym> "Z"; }<char> { <num> 91; <sym> "["; }
+<char> { <num> 92; <sym> "\\"; }<char> { <num> 93; <sym> "]"; }<char> { <num> 94; <sym> "^"; }<char> { <num> 95; <sym> "_"; }<char> { <num> 96; <sym> "`"; }
+<char> { <num> 97; <sym> "a"; }<char> { <num> 98; <sym> "b"; }<char> { <num> 99; <sym> "c"; }<char> { <num> 100; <sym> "d"; }<char> { <num> 101; <sym> "e"; }
+<char> { <num> 102; <sym> "f"; }<char> { <num> 103; <sym> "g"; }<char> { <num> 104; <sym> "h"; }<char> { <num> 105; <sym> "i"; }<char> { <num> 106; <sym> "j"; }
+<char> { <num> 107; <sym> "k"; }<char> { <num> 108; <sym> "l"; }<char> { <num> 109; <sym> "m"; }<char> { <num> 110; <sym> "n"; }<char> { <num> 111; <sym> "o"; }
+<char> { <num> 112; <sym> "p"; }<char> { <num> 113; <sym> "q"; }<char> { <num> 114; <sym> "r"; }<char> { <num> 115; <sym> "s"; }<char> { <num> 116; <sym> "t"; }
+<char> { <num> 117; <sym> "u"; }<char> { <num> 118; <sym> "v"; }<char> { <num> 119; <sym> "w"; }<char> { <num> 120; <sym> "x"; }<char> { <num> 121; <sym> "y"; }
+<char> { <num> 122; <sym> "z"; }<char> { <num> 123; <sym> "{"; }<char> { <num> 124; <sym> "|"; }<char> { <num> 125; <sym> "}"; }<char> { <num> 126; <sym> "~"; }
+}
+
+
+/*
+ * Checks if JUNOS version is at the minimum version or above, displays the
+ * failure message and exits if it is not.
+ */
+template check-version( $minimum-version, $failure-message ) {
+
+    var $kern-osrelease = jcs:sysctl("kern.osrelease", "s");
+
+    var $version-set = jcs:split("[IRSB-]", $kern-osrelease );
+
+    var $version = $version-set[1];
+    
+    if( $minimum-version > $version ) {
+        <xsl:message terminate="yes"> $failure-message;
+    }
+}
+

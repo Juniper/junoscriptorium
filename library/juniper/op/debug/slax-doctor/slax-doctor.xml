@@ -1,0 +1,100 @@
+<?xml version="1.0"?>
+<script>
+  <title>slax-doctor.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	Checks SLAX scripts for common syntax and programming errors
+  </synopsis>
+  <coe>op</coe>
+  <type>debug</type>
+
+  <description>
+One common problem with writing large SLAX scripts is the difficulty in isolating the location of the inevitable syntax errors.  Unterminated comments or strings and other syntax problems tend to cause cascading errors, which do not point clearly to the line where the problem occurred.
+
+ 
+
+I wrote this script to help locate these types of errors.  It is not perfect but it can detect the following problems:
+
+ 
+
+    * Unterminated comments
+    * Unterminated strings
+    * Lines that lack proper termination
+    * Mixed up parenthesis and curly braces
+    * Missing brackets
+    * Missing parenthesis
+    * Unknown parameters included in template calls
+    * Missing default-less parameters in template calls
+    * Trying to treat template parameters like function arguments
+    * Trying to treat function arguments like template parameters
+    * Missing call statements when redirecting template results to variables
+    * Missing namespaces for <func:function> function names
+
+ 
+
+There are, of course, caveats:
+
+ 
+
+    * Comment delimiters within quotes will cause false errors
+    * Comment delimiters within comments will cause false errors
+    * Brackets, parenthesis, and braces within quotes will cause false errors
+    * Equal signs within quotes passed as function arguments will cause false errors
+    * More than one single-line comment within a line will cause false errors
+    * Location paths with /* will cause false errors
+    * Parameter checking only works within parenthesis, not using the with statement
+    * Code lines that are split across multiple file lines could cause false errors
+
+ 
+
+To use, install it on a JUNOS device which also has the script that needs to be checked.  Then run it like this:
+
+ 
+
+user@JUNOS> op slax-doctor filename problem-script.slax
+
+ 
+
+It will process the file line and line and will report any possible problems it finds.
+
+ 
+
+Here is an example:
+
+ 
+
+jnpr@r2d2-re0> op slax-doctor filename /var/db/scripts/op/demo-safe-file-get.slax
+->Total lines in /var/db/scripts/op/demo-safe-file-get.slax = 650
+->Found 13 templates in script file
+->Found 0 functions in script file
+->SLAX Doctor - starting line by line checkup...
+[Processing lines 1-101]
+[Processing lines 101-201]
+[Processing lines 201-301]
+[Processing lines 301-401]
+[Processing lines 401-501]
+[Processing lines 501-601]
+[Processing lines 601-701]
+Line 623: Possible unterminated quote
+Line 634: Possible missing bracket
+Line 635: Possible missing bracket
+->Checkup Done!
+
+
+Minimum JUNOS Version: 9.4.
+
+Latest Script Version: 1.42
+
+SHA-256 Checksum: b165914b2409c6aaa69b3f97a72dd225cdb6c882391ff436ae5f50d31487000e
+
+  </description>
+
+  <keyword>debug</keyword>
+  <keyword>slax</keyword>
+  <keyword>syntax</keyword>
+  <keyword>doctor</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
