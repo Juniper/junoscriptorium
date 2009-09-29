@@ -1,0 +1,25 @@
+/*
+ * Very simple script which gets triggerd on receiving 
+ * RPD_OSPF_NBRDOWN event. RPD_OSPF_NBRDOWN is received when OSPF neighbor 
+ * adjacency was terminated. This script raises an syslog message 
+ * with high priority value.
+ * 
+ * Due to a known issue (PR 76849) this script will not get event details. 
+ * So, we can only log a simple log message saying OSPF adjacency happened
+ * but not the details.
+ */
+
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match / {
+    
+    expr jcs:syslog("daemon.crit", "OSPF neighbor adjacency was terminated");
+
+}
