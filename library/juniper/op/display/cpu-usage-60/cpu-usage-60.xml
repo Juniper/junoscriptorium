@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<script>
+  <title>cpu-usage-60.slax</title>
+  <author>phil</author>
+  <synopsis>
+	Cool display of CPU usage graphically, similar to Cisco's "show processes cpu history"
+  </synopsis>
+  <coe>op</coe>
+  <type>display</type>
+
+  <description>
+This op script uses get-accounting-record-information to collect RE CPU usage for the last 60 minutes and display them in graphical format.
+It can be similarly modified to display router temperature, rtt details, memory usage, etc as well.
+
+  </description>
+
+  <example>
+    <title>Configuration</title>
+    <description>Configuration required for this op script</description>
+    <config>example-1.conf</config>
+    <output>example-1.output</output>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

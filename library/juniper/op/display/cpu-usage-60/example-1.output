@@ -1,0 +1,26 @@
+copy the file cpu-usage-60.slax to /var/db/scripts/op and let the accounting-option colle
+t date (wait 10+ minutes), then type of the following:
+
+user@cli> op cpu-usage-60     
+
+                     1          1                     1
+     999998999989998818889899888299989998999898989789907888889999 
+ 100|  
+  90|  
+  80|  
+  70|  
+  60|  
+  50|  
+  40|  
+  30|  
+  20|                *          *  
+  10|**************** ********** ********************************  
+    +------------------------------------------------------------  
+    0....5....1....1....2....2....3....3....4....4....5....5....6  
+              0    5    0    5    0    5    0    5    0    5    0 
+
+ x-axis => Mins, y-axis => CPU%  (CPU Usage for the last 60 minutes)  
+
+ * show the CPU usage for the last 60 minutes
+ * the top 2 rows vertically display the CPU % of that minute
+ * the CPU % for the last minute is 9%

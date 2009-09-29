@@ -1,0 +1,346 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+/*
+ * OpScript to monitor CPU usage
+ * 
+ *   user@cli> show configuration accounting-options file router.prf {
+ *       files 3;
+ *   }
+ *   routing-engine-profile router-profile {
+ *       file router.prf;
+ *       interval 1;
+ *       fields {
+ *           time-of-day;
+ *           total-cpu-usage;
+ *       }
+ *   }
+ *   
+ *   user@cli> show configuration system scripts op file cpu-usage-60.slax {
+ *       command cpu_usage;
+ *   }
+ *
+ *   Copy the file to /var/db/scripts/op and let the accounting-option collect data 
+ *   (wait 10+ minutes), then type the following:
+ *   
+ *   user@cli> op cpu-usage-60
+ *
+ *                   1          1                     1
+ *    999998999989998818889899888299989998999898989789907888889999
+ * 100|
+ *  90|
+ *  80|
+ *  70|
+ *  60|
+ *  50|
+ *  40|
+ *  30|
+ *  20|                *          *
+ *  10|**************** ********** ********************************
+ *    +------------------------------------------------------------
+ *    0....5....1....1....2....2....3....3....4....4....5....5....6
+ *              0    5    0    5    0    5    0    5    0    5    0
+ * x-axis => Mins, y-axis => CPU%  (CPU Usage for the last 60 minutes)
+ *
+ */
+
+var $xaxis-line = "   +------------------------------------------------------------";
+var $xaxis-num1 = "   0....5....1....1....2....2....3....3....4....4....5....5....6"; 
+var $xaxis-num2 = "             0    5    0    5    0    5    0    5    0    5    0";
+
+var $xaxis-num3 = "x-axis => Mins, y-axis => CPU%  (CPU Usage for the last 60 minutes)" ;
+
+var $profile-name = "router-profile";
+
+match / {
+
+    /*
+     * Get the cpu-usage for the last 60 minutes
+     */
+    var $rpc = <get-accounting-record-information> {
+		    <profile> $profile-name;
+		    <since> "-3600";
+		}
+
+    var $results = jcs:invoke($rpc);
+
+    var $line-raw = {
+	for-each ($results/routing-engine-accounting-statistics/routing-engine-accounting-record) {
+
+	    <xsl:sort select="position()" data-type="number" order="descending">;
+	    
+	    var $tcpu =  round(total-cpu-usage);
+	    var $split = jcs:regex("([0-9])([0-9]?)([0-9]?)", $tcpu);
+
+	    if ($tcpu < 10) {
+	    	<first-line> "b";
+		<second-line> "b";
+		<third-line> $split[2];
+	    } else if ($tcpu < 100) {
+		<first-line> "b";
+		<second-line>$split[2];
+		<third-line> $split[3];
+	    } else { 
+		<first-line> $split[2];
+		<second-line>$split[3];
+		<third-line> $split[4];
+	   } 
+
+	   if ($tcpu > 90 && $tcpu <= 100) {
+	       <y1> "*";
+	   } else {
+	       <y1> "b";
+	   }
+
+	   if ($tcpu > 80 and $tcpu <= 90) {
+	       <y2> "*";
+	   } else {
+	       <y2> "b";
+	   }
+
+	   if ($tcpu > 70 and $tcpu <= 80) {
+	       <y3> "*";
+	   } else {
+	       <y3> "b";
+	   }
+
+	   if ($tcpu > 60 and $tcpu <= 70) {
+	       <y4> "*";
+	   } else {
+	       <y4> "b";
+	   }
+
+	   if ($tcpu > 50 and $tcpu <= 60) {
+	       <y5> "*";
+	   } else {
+	       <y5> "b";
+	   }
+
+	   if ($tcpu > 40 and $tcpu <= 50) {
+	       <y6> "*";
+	   } else {
+	       <y6> "b";
+	   }
+
+	   if ($tcpu > 30 and $tcpu <= 40) {
+	       <y7> "*";
+	   } else {
+	       <y7> "b";
+	   }
+
+	   if ($tcpu > 20 and $tcpu <= 30) {
+	       <y8> "*";
+	   } else {
+	       <y8> "b";
+	   }
+
+	   if ($tcpu > 10 and $tcpu <= 20) {
+	       <y9> "*";
+	   } else {
+	       <y9> "b";
+	   }
+	   if ($tcpu > 0 and $tcpu <= 10) {
+	       <y10> "*";
+	   } else {
+	       <y10> "b";
+	   }
+	}
+    }
+
+    var $lines = ext:node-set($line-raw);
+
+    var $percent-line-out  = {
+
+	expr jcs:printf("%s", "    ");
+
+	for-each ($lines/first-line) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+	expr jcs:printf("%s", "\n    ");
+
+	for-each ($lines/second-line) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+	expr jcs:printf("%s", "\n    ");
+
+	for-each ($lines/third-line) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+
+    expr jcs:output($percent-line-out);
+
+    var $y1  = {
+
+	expr jcs:printf("%s", "100|");
+
+	for-each ($lines/y1) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y1);
+
+    var $y2  = {
+
+	expr jcs:printf("%s", " 90|");
+
+	for-each ($lines/y2) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y2);
+
+    var $y3  = {
+
+	expr jcs:printf("%s", " 80|");
+
+	for-each ($lines/y3) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y3);
+
+    var $y4  = {
+
+	expr jcs:printf("%s", " 70|");
+
+	for-each ($lines/y4) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y4);
+
+    var $y5  = {
+
+	expr jcs:printf("%s", " 60|");
+
+	for-each ($lines/y5) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y5);
+
+    var $y6  = {
+
+	expr jcs:printf("%s", " 50|");
+
+	for-each ($lines/y6) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y6);
+
+    var $y7  = {
+
+	expr jcs:printf("%s", " 40|");
+
+	for-each ($lines/y7) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y7);
+
+    var $y8  = {
+
+	expr jcs:printf("%s", " 30|");
+
+	for-each ($lines/y8) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y8);
+
+    var $y9  = {
+
+	expr jcs:printf("%s", " 20|");
+
+	for-each ($lines/y9) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y9);
+
+    var $y10  = {
+
+	expr jcs:printf("%s", " 10|");
+
+	for-each ($lines/y10) {
+	    if (. == "b") {
+		expr jcs:printf("%s", " ");
+	    } else {
+		expr jcs:printf("%s", .); 
+	    }
+	}
+    }
+    
+    expr jcs:output($y10);
+
+    expr jcs:output($xaxis-line);
+    expr jcs:output($xaxis-num1);
+    expr jcs:output($xaxis-num2);
+    expr jcs:output($xaxis-num3);
+
+}
