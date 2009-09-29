@@ -1,0 +1,76 @@
+/*
+ * Op script to expand the interface port range. 
+ *
+ * For example 
+ *
+ * set interfaces ge-0/0/0-20 unit 0 family ethernet-switching vlan members data
+ *
+ * gets expanded into multiple set command like
+ *
+ * set interfaces ge-0/0/0 unit 0 family ethernet-switching vlan members data
+ * set interfaces ge-0/0/1 unit 0 family ethernet-switching vlan members data
+ * ....
+ * ....
+ * set interfaces ge-0/0/19 unit 0 family ethernet-switching vlan members data
+ * set interfaces ge-0/0/20 unit 0 family ethernet-switching vlan members data
+ *
+ * How to run:
+ *
+ * userid@machine-name> op expand-interface-port-range command 
+ *     "set interfaces ge-0/0/0-20 unit 0 family ethernet-switching vlan members data"
+ *     | save /var/tmp/out
+ * 
+ * userid@machine# load set /var/tmp/out
+ *
+ * Expects the interface format as "intprefix-fpc/pic/startport-endport" and
+ * only one range can be given per command, for multiple range please execute 
+ * this script multiple times.
+ *
+ * Use case: Can be used to configure the same attribute in multiple ports.
+ * This op-script will expand the set command and user can save the output
+ * of this command and execute "load set" to configure the interface.
+ *
+ */
+  
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "command";
+        <description> "Interface set command with range";
+    }
+}
+
+param $command;
+
+match / {
+    <op-script-results> {
+	var $reg-exp = "(.* [a-z][a-z]{1,2}-[0-9]+/[0-9]+/)([0-9]+)-([0-9]+)(.*)";
+	var $reg-results = jcs:regex($reg-exp, $command);
+	
+	call expand-command($initial-cmd = $reg-results[2], 
+			    $start-port = $reg-results[3],
+			    $end-port = $reg-results[4],
+			    $final-cmd = $reg-results[5]);
+
+   }
+}
+
+template expand-command ($initial-cmd, $start-port, $end-port, $final-cmd) {
+
+    if ($start-port <= $end-port) {
+	expr jcs:output($initial-cmd, $start-port, $final-cmd);
+
+	call expand-command($initial-cmd, $start-port = $start-port + 1,
+			    $end-port, $final-cmd);
+
+    }
+}

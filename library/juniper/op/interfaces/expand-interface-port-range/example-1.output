@@ -1,0 +1,50 @@
+Interface Range Command Requirement: 
+
+In the enterprise market, it is not uncommon to see group of ports
+(20+, even 100+) to have the same attributes. Currently in JUNOS, 
+there is no way to configure the same attributes across multiple ports.
+Configuring ports one at a time is long and tedious process.
+
+For example, if I want to assign VLAN "data" to ports ge-0/0/0 to
+ge-0/0/20, ge-0/1/0 to ge-0/1/10, ge-0/1/15 set interfaces ge-0/0/0-20
+ge-0/1/0-10 ge-0/1/15 unit 0 family ethernet-switching vlan member data
+
+The range command should also be available for any stanza in JUNOS, i.e.
+protocols, etherenet-switching-options, etc.
+set class-of-service interfaces ge-0/0/12-15 ge-0/0/20 ge-0/5/40-47
+
+Usage:
+
+This Op script is used to expand the interface port range
+
+For example
+
+ set interfaces ge-0/0/0-20 unit 0 family ethernet-switching vlan members data
+
+ gets expanded into multiple set command like
+
+ set interfaces ge-0/0/0 unit 0 family ethernet-switching vlan members data
+ set interfaces ge-0/0/1 unit 0 family ethernet-switching vlan members data
+ ....
+ ....
+ set interfaces ge-0/0/19 unit 0 family ethernet-switching vlan members data
+ set interfaces ge-0/0/20 unit 0 family ethernet-switching vlan members data
+
+How to run:
+
+ userid@machine-name> op expand-interface-port-range command 
+ "set interfaces ge-0/0/0-20 unit 0 family ethernet-switching vlan members data" |
+ save /var/tmp/out
+
+ userid@machine# load set /var/tmp/out
+
+ Expects the interface format as "intprefix-fpc/pic/startport-endport" and
+ only one range can be given per command, for multiple range please execute 
+ this script multiple times.
+
+ Use case: Can be used to configure the same attribute in multiple ports.
+ This op-script will expand the set command and user can save the output
+ of this command and execute "load set" to configure the interface.
+
+
+
