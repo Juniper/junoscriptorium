@@ -1,0 +1,88 @@
+version 1.0;
+ 
+ ns junos = "http://xml.juniper.net/junos/*/junos";
+ ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ ns ext = "http://xmlsoft.org/XSLT/namespace";
+ 
+ import "../import/junos.xsl";
+ 
+/*  Search for all neighbors that have Rseries in the description field
+*   End goal is to have $Rseries_2nd_import and $Rseries_3rd_import has the 2nd and 3rd import policy
+*
+*   If those policies aren't there, or are at any other position in the list place them in that position
+*   Special cases: If there aren't any import policies, or the first one is $Rseries_2nd_import or $Rseries_3rd_import	
+*   just raise a warning - risky messing around
+*/
+
+match configuration {
+  
+	var $bgp_group = protocols/bgp/group;
+	var $Rseries_description_value = "Rseries";
+	var $bad_pol_list = "-R series neighbor with incorrect import policy list - applying ";
+	var $incorrect_order = "-R series neighbor with incorrect import policy list - please correct ";
+	var $no_pol_list =  "-R series neighbor with no import policy list - please correct - no action taken";
+	var $msg_no_import_policies_defined = "- R series with no import policies applied -";
+	var $Rseries_import_2 = "pol2";
+	var $Rseries_import_3 = "pol3";
+	
+  for-each ($bgp_group/neighbor[contains(description,$Rseries_description_value)]) {
+
+/*	each import policy show up (show | display xml) as:
+*	<import>policy 1 name</import>
+*	<import>policy 2 name</import>
+*	<import>policy N name</import> 
+*	using the position function we can navigate trough the configured policies
+*   import[position()=1] equivalent to import[1]
+*   neighbor IP address obtained from the name paramenter
+*/
+						
+	var $import_1 = import[1];
+	var $import_2 = import[2];
+	var $import_3 = import[3]; 
+				
+	if(not(($import_2 == $Rseries_import_2) && ($import_3 == $Rseries_import_3))){
+			
+		if (not(import)){
+			
+			var $display_msg=concat(name,$no_pol_list);
+			call jcs:emit-change() {
+				/* if there are no policies do we want to place them there?
+				* Or raise warning?
+				*with $content = {
+				*	<import> $Rseries_import_2;
+				*	<import> $Rseries_import_3;
+				*}
+				*/
+				with $message = {
+					expr $display_msg;
+	            }
+			}
+		
+		}
+		else if ((import[1]==$Rseries_import_2) || import[1]==$Rseries_import_3) {
+
+			var $display_msg=concat(name,$incorrect_order,$Rseries_import_2," and ",$Rseries_import_3, " should be 2nd and 3rd import policies");
+			call jcs:emit-change() {
+				with $message = {
+					expr $display_msg;
+            	}
+			}
+		
+		} else {
+			
+			var $display_msg=concat(name,$bad_pol_list,$Rseries_import_2," and ",$Rseries_import_3);
+			call jcs:emit-change() {
+				with $content = {
+						<import insert="after" name=$import_1> $Rseries_import_3;
+						<import insert="after" name=$import_1> $Rseries_import_2;
+				}
+				with $message = {
+					expr $display_msg;
+            	}
+			}
+		}
+	}
+ }																
+}
+
