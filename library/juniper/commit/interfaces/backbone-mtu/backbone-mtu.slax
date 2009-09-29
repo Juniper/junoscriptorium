@@ -1,0 +1,40 @@
+Version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+/* 
+ * This commit script checks that any interfaces with "CORE" or "core"
+ * in the description is configured with an MTU of 4484.
+ * The search criteria and MTU should be changed to fit the environment
+ * and requirements.
+ */ 
+
+match configuration {
+        for-each (interfaces/interface) {
+                var $int = name;
+                var $unit = unit/name;
+                var $desc = unit/description;
+                var $mtu = mtu;
+                if (contains($desc, "CORE") || contains($desc, "core")) {
+                        if (not ($mtu == 4484)) {
+                                <xnm:warning> {
+                                        <message> {
+                                                expr "MTU on backbone interface";
+                                                expr $int;
+                                                expr ".";
+                                                expr $unit;
+                                                expr " is not set to 4484";
+                                                expr " (";
+                                                expr $mtu;
+                                                expr ")";
+                                        }
+                                }
+                        }
+                }
+        }
+}
+
