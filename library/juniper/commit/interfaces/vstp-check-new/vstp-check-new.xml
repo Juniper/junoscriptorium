@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<script>
+<title>vstp-check-new.slax</title>
+<author>jpanagos</author>
+<synopsis>
+Prevent a VLAN from inadvertently being trunked and potentially causing a bridge-loop. This works with the new 9.2 style MX trunking/access configs only.
+</synopsis>
+<coe>commit</coe>
+<type>interfaces</type>
+
+<description>
+This commit-script ensures that any trunked VLANs (on "xe-*" interfaces in this case) are configured for VSTP and have a bridge-domain associated with it. This script errors if the VLAN is not in VSTP
+ or in a bridge-domain and warns if the VLAN is in VSTP, but does not have a priority associated with it.
+</description>
+
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>

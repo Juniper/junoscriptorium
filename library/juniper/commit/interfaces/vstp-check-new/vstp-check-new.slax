@@ -1,0 +1,105 @@
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+match configuration {
+    var $vstpConfRaw = { call vstpConfTemplate(); }
+    var $vstpConf = ext:node-set($vstpConfRaw);
+
+    var $bridgeConfRaw = { call bridgeConfTemplate(); }
+    var $bridgeConf = ext:node-set($bridgeConfRaw);
+
+    for-each (interfaces/interface[starts-with(name, "xe-")]/unit[name == 0]/family/bridge/vlan-id-list) {
+        var $intName = ../../../../name;
+        var $vlanRaw = .;
+	if (contains($vlanRaw, "\-")) {
+            var $low = substring-before($vlanRaw, "-");
+            var $high = substring-after($vlanRaw, "-");
+
+            var $vlanListRaw = { call genList ($low, $high); }
+            var $vlanList = ext:node-set($vlanListRaw);
+    	    
+            for-each ($vlanList/vlanList) {
+                var $vlanID = @name;
+                var $bridge = $bridgeConf/bridgeConf[@name == $vlanID]/@value;
+                var $vstp = $vstpConf/vstpConf[@name == $vlanID]/@value;
+                if ($vstp == 0) {
+                    <xnm:warning> {
+                        <message> {
+                            expr "VLAN " _ $vlanID _ " (" _ $intName _ ") is configured for VSTP, but no bridge-priority is set\n";
+                        }
+                    }
+                }
+                if (not($vstp)) {
+                    <xnm:error> {
+                        <message> {
+                            expr "VLAN " _ $vlanID _ " (" _ $intName _ ") is NOT configured for VSTP\n";
+                        }
+                    }
+                }
+                if (not($bridge == 1)) {
+                    <xnm:error> {
+                        <message> {
+                            expr "VLAN " _ $vlanID _ " (" _ $intName _ ") does not have a configured bridge-domain\n";
+                        }
+                    }
+                }
+            }
+        } else {
+            var $bridge = $bridgeConf/bridgeConf[@name == $vlanRaw]/@value;
+            var $vstp = $vstpConf/vstpConf[@name == $vlanRaw]/@value;
+                
+            if ($vstp == 0) {
+                <xnm:warning> {
+                    <message> {
+                        expr "VLAN " _ $vlanRaw _ " (" _ $intName _ ") is configured for VSTP, but no bridge-priority is set\n";
+                    }
+                }
+            }
+            if (not($vstp)) {
+                <xnm:error> {
+                    <message> {
+                        expr "VLAN " _ $vlanRaw _ " (" _ $intName _ ") is NOT configured for VSTP\n";
+                    }
+                }
+            }
+            if (not($bridge == 1)) {
+                <xnm:error> {
+                    <message> {
+                        expr "VLAN " _ $vlanRaw _ " (" _ $intName _ ") does not have a configured bridge-domain\n";
+                    }
+                }
+            }
+        }
+    }
+}
+
+template vstpConfTemplate {
+    for-each (protocols/vstp/vlan) {
+        var $vlan = name;
+        var $priority = bridge-priority;
+        if (contains ($priority, "k")) {
+                <vstpConf name=$vlan value=$priority>;
+        } else {
+                <vstpConf name=$vlan value=0>;
+        }
+    }
+}
+
+template bridgeConfTemplate {
+    for-each (bridge-domains/domain) {
+        var $domainID = vlan-id;
+        <bridgeConf name=$domainID value=1>;
+    }
+}
+
+template genList ($low, $high) {
+    if ($low <= $high) {
+        <vlanList name=$low value=1>;
+        call genList ($low = $low + 1, $high);
+    }
+}
