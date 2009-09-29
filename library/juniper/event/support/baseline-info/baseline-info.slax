@@ -1,0 +1,103 @@
+/*
+ * Event-script with the following inbuild event-policy configuration in it.
+ *
+ * Typically, event-policies are configured under [edit event-options] hierarchy.
+ * This script illustrates an alternative approach (in JUNOS 9.0) where event-policies
+ * can be configured inside an event-script. Inside this event-script, event-policies 
+ * configuration has to be specified within a global variable "event-definition"
+ * in xml format. The xml format for event-policy configuration inside event-scripts
+ * is the same as JUNOS event-policy configuration in xml format, i.e.
+ * 	user@host> show configuration event-options | display xml	
+ * 
+ * 
+ * Note: This script assumes that /var/tmp/baseline-info is present in the router,
+ *       as script currently does not have the capabiility to mkdir.
+ *
+ * Usage: Copy this event-script inside /var/db/scripts/event directory
+ *        and configure it in [edit event-options event-script file baseline-info.slax]
+ *
+ *        You may include additional events for triggering this script. To view a list of
+ *        the events that can be referenced, issue the help syslog ? command
+ *        	user@host> help syslog ?
+ *         
+ *        After modifying the event-script, execute
+ *        	user@host> request system scripts event-scripts reload
+ *        for the changes to get effective
+ *
+ *
+ * event-options {
+ *   policy baseline-info {
+ *       events [ ui_restart_event ui_dbase_login_event ];
+ *       then {
+ *           execute-commands {
+ *               commands {
+ *                   "request support information | save /var/tmp/baseline-info/request-support-information.txt";
+ *                   "file copy /var/log/messages /var/tmp/baseline-info";
+ *                   "file copy /var/log/messages.0.gz /var/tmp/baseline-info";
+ *                   "file copy /var/log/command /var/tmp/baseline-info";
+ *                   "file copy /var/crash/*core* /var/tmp/baseline-info";
+ *                   "file copy /var/tmp/*core* /var/tmp/baseline-info";
+ *                   "file copy /var/crash/kernel /var/tmp/baseline-info";
+ *                   "file archive source /var/tmp/baseline-info compress destination /var/tmp/baseline-info.tgz";
+ *                   "file copy /var/tmp/baseline-info.tgz ftp://username:password@remote-machine//var/tmp/baseline-info.tgz";
+ *               }
+ *               output-format text;
+ *           }
+ *       }
+ *   }
+ * }
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+var $event-definition = {
+	<event-options> {
+	    <policy> {
+		<name> "baseline-info";
+		<events> "ui_restart_event"; /* add any events here for triggering this script */
+		<events> "ui_dbase_login_event";
+		<then> {
+		    <execute-commands> {
+			<commands> {
+			    <name> "request support information | save /var/tmp/baseline-info/request-support-information.txt";
+			}
+			<commands> {
+			    <name> "file copy /var/log/messages /var/tmp/baseline-info";
+			}
+			<commands> {
+			    <name> "file copy /var/log/messages.0.gz /var/tmp/baseline-info";
+			}
+			<commands> {
+			    <name> "file copy /var/log/command /var/tmp/baseline-info";
+			}
+			<commands> {
+			    <name> "file copy /var/crash/*core* /var/tmp/baseline-info";
+			}
+			<commands> {
+			    <name> "file copy /var/tmp/*core* /var/tmp/baseline-info";
+			}
+			<commands> {
+			    <name> "file copy /var/crash/kernel /var/tmp/baseline-info";
+			}
+			<commands> {
+			    <name> "file archive source /var/tmp/baseline-info compress destination /var/tmp/baseline-info.tgz";
+			}
+			<commands> {
+		    	    <name> "file copy /var/tmp/baseline-info.tgz ftp://usrname:password@remote-machine//var/tmp/baseline-info.tgz";
+			}
+			<output-format> "text";
+		    }
+		}
+	    }
+	}
+    }
+
+match / {
+}
+
