@@ -1,0 +1,75 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+	<name> "remote-host";
+	<description> "Host name or ip-address to ping";
+    }
+    <argument> {
+	<name> "ping-request";
+	<description> "Number of ping requests to send";
+    }
+}
+
+param $remote-host;
+param $ping-request;
+param $file = "rtt-details.prf";
+ 
+match / {
+    var $ping-rpc = {
+	<ping> {
+	    <host> $remote-host;
+	    <count> $ping-request;
+	}
+    }
+
+    var $ping-out = jcs:invoke($ping-rpc);
+
+    if ($ping-out/ping-failure) {
+
+	call store-detail($message = "Ping to host '" _  $remote-host _ "' failed at time " _ $localtime_iso);
+    } else {
+	call store-detail($message = "Rtt details for host '" _ $remote-host _ "' at time '" _ $localtime_iso _ "' Minimum = " _ ($ping-out/probe-results-summary/rtt-minimum div 100) _ " Maximum = " _ ($ping-out/probe-results-summary/rtt-maximum div 100)_ " Average = " _ ($ping-out/probe-results-summary/rtt-average div 100));
+
+    }
+}
+
+template store-detail($message) {
+
+    var $translated = {
+	call replace-string($text = $message, $from = " ", $to = "~");
+    }
+
+    var $add-acc-rpc = {
+	<add-accounting-file-record> {
+	    <file> $file;
+	    <data> $translated;
+	    <fields> "message";
+	    <layout> "message-layout";
+	}
+    }
+
+    var $add-acc-out = jcs:invoke($add-acc-rpc);
+}
+
+template replace-string ($text, $from, $to) {
+
+    if (contains($text, $from)) {
+        var $before = substring-before($text, $from);
+        var $after = substring-after($text, $from);
+        var $prefix = $before _  $to;
+
+        expr $before;
+        expr $to;
+        call replace-string($text = $after, $from, $to);
+
+    } else {
+        expr $text;
+    }
+}

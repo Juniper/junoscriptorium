@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<script>
+  <title>log_rtt_detail.slax</title>
+  <author>rsankar</author>
+  <synopsis>
+	Ping the remote host every 5 min and write the rtt details into an accounting profile
+  </synopsis>
+  <coe>event</coe>
+  <type>diagnose</type>
+
+  <description>
+This op script is similar to op-ping-rtt.slax but without using jcs:syslog(), which is available in JUNOS 9.0 and later. Note this script is used in conjunction with the event script display_rtt_detail.slax, which runs for every hour and read the same accounting profile file and get the last 1 hour data and write to console. Eventd will capture the data written to console and will write into file and upload to a configured destination.
+
+  </description>
+
+  <example>
+    <title>Sample Configuration</title>
+    <description>Configuration required for this event script</description>
+    <config>example-1.conf</config>
+  </example>
+  <example>
+    <title>/homes/roy/public_html/junoscriptorium/library/juniper/event/diagnose/log_rtt_detail/display_rtt_detail.slax</title>
+    <description>Get the rtt details </description>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
