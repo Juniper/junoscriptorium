@@ -1,0 +1,48 @@
+version 1.0;
+
+/*
+ * CVS details
+ * $Id$
+ *
+ * the change log can be found at the bottom of this file
+ */
+
+/*
+ * This script uses the snmp.slax library. This library makes it as easy
+ * to get a value as it does set a value.
+ * This script demontrates this by setting a given utility MIB to the value 100
+ */
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+import "snmp.slax";
+
+param $string;
+
+var $arguments = {
+	<argument> {
+		<name> string;
+		<description> "a string";
+	}
+}
+
+match / {
+	<op-script-results> {
+		/* set the utility MIB to the value of 100 */
+		call snmp_set($instance = $string, $value = "100");
+		
+		/* now here's the magic. get the value without having to convert
+		 * the string into an OID format
+		 */
+		var $mib = "jnxUtilIntegerValue." _ $string;
+		var $value = {
+			call snmp_get($instance = $mib);
+		}
+		
+		<output> "Utility MIB " _ $string _ " has value " _ $value;
+	}
+}
