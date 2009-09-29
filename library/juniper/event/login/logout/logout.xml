@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<script>
+<title>logout.slax</title>
+<author>jpanagos</author>
+<synopsis>
+This event script mimicks Cisco's absolute vty timeout functionality.
+</synopsis>
+<coe>event</coe>
+<type>login</type>
+
+<description>
+This script works on 9.2. It uses jade_auth_success as the generated event to cause the script to be run every 60 seconds, this can be changed to fit your environment.
+
+</description>
+
+ <example>
+ <title>Config</title>
+ <description>The event-options to trigger this script are below:</description>
+ <config>example-1.conf</config>
+ </example>
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>
