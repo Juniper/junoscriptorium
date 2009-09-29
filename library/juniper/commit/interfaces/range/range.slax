@@ -1,0 +1,1079 @@
+/*
+*
+*    NAME: range.slax
+*    PURPOSE: To allow the user to issue select attributes on a range of 
+*             interfaces.  Interfaces must be on the same "dpc" and "pic"
+*             on EX-series switches.  Interfaces must be on the same "dpc"
+*             for MX-series switches.
+*
+*    CREATED: 09/05/08
+*    BY: Jay Wilson (Southwest Regional JUNOS Specialist)
+*    LAST MOD: 10/27/08
+*    BY: Jay Wilson
+*    VERSION: 3.02
+*
+*    MODIFICATION HISTORY:
+*        V1.00 = Initial release
+*        V1.01 = Changed the parm names for the macro to match the JUNOS
+*                names (vname ==> vlan, vid ==> vlan-id, mode ==> port-mode)
+*        V1.02 = Added a parm called "remove".
+*                It has no options.
+*                If it is specificed in the macro, that macro will be
+*                removed from the configuration upon a successful commit.
+*        V1.03 = Added a check to ensure the script is running on an EX device.
+*        V1.04 = Removed warning messages when script is run.
+*                Added a check for a ztrace option in the macro that 
+*                   if specified calls WRITE-MSG to print out a 
+*                   warning message showing what changes will happen
+*                   to each interface.
+*        V2.00 = Major rewrite!!
+*                   Modularized the code via templates.
+*                   Added support for the "setv" option, which allows the
+*                      user to put the interface into the VLANS
+*                      hierarchy instead of putting the vlan name on
+*                      the interface in the INTERFACES hierarchy
+*        V3.00 = Major rewrite!!
+*                   Added support for MX-series at the request of the EABU.
+*                      Several new templates were added to support the
+*                      specific requirements of the MX.
+*                      The device check was modified to allow the script
+*                      to work on both the EX-series and MX-Series.
+*                      The range macro is still limited to a single PIC
+*                      for EX member, but for the MX it can cross PICs on 
+*                      the same DPC.
+*                      The same marcro syntax is used for both MX and EX
+*                      and the script translates the options for each 
+*                      series.
+*        V3.01 = MX-series changes
+*                   Removed unused macro options
+*        V3.02 = EX & MX changes
+*                   Added "description" option, which allows the
+*                      user to put a description on all interfaces
+*                      specified.
+*
+*
+*    HOW TO USE:
+*        This script will be called for each "apply-macro" found in the 
+*        configuration that starts with "range".  There is no limited to 
+*        the number of times it may be called in a configuration.
+*
+*        Additionally, if the vlan specificed to be placed on the interfaces
+*        does not exist in "vlans", the vlan will be created and the "vlan-id"
+*        will be added if the "vlan-id" parm is passed to the script.
+*
+*        Parms:
+*           "action delete"  (will delete what ever is specified)
+*                            (the interface if no vlan or mode is specified)
+*                            (if mode and/or vlan is specified only they are
+*                             delete)
+*           "mode trunk"     (sets the interface's port-mode to trunk)
+*                            ("access" is the default and implied)
+*           "from xx"        (the interface to start the range at)
+*           "to xx"          (the interface to stop the range at)
+*           "vlan-id xx"         (the tag number for the vlan)
+*                            (this is not needed for the interface.
+*                             it is only used if the vlan does not exist
+*                             in vlans)
+*           "vlan xx"       (the vlan name to add to the port)
+*           "remove"        (remove the range macro upon successful
+*                            commit or commit check)
+*           "ztrace"        (turns on debugging)
+*           "setv"          (puts the interface into the VLANS
+*                            hierarchy instead of putting the
+*                            vlan name on the interface)
+*
+*    Example 1:
+*       Add vlan "red" to interfaces ge-0/0/0 through ge-0/0/10
+*           and if the vlan has not been created, create it and 
+*           set the vlan-id.
+*
+*       apply-macro range {
+*          from ge-0/0/0
+*          to ge-0/0/10
+*          vlan-id 10
+*          vlan red
+*       }
+*
+*    Example 2:
+*       Make ge-3/1/0 through ge-3/1/3 trunk ports and delete
+*          the macro from the configuration.
+*
+*       apply-macro range2 { 
+*          from ge-3/1/0
+*          to ge-3/1/3 
+*          mode trunk
+*          remove
+*       }
+*
+*    Example 3:
+*       Delete ge-1/0/0 through ge-1/0/5
+*
+*       apply-macro range3 { 
+*          from ge-1/0/0
+*          to ge-1/0/5 
+*          action delete
+*       }
+*
+*    Example 4:
+*       Add vlan "red" to interfaces ge-4/0/5 through ge-4/0/10
+*           and if the vlan has not been created, create it and 
+*           set the vlan-id.
+*           Additionally, make them trunk ports.
+*
+*       apply-macro range4 { 
+*          from ge-4/0/5
+*          to ge-4/0/10 
+*          vlan-id 10
+*          mode trunk
+*          vlan red
+*       }
+*
+*    Example 5:
+*       Add interfaces ge-4/0/5 through ge-4/0/10 to vlan red
+*           and if the vlan has not been created, create it and 
+*           set the vlan-id.
+*           Additionally, make the interfaces trunk ports and
+*           delete the macro upon a successful commit or
+*           commit check.
+*           
+*
+*       apply-macro range4 { 
+*          from ge-4/0/5
+*          to ge-4/0/10 
+*          vlan-id 10
+*          mode trunk
+*          vlan red
+*          setv
+*          remove
+*       }
+*
+*/
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+match configuration {
+/*
+*
+*  get the device information before entering the macro processing loop
+*
+*  Only SNMP returns a consistantly formated result for all Juniper
+*  platforms.
+*
+*/
+   var $rpc-cmd = {
+       <get-snmp-object> {
+          <snmp-object-name>"1.3.6.1.2.1.1.2.0";
+       }
+   }
+   var $sysobjid = jcs:invoke($rpc-cmd);
+   var $sub-sysobjid = substring-after($sysobjid,"jnxProduct");
+   var $model = substring-before($sub-sysobjid,"\n");
+
+/*
+*
+*  Make sure the macro and script are used on a supported device type
+*  and if they are, select the correct templates to use
+*
+*/
+   if (contains($model,"EX") || contains($model,"ex")) {
+       call ex-main;
+   }
+   else if (contains($model,"MX") || contains($model,"mx")) {
+       call mx-main;
+   }
+   else {
+       <xnm:error> {
+         <message> "RANGE ERROR: Macro is only supported on EX-series and MX-Series";
+       }
+   }
+}
+
+/******************************************************************/
+/*                                                                */
+/*                       EX Specific Templates                    */
+/*                                                                */
+/******************************************************************/
+
+template ex-main {
+
+/* Save the candidate node set point for vlans */
+
+var $vnode = ./vlans;
+
+/*
+*  Process the apply-macros 
+*        Only look at macros that start with "range"
+*
+*/
+   for-each (apply-macro[starts-with(name,"range")]) {
+      var $vlan = data[name = 'vlan']/value;
+      var $vlan-id = data[name = 'vlan-id']/value;
+      var $from = data[name = 'from']/value;
+      var $to   = data[name = 'to']/value;
+      var $action = data[name = 'action']/value;
+      var $port-mode = data[name = 'port-mode']/value;
+      var $fromtype = substring-before($from,'-');
+      var $totype = substring-before($to,'-');
+      var $description = data[name = 'description']/value;
+      /* check to see if macro should be delete on successful commit */
+      var $bitbucket = { if (data[name = 'remove']) {
+                            expr name;
+                         }
+                         else { 
+                            expr "";
+                         }
+                       }
+      /* check to see if macro tracing was turned on                */
+      var $trace = { if (data[name = 'ztrace']) {
+                            expr "ztrace";
+                         }
+                         else { 
+                            expr "";
+                         }
+                       }
+      /* check to see if set location was turned on                */
+      var $set-loc = { if (data[name = 'setv']) {
+                            expr "setv";
+                         }
+                         else { 
+                            expr "";
+                         }
+                       }
+       if (not($fromtype =='') and not($totype =='') and $fromtype == $totype and ($fromtype == "ge" || $fromtype == "xe") and ($totype == "ge" || $totype == "xe")) {
+
+          /* Split up the Interfaces into DPC, PIC, PORT */
+
+          var $fromtriple = substring-after($from,'-');
+          var $fromoct1 = substring-before($fromtriple,'/');
+          var $fromleft = substring-after($fromtriple,'/');
+          var $fromoct2 = substring-before($fromleft,'/');
+          var $fromoct3 = substring-after($fromleft,'/');
+          var $totriple = substring-after($to,'-');
+          var $tooct1 = substring-before($totriple,'/');
+          var $toleft = substring-after($totriple,'/');
+          var $tooct2 = substring-before($toleft,'/');
+          var $tooct3 = substring-after($toleft,'/');
+          /* If the vlan doesn't exist, create it and add the vlan-id */
+          /*    if it was supplied.                                   */
+          /* The vlan is created to avoid warning messages on the commit. */
+          /* Put a vlan on an Interface without the vlan existing in  */
+          /* vlans, causes the warning.                               */
+          if ($vlan and not($action == "delete")) {
+             <change> {
+                <vlans> {
+                   <vlan> {
+                     <name> $vlan;
+                     if ($vlan-id) {
+                     <vlan-id> $vlan-id;
+                     }
+                   }
+                }
+             }
+          } 
+          /* Validate the information supplied in the macro          */
+          /*                                                         */
+          if (not($fromoct1) || not($fromoct2) || not($fromoct3) || not($tooct1) || not($tooct2) || not($tooct3)) {
+             <xnm:error> {
+                <message> "RANGE ERROR: Invalid Interface Format";
+             }
+          }
+          else if (not($fromoct1 == $tooct1)) {
+             <xnm:error> {
+                <message> "RANGE ERROR: From Member != To Member"; 
+             }
+          }
+          else if (not($fromoct2 == $tooct2)) {
+             <xnm:error> {
+                <message> "RANGE ERROR: From and To PIC must match";
+             }
+          }
+          else if ($fromoct1 == $tooct1 and $fromoct2 > $tooct2) {
+             /* Should not be called until multi-member is supported */
+             <xnm:error> {
+                <message> "RANGE ERROR: From PIC >= To PIC on same Member";
+             }
+          }
+          else if ($fromtype == "xe" and $fromoct2 != 1) { /* remove this if when all 10G switch is available */
+             <xnm:error> {
+                <message> "RANGE ERROR: xe- interfaces only supported on PIC 1";
+             }
+          }
+          else if ($fromoct1 == $tooct1 and $fromoct2 == $tooct2 and $fromoct3 >= $tooct3) {
+             <xnm:error> {
+                <message> "RANGE ERROR: From Port >= To Port on same Member/PIC";
+             }
+          }
+          else if ($fromoct1 > 9 || $tooct1 > 9) {
+             <xnm:error> {
+                <message> "RANGE ERROR: Member must be 0 to 9";
+             }
+          }
+          else if ($fromoct2 > 1 || $tooct2 > 1) {
+             <xnm:error> {
+                <message> "RANGE ERROR: PIC must be 0 or 1";
+             }
+          }
+          else if ($fromtype == "xe" and $fromoct2 != 1) {
+             <xnm:error> {
+                <message> "RANGE ERROR: PIC must be 1 for xe- Interfaces";
+             }
+          }
+          else if ($fromoct2 == 1 and (($fromoct3 > 3 || $tooct3 > 3) and $fromtype == "ge")) {
+             <xnm:error> {
+                <message> "RANGE ERROR: GE PIC Interfaces Must be < 4";
+             }
+          }
+          else if ($fromoct2 == 1 and (($fromoct3 > 1 || $tooct3 > 1) and $fromtype == "xe")) {
+             <xnm:error> {
+                <message> "RANGE ERROR: XE PIC Interfaces Must be < 2";
+             }
+          }
+          else if (not($vlan) and not($port-mode) and not($action)) {
+             <xnm:error> {
+                <message> "RANGE ERROR: Macro MUST include a vlan and/or MODE";
+             }
+          }
+          else if ($action and not($action == "delete")) {
+             <xnm:error> {
+                <message> "RANGE ERROR: Valid ACTION is delete. set is implied.";
+             }
+          }
+          else if ($port-mode and not($port-mode == "trunk")) {
+             <xnm:error> {
+                <message> "RANGE ERROR: Valid MODE is trunk.  access is implied.";
+             }         
+          }
+          else {
+          /*                                                          */
+          /*  Process each Interface of the range.                    */
+          /*  This is accomplished by calling a recursive template.   */
+          /*                                                          */
+          call ex-loop($maxcount = $tooct3, $initial-value = $fromoct3, $fromtype, $fromoct1, $fromoct2, $port-mode, $vlan, $vlan-id, $action, $trace, $set-loc, $description);
+          /* See if the user wants the macro removed from the config. */
+          call macro-attack($bitbucket);
+     }
+     }
+     else {
+       <xnm:error> {
+          <message> {
+             expr "RANGE ERROR: Invalid FROM ";
+             expr $from;
+             expr " or TO ";
+             expr $to;
+             expr " interface \n";
+          }
+        }
+     }
+}
+}
+
+/*
+*   NAME: EX-LOOP
+*   PURPOSE: To process each Interface in the range specified.
+*   CALLED: Called if no errors where found with the input to the macro.
+*           Also called recursively within itself.  This is how looping works.
+*
+*   PARMS PASSED:
+*        $maxcount = It's the ending Interface number 
+*                    Used for controlling the loop
+*        $initial-value = It's the starting Interface number
+*                         Used for controlling the loop
+*        $fromtype = Type of interface (GE or XE)
+*                    Used to reconstruct the full Interface name
+*        $fromoct1 = The DPC (Member) number
+*                    Used to reconstruct the full Interface name
+*        $fromoct2 = The PIC number
+*                    Used to reconstruct the full Interface name
+*        $port-mode = If set to "trunk", then the "port-mode trunk" option
+*                     is added to the Interface
+*        $vlan = The vlan name to add to the Interface
+*        $vlan-id = The vlan-id for the vlan.
+*                   Currently not used
+*        $action = If set to "delete", then kill-it is called
+*        $trace = If "ztrace" is specified in the macro, then
+*                 print out debugging information
+*        $set-loc = Instead of adding the vlan to the interface,
+*                   add the interface to the vlan.
+*        $description = The "description" to set on each interface
+*
+*/
+template ex-loop ($maxcount, $initial-value, $fromtype, $fromoct1, $fromoct2, $port-mode, $vlan, $vlan-id, $action, $trace, $set-loc, $description) {
+    
+    if ($initial-value <= $maxcount) {
+        var $ifl = $fromtype _ "-" _ $fromoct1 _ "/" _ $fromoct2 _ "/" _ $initial-value;
+        /*                                                                 */
+        /* If debug was requested from the macro, then print out a message */
+        /* for each interface being worked on.                             */
+        /*                                                                 */
+        if (contains($trace,"ztrace")) {
+           call write-msg($ifl, $port-mode, $vlan, $vlan-id, $action, $type = "ex", $set-loc);
+        }
+        if ($action == "delete" and not($set-loc == "setv")) {
+           call kill-it-interfaces($ifl, $port-mode, $vlan);
+        }
+        else if ($action == "delete" and $set-loc == "setv") {
+           call kill-it-vlans($ifl, $port-mode, $vlan);
+        }
+        else if ($set-loc == "setv") {
+           call attach-to-vlans($ifl, $port-mode, $vlan, $description);
+         }
+        else {
+           call attach-to-interfaces-ex($ifl, $port-mode, $vlan, $description);
+        }
+        call ex-loop($maxcount, $initial-value = $initial-value + 1, $fromtype, $fromoct1, $fromoct2, $port-mode, $vlan, $vlan-id, $action, $trace, $set-loc, $description);
+    }
+}
+
+/*
+*   NAME: KILL-IT-INTERFACES
+*   PURPOSE: To remove an element from the configuration.
+*   CALLED: Only called if "action delete" is specified in the range macro
+*           and if "setv" is NOT specified in the range macro
+*
+*   PARMS PASSED:
+*        $ifl = The interface name to act on
+*        $port-mode = if "mode = trunk", then delete the <port-mode> element
+*        $vlan = if "vlan" is non-blank, then delete the <members> element
+*
+*        NOTE: If both $port-mode and $vlan are true, then both will be deleted.
+*              If only $ifl is specified, then the complete interface is deleted
+*
+*/
+template kill-it-interfaces($ifl, $port-mode, $vlan) {
+   if (not($vlan) and not($port-mode)) {
+     <change> {
+        <interfaces> {
+           <interface delete="delete"> {
+               <name> $ifl;
+           }
+        }
+     } 
+   }
+   else {
+      <change> {
+          <interfaces> {
+              <interface> {
+                 <name> $ifl;
+                    <unit> {
+                       <name> "0";
+                        <family> {
+                            <ethernet-switching> {
+                             if ($port-mode) {
+                                <port-mode delete="delete">;
+                             }
+                             if ($vlan) {
+                                <vlan> {
+                                   <members delete="delete"> $vlan;
+                                }
+                             } 
+                             }
+                          }
+                  }
+              }
+            }
+   }
+}
+}
+/*
+*   NAME: KILL-IT-VLANS
+*   PURPOSE: To remove an element from the configuration.
+*   CALLED: Only called if "action delete" is specified in the range macro
+*           and if "setv" is specified in the range macro
+*
+*   PARMS PASSED:
+*        $ifl = The interface name to act on
+*        $port-mode = if "mode = trunk", then delete the <port-mode> element
+*        $vlan = if "vlan" is non-blank, then delete the Interface from the
+*                VLANS hierarchy
+*
+*        NOTE: If both $port-mode and $vlan are true, then both will be deleted.
+*              If only $ifl is specified, then the complete interface is deleted
+*
+*/
+template kill-it-vlans($ifl, $port-mode, $vlan) {
+   if (not($vlan) and not($port-mode)) {
+     <change> {
+        <interfaces> {
+           <interface delete="delete"> {
+               <name> $ifl;
+           }
+        }
+     } 
+   }
+   else {
+      <change> {
+          <interfaces> {
+              <interface> {
+                 <name> $ifl;
+                    <unit> {
+                       <name> "0";
+                        <family> {
+                            <ethernet-switching> {
+                             if ($port-mode) {
+                                <port-mode delete="delete">;
+                             }
+                             }
+                          }
+                  }
+              }
+            }
+      }
+      <change> {
+         <vlans> {
+            <vlan> {
+               <name> $vlan;
+                  <interface delete="delete"> {
+                     <name> $ifl _ ".0";
+                  }
+            }
+         }
+      }
+             
+   }
+}
+/*
+*   NAME: MACRO-ATTACK
+*   PURPOSE: To remove the range macro from the configuration.
+*   CALLED: Only called if "remove" is specified in the range macro
+*
+*   PARMS PASSED:
+*        $bitbucket = The name of the apply-macro to delete
+
+*/
+template macro-attack($bitbucket) {
+   if (not($bitbucket == "")) {
+     <change> {
+        <apply-macro delete="delete"> {
+               <name> $bitbucket;
+        }
+     } 
+   }
+}
+
+
+/*
+*   NAME: WRITE-MSG
+*   PURPOSE: Prints a Warning Message showing the CLI command that will be
+*            applied to the configuration.
+*   CALLED: Only called if "ztrace" is specified in the range macro
+*
+*   PARMS PASSED:
+*        $ifl = The interface name being acted on
+*        $port-mode = "port-mode" specified in the macro
+*        $vlan = "vlan" specified in the macro
+*        $action = "action" specified in the macro
+*        $set-loc = "setv" specified in the macro 
+*
+*
+*/
+template write-msg($ifl, $port-mode, $vlan, $vlan-id, $action, $type, $set-loc) {
+   <xnm:warning> {
+      <message> {
+         expr "RANGE TRACE: ";
+         if ($action == "delete") {
+            expr "delete ";
+         }
+         else {
+            expr "set ";
+         }
+         expr $ifl;
+         if ($port-mode == "trunk" || $vlan and $type == "ex") {
+            expr " unit 0 family ethernet-switching";
+            if ($port-mode == "trunk") {
+              expr " port-mode trunk";
+            }
+            if ($vlan) {
+              expr " vlan members ";
+              expr $vlan;
+              expr " location ";
+              expr $set-loc;
+            }
+         }
+         if ($port-mode == "trunk" || $vlan-id and $type == "mx") {
+            expr " unit 0 family bridge";
+            if ($port-mode == "trunk") {
+              expr " interface-mode trunk";
+              expr " vlan-id-list ";
+              expr $vlan-id;
+            }
+            else {
+              expr " interface-mode access";
+              expr " vlan-id ";
+              expr $vlan-id;
+            }
+         }
+      }
+   }   
+}
+/*
+*   NAME: ATTACH-INTERFACES-EX
+*   PURPOSE: Build the XML statement needed to add the information to
+*            the Interfaces heirarchy
+*   CALLED: Only called if "setv" is NOT specified in the range macro
+*           for EX-series devices
+*
+*   PARMS PASSED:
+*        $ifl = The interface name being acted on
+*        $port-mode = "port-mode" specified in the macro
+*        $vlan = "vlan" specified in the macro
+*        $description = "description" specified in the macro
+*
+*
+*/
+template attach-to-interfaces-ex($ifl, $port-mode, $vlan, $description) {
+           <change> {
+              <interfaces> {
+                 <interface> {
+                    <name> $ifl;
+                    if ($description) {
+                       <description> $description;
+                    }
+                       <unit> {
+                          <name> "0";
+                             <family> {
+                                <ethernet-switching> {
+                                   if ($port-mode == "trunk") {
+                                      <port-mode> "trunk";
+                                   }
+                                   <vlan> {
+                                      <members> $vlan;
+                                   }
+                                }
+                             }
+                          }
+                  }
+              }
+            }
+}
+
+/*
+*   NAME: ATTACH-VLANS
+*   PURPOSE: Build the XML statement needed to add the information to
+*            the VLANS heirarchy
+*   CALLED: Only called if "setv" is specified in the range macro
+*
+*   PARMS PASSED:
+*        $ifl = The interface name being acted on
+*        $port-mode = "port-mode" specified in the macro
+*        $vlan = "vlan" specified in the macro
+*        $description = "description" specified in the macro
+*
+*
+*/
+template attach-to-vlans($ifl, $port-mode, $vlan, $description) {
+           <change> {
+              <vlans> {
+                 <vlan> {
+                    <name> $vlan;
+                    <interface> {
+                       <name> $ifl;
+                    }
+                 }
+              }
+           }
+           <change> {
+              <interfaces> {
+                 <interface> {
+                    <name> $ifl;
+                    if ($description) {
+                       <description> $description;
+                    }
+                       <unit> {
+                          <name> "0";
+                             <family> {
+                                <ethernet-switching> {
+                                   if ($port-mode == "trunk") {
+                                      <port-mode> "trunk";
+                                  }
+                                }
+                             }
+                        }
+                    }
+               }
+           }
+}
+
+/******************************************************************/
+/*                                                                */
+/*                       MX Specific Templates                    */
+/*                                                                */
+/******************************************************************/
+template mx-main {
+
+/*
+*  Process the apply-macros 
+*        Only look at macros that start with "range"
+*
+*/
+   for-each (apply-macro[starts-with(name,"range")]) {
+      var $vlan = data[name = 'vlan']/value;
+      var $vlan-id = data[name = 'vlan-id']/value;
+      var $from = data[name = 'from']/value;
+      var $to   = data[name = 'to']/value;
+      var $action = data[name = 'action']/value;
+      var $port-mode = data[name = 'port-mode']/value;
+      var $fromtype = substring-before($from,'-');
+      var $totype = substring-before($to,'-');
+      var $description = data[name = 'description']/value;
+      /* check to see if macro should be delete on successful commit */
+      var $bitbucket = { if (data[name = 'remove']) {
+                            expr name;
+                         }
+                         else { 
+                            expr "";
+                         }
+                       }
+      /* check to see if macro tracing was turned on                */
+      var $trace = { if (data[name = 'ztrace']) {
+                            expr "ztrace";
+                         }
+                         else { 
+                            expr "";
+                         }
+                       }
+      /* check to see if set location was turned on                */
+     if (data[name = 'setv']) {
+          <xnm:warning> {
+             <message> "RANGE MACRO: option SETV is not supported on the MX-series.";
+          }
+     }
+       if (not($fromtype =='') and not($totype =='') and $fromtype == $totype and ($fromtype == "ge" || $fromtype == "xe") and ($totype == "ge" || $totype == "xe")) {
+
+          /* Split up the Interfaces into DPC, PIC, PORT */
+
+          var $fromtriple = substring-after($from,'-');
+          var $fromoct1 = substring-before($fromtriple,'/');
+          var $fromleft = substring-after($fromtriple,'/');
+          var $fromoct2 = substring-before($fromleft,'/');
+          var $fromoct3 = substring-after($fromleft,'/');
+          var $totriple = substring-after($to,'-');
+          var $tooct1 = substring-before($totriple,'/');
+          var $toleft = substring-after($totriple,'/');
+          var $tooct2 = substring-before($toleft,'/');
+          var $tooct3 = substring-after($toleft,'/');
+
+          /* Validate the information supplied in the macro          */
+          /*                                                         */
+          if (not($fromoct1) || not($fromoct2) || not($fromoct3) || not($tooct1) || not($tooct2) || not($tooct3)) {
+             <xnm:error> {
+                <message> "RANGE ERROR: Invalid Interface Format";
+             }
+          }
+          else if (not($fromoct1 == $tooct1)) {
+             <xnm:error> {
+                <message> "RANGE ERROR: From DPC != To DPC"; 
+             }
+          }
+          else if ($fromoct1 == $tooct1 and $fromoct2 > $tooct2) {
+             <xnm:error> {
+                <message> "RANGE ERROR: From PIC >= To PIC on same DOC";
+             }
+          }
+          else if ($fromoct1 == $tooct1 and $fromoct2 == $tooct2 and $fromoct3 >= $tooct3) {
+             <xnm:error> {
+                <message> "RANGE ERROR: From Port >= To Port on same DPC/PIC";
+             }
+          }
+          else if ($fromoct1 > 7 || $tooct1 > 7) {
+             <xnm:error> {
+                <message> "RANGE ERROR: DPC must be 0 to 7";
+             }
+          }
+          else if (not($vlan-id) and not($port-mode) and not($action)) {
+             <xnm:error> {
+                <message> "RANGE ERROR: Macro MUST include a vlan-id and/or MODE";
+             }
+          }
+          else if ($action and not($action == "delete")) {
+             <xnm:error> {
+                <message> "RANGE ERROR: Valid ACTION is delete. set is implied.";
+             }
+          }
+          else if ($port-mode and not($port-mode == "trunk")) {
+             <xnm:error> {
+                <message> "RANGE ERROR: Valid MODE is trunk.  access is implied.";
+             }         
+          }
+          else {
+             /* If the vlan doesn't exist, create it and add the vlan-id */
+             /* The vlan is created to avoid warning messages on the commit. */
+             /* Putting a vlan on an Interface without the vlan existing in  */
+             /* vlans, causes the warning.                               */
+             if ($vlan and not($action == "delete")) {
+                <change> {
+                   <bridge-domains> {
+                      <domain> {
+                        <name> $vlan;
+                        <vlan-id> $vlan-id;
+                      }
+                   }
+                }
+             } 
+          /*                                                          */
+          /*  Process each Interface of the range.                    */
+          /*  This is accomplished by calling a recursive template.   */
+          /*                                                          */
+          call mx-loop-outside($maxcount = $tooct3, $initial-value = $fromoct3, $fromtype, $fromoct1, $str-pic = $fromoct2, $end-pic = $tooct2, $tooct3, $port-mode, $vlan, $vlan-id, $action, $trace, $description);
+          /* See if the user wants the macro removed from the config. */
+          call macro-attack($bitbucket);
+     }
+     }
+     else {
+       <xnm:error> {
+          <message> {
+             expr "RANGE ERROR: Invalid FROM ";
+             expr $from;
+             expr " or TO ";
+             expr $to;
+             expr " interface \n";
+          }
+        }
+     }
+}
+}
+/*
+*   NAME: MX-LOOP-OUTSIDE
+*   PURPOSE: To process each Interface in the range specified.
+*   CALLED: Called if no errors where found with the input to the macro.
+*           Also called recursively within itself.  This is how looping works.
+*
+*   PARMS PASSED:
+*        $maxcount = It's the ending Interface number 
+*                    Used for controlling the loop
+*        $initial-value = It's the starting Interface number
+*                         Used for controlling the loop
+*        $fromtype = Type of interface (GE or XE)
+*                    Used to reconstruct the full Interface name
+*        $fromoct1 = The DPC (Member) number
+*                    Used to reconstruct the full Interface name
+*        $str-pic  = The PIC number to start on
+*                    Used to reconstruct the full Interface name
+*        $end-pic  = The PIC number to end on
+*                    Used to reconstruct the full Interface name
+*        $tooct3   = The Interface number to end on
+*                    Used to reconstruct the full Interface name
+*        $port-mode = If set to "trunk", then the "port-mode trunk" option
+*                     is added to the Interface
+*        $vlan = The vlan name to add to the Interface
+*        $vlan-id = The vlan-id for the vlan.
+*                   Currently not used
+*        $action = If set to "delete", then kill-it is called
+*        $trace = If "ztrace" is specified in the macro, then
+*                 print out debugging information
+*        $description = The "description" to add to each Interface.
+*
+*/
+template mx-loop-outside ($maxcount, $initial-value, $fromtype, $fromoct1, $str-pic, $end-pic, $tooct3, $port-mode, $vlan, $vlan-id, $action, $trace, $description) {
+/*                                                        */
+/*   To cross PICs, nested loops must be used and both    */
+/*   loops must be recursive.                             */
+/*                                                        */
+   if ($str-pic = $end-pic) {
+      call mx-loop-inside ($maxcount = $tooct3, $initial-value, $fromtype, $fromoct1, $str-pic, $end-pic, $tooct3, $port-mode, $vlan, $vlan-id, $action, $trace, $description);
+   }
+   else if ($str-pic < $end-pic and $fromtype == "ge") {
+      call mx-loop-inside ($maxcount = 9, $initial-value, $fromtype, $fromoct1, $str-pic, $end-pic, $tooct3, $port-mode, $vlan, $vlan-id, $action, $trace, $description);
+      call mx-loop-outside ($maxcount, $initial-value = 0, $fromtype, $fromoct1, $str-pic = $str-pic + 1, $end-pic, $tooct3, $port-mode, $vlan, $vlan-id, $action, $trace, $description);
+   }
+   else if ($str-pic < $end-pic and $fromtype == "xe") {
+      call mx-loop-inside ($maxcount = 1, $initial-value, $fromtype, $fromoct1, $str-pic, $end-pic, $tooct3, $port-mode, $vlan, $vlan-id, $action, $trace, $description);
+      call mx-loop-outside ($maxcount, $initial-value = 0, $fromtype, $fromoct1, $str-pic = $str-pic + 1, $end-pic, $tooct3, $port-mode, $vlan, $vlan-id, $action, $trace, $description);
+   }
+
+}
+/*
+*   NAME: MX-LOOP-INSIDE
+*   PURPOSE: To process each Interface in the range specified.
+*   CALLED: Called if no errors where found with the input to the macro.
+*           Also called recursively within itself.  This is how looping works.
+*
+*   PARMS PASSED:
+*        $maxcount = It's the ending Interface number 
+*                    Used for controlling the loop
+*        $initial-value = It's the starting Interface number
+*                         Used for controlling the loop
+*        $fromtype = Type of interface (GE or XE)
+*                    Used to reconstruct the full Interface name
+*        $fromoct1 = The DPC (Member) number
+*                    Used to reconstruct the full Interface name
+*        $str-pic  = The PIC number to start on
+*                    Used to reconstruct the full Interface name
+*        $end-pic  = The PIC number to end on
+*                    Used to reconstruct the full Interface name
+*        $tooct3   = The Interface number to end on
+*                    Used to reconstruct the full Interface name
+*        $port-mode = If set to "trunk", then the "port-mode trunk" option
+*                     is added to the Interface
+*        $vlan = The vlan name to add to the Interface
+*        $vlan-id = The vlan-id for the vlan.
+*                   Currently not used
+*        $action = If set to "delete", then kill-it is called
+*        $trace = If "ztrace" is specified in the macro, then
+*                 print out debugging information
+*        $description = The "description" to add to each Interface.                    
+*
+*/
+template mx-loop-inside ($maxcount, $initial-value, $fromtype, $fromoct1, $str-pic, $end-pic, $tooct3, $port-mode, $vlan, $vlan-id, $action, $trace, $description){   
+    if ($initial-value <= $maxcount) {
+        var $ifl = $fromtype _ "-" _ $fromoct1 _ "/" _ $str-pic _ "/" _ $initial-value;
+        /*                                                                 */
+        /* If debug was requested from the macro, then print out a message */
+        /* for each interface being worked on.                             */
+        /*                                                                 */
+        if (contains($trace,"ztrace")) {
+           call write-msg($ifl, $port-mode, $vlan, $vlan-id, $action, $type = "mx", $set-loc);
+        }
+        if ($action == "delete") {
+           call kill-it-interfaces-mx($ifl, $port-mode, $vlan-id);
+        }
+        else {
+           call attach-to-interfaces-mx($ifl, $port-mode, $vlan-id, $description);
+        }
+
+        call mx-loop-inside ($maxcount, $initial-value = $initial-value + 1, $fromtype, $fromoct1, $str-pic, $end-pic, $tooct3, $port-mode, $vlan, $vlan-id, $action, $trace, $description);
+    }
+}
+
+/*
+*   NAME: KILL-IT-INTERFACES-MX
+*   PURPOSE: To remove an element from the configuration.
+*   CALLED: Only called if "action delete" is specified in the range macro
+*
+*   PARMS PASSED:
+*        $ifl = The interface name to act on
+*        $port-mode = if "mode = trunk", then delete the <port-mode> element
+*        $vlan-id = if "vlan-id" is non-blank, then delete the <vlan-id> element
+*                   or <vlan-id-list> element depending on $port-mode.
+*
+*        NOTE: If both $port-mode and $vlan-ld are true, then both will be deleted.
+*              If only $ifl is specified, then the complete interface is deleted
+*
+*/
+template kill-it-interfaces-mx($ifl, $port-mode, $vlan-id) {
+   if (not($vlan-id) and not($port-mode)) {
+     <change> {
+        <interfaces> {
+           <interface delete="delete"> {
+               <name> $ifl;
+           }
+        }
+     } 
+   }
+   else {
+      <change> {
+          <interfaces> {
+              <interface> {
+                 <name> $ifl;
+                    <unit> {
+                       <name> "0";
+                             if ($vlan-id and $port-mode) {
+                                if (count(../interfaces/interface[name=$ifl]/unit[name="0"]/family/bridge/vlan-id-list) == 1) {
+                                   /*                                           */
+                                   /*  If only 1 vlan-id is on the trunk        */
+                                   /*  the whole family needs to be removed     */
+                                   /*  or else the "commit" will fail since     */
+                                   /*  the trunk will have no vlans on it       */
+                                   /*                                           */
+                                   <family delete="delete"> {
+                                      <bridge>;
+                                   }
+                                }
+                                else {
+                                   <family> {
+                                      <bridge> {
+                                         <vlan-id-list delete="delete"> $vlan-id;
+                                      }
+                                   }
+                                }
+                             }
+                             /*                                              */
+                             /*  If not a trunk and the vlan-id is being     */
+                             /*  deleted, then we must remove the own family */
+                             /*  or else the "commit" will fail since        */
+                             /*  "family bridge" with an "interface-mode"    */
+                             /*  of "access" must have a vlan-id on it.      */
+                             /*                                              */
+                             else if ($vlan-id) {  
+                                <family delete="delete"> {
+                                   <bridge>;
+                                }
+                             }
+                  }
+              }
+            }
+   }
+}
+}
+/*
+*   NAME: ATTACH-INTERFACES-MX
+*   PURPOSE: Build the XML statement needed to add the information to
+*            the Interfaces heirarchy
+*   CALLED: Only called for MX-series devices
+*
+*   PARMS PASSED:
+*        $ifl = The interface name being acted on
+*        $port-mode = "port-mode" specified in the macro
+*        $vlan = "vlan" specified in the macro
+*        $description = "description" specified in the macro
+*
+*
+*/
+template attach-to-interfaces-mx($ifl, $port-mode, $vlan-id, $description) {
+/*
+*   Verify that the the interface we are working is on suitable.
+*      If the interface exists, determine if "family bridge" is
+*      already set.  If not, then print a warning and do not 
+*      apply any macro settings.
+*
+*/
+   var $u-count=count(../interfaces/interface[name = $ifl]/unit);
+   var $f-count=count(../interfaces/interface[name = $ifl]/unit[name="0"]/family);
+   if ($u-count > 1 || $f-count > 1 || (not(../interfaces/interface[name = $ifl]/unit[name = "0"]/family/bridge) and $f-count = 1)) {
+     <xnm:warning> {
+        <message> {
+           expr "RANGE MACRO: Conflict on Interface ";
+           expr $ifl;
+           expr ".  Unable to apply macro to the interface.";
+        }
+     }
+   }
+     else {
+        <change> {
+           <interfaces> {
+              <interface> {
+                 <name> $ifl;
+                 if ($description) {
+                    <description> $description;
+                 }
+                    <unit> {
+                       <name> "0";
+                          <family> {
+                             <bridge> {
+                                /*                                           */
+                                /*  Trunks on MX do not support "vlan-id" so */
+                                /*  make sure to write into "vlan-id-list"   */
+                                /*                                           */
+                                if ($port-mode == "trunk") {
+                                   <interface-mode> "trunk";
+                                   <vlan-id-list> $vlan-id;
+                                }
+                                else {
+                                /*                                           */
+                                /*  MX does not assume a port is of type     */
+                                /*  access, so we must set the type when     */
+                                /*  we set the vlan-id or the commit will    */
+                                /*  fail.                                    */
+                                /*                                           */
+                                   <interface-mode> "access";
+                                   <vlan-id> $vlan-id;
+                                }
+                             }
+                          }
+                       }
+               }
+           }
+        }
+     }
+}
