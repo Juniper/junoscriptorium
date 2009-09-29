@@ -1,0 +1,164 @@
+/*
+ * Example script to demonstrate how a configuration can be committed 
+ * from op-script.
+ * 
+ * This script by default tries to deactive interface 'ge-0/0/2'
+ *
+ * (i.e) Commit the following configuration
+ *         "set interfaces ge-0/0/2 disable"
+ *
+ * Parameters: $interface -> Interface to disable
+ *             $silent -> Decides where the output will go. 
+ *                          0 -> (Default) Output to stdout
+ *                          1 -> Output to syslog
+ *
+ * Same script can be triggered from event-policy configuration to deactivate
+ * an interface on some specific conditions.
+ *
+ * For Example: 
+ *
+ * The following event-policy will trigger this script when
+ * PING_TEST_FAILED event occurs. (PING_TEST_FAILED will be genereated by rpm 
+ * when the ping test is failed)
+ *
+ * This policy also demonstrates, how to restrict the execution of same script 
+ * again and again because of multiple occurences of the same event.
+ *
+ * Here, the only first occurance of PING_TEST_FAILED will trigger the script
+ * and the script will be triggerd again only when the PING_TEST_FAILED did
+ * not occur in the last 5 mins (300 secs)
+ *
+policy disable-interface-on-ping-failure {
+    events ping_test_failed;
+    within 300 {
+        trigger on 1; 
+    }
+    then {
+        event-script disable-interface.slax {
+            arguments {
+                silent 1;
+            }
+        }
+    }
+}
+ * 
+ * Sample rpm configuration used to test this.
+ *
+rpm {
+    probe icmp-ping-probe {
+        test ping-probe-test {
+            probe-type icmp-ping;
+            target address 10.1.2.1;
+            test-interval 60;
+        }
+    }
+}
+ *
+ *
+ */
+
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+
+var $arguments = {
+    <argument> {
+	<name> "interface";
+	<description> "Interface to deactivate";
+    }
+    <argument> {
+	<name> "silent";
+	<description> "Decides where the output will go, 0 -> stdout, 1 -> syslog";
+    }
+}
+
+param $interface = "ge-0/0/2";
+param $silent = 0;
+
+match / {
+
+    /*
+     * Open connection with mgd
+     */
+    var $con = jcs:open();
+
+    if (not($con)) {
+	call emit-error($message = "Not able to connect to local mgd");
+    }
+
+    /*
+     * Configuration to disable the interface
+     */
+    var $xml = {
+	<configuration> {
+	     <interfaces> {
+		 <interface> {
+		     <name> $interface;
+		     <disable>;
+		 }
+	     }
+	}
+    }
+
+    /*
+     * Use load-configuration template defined in junos.xsl to load and
+     * commit the configuration
+     */
+    var $results = {
+	call jcs:load-configuration($connection = $con, $configuration = $xml);
+    }
+
+    /*
+     * Emit warnings
+     */
+    for-each ($results//xnm:warning) {
+	call emit-warn($message = message);
+    }
+
+    if ($results//xnm:error) {
+	for-each ($results//xnm:error) {
+	    call emit-error($message = message);
+	}
+    } else {
+	call emit-success($message = "Successfully deactivated the interface");
+    }
+
+    if (not($silent)) {
+	<op-script-results> {
+	    copy-of $results;
+	}
+    }
+
+    /*
+     * Close the mgd connection
+     */
+    expr jcs:close($con);
+
+}
+
+template emit-success($message)
+{
+    if ($silent) {
+	expr jcs:syslog("user.info", "disable-interface.slax[Success]: ", $message);
+    } else {
+	expr jcs:output($message);
+    }
+}
+
+template emit-error($message) 
+{
+    if ($silent) {
+	expr jcs:syslog("user.error", "disable-interface.slax[Error]: ", $message);
+    }
+}
+
+template emit-warn($message)
+{
+    if ($silent) {
+	expr jcs:syslog("user.warning", "disable-interface.slax[Warning]: ", $message);
+    }
+}
