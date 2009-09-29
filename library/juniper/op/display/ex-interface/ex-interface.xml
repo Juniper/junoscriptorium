@@ -14,7 +14,7 @@ Include the description field from each interface and support an optional parame
 
  <example>
  <title>Output</title>
- <config>example-1.conf</config>
+ <output>example-1.output</output>
  </example>
 
 <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
