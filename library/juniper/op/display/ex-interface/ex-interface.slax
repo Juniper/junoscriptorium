@@ -1,0 +1,197 @@
+/*
+*
+*    NAME: ex-interface.slax
+*    PURPOSE: Enhance the output of the
+*             "show ethernet-switching interfaces" command.
+*
+*    CREATED: 02/03/09
+*    BY: Jay Wilson (Solutions Architect - Western Area)
+*    LAST MOD: 02/06/09
+*    BY: Jay Wilson
+*    VERSION: 1.20
+*
+*    MODIFICATION HISTORY:
+*        V1.00 = Initial release
+*        V1.01 = Added a parm called "fpc".
+*                Used to limit output to a specific member # on
+*                EX3200/EX4200 or to a specific slot $ on the
+*                EX8208/EX8216.
+*                If not specified, all interfaces are returned.
+*        V1.10 = Optimized performance
+*                Changed the get-interface-information call
+*                to be called only once.
+*        V1.20 = Changes to Mash-up:
+*                  1) Support for JUNOS9.3 structure
+*                     returned from get-ethernet-switching-\
+*                     interface-information.
+*                  2) Check for blocking by RTG
+*
+*                Change to main routine to support the inclusion
+*                "ae" type interfaces.
+*
+*/
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+var $arguments = {
+    <argument> {
+        <name> "fpc";
+        <description> "EX member or slot # to display";
+    }
+}
+param $fpc;
+
+ 
+
+
+match / {
+    <op-script-results> {
+/*
+*
+*  RPC that returns the "show ethernet-switching interface" output
+*
+*/
+        var $rpc = <get-ethernet-switching-interface-information> {
+        }
+        var $switch-output = jcs:invoke($rpc);
+/*
+*
+*  RPC that returns the "show interface" output
+*
+*/
+    var $rpc2 = <get-interface-information> {
+    }
+    var $physical-output = jcs:invoke($rpc2);
+/*
+*
+*   Print out the Header line
+*
+*/
+
+ 
+
+        <output> jcs:printf("%-12s %-8s %-23s %-13s %-s\n","Interface","State","VLAN Member","Blocked","Description");
+
+ 
+
+/*
+*
+*   Get all the interfaces, but only look at "ge", "xe", and "ae"
+*   At the same time, get the FPC #
+*
+*/
+
+ 
+
+        for-each ($switch-output/interface) {
+            var $triple = substring-after(interface-name,'-');
+            var $ct1 = substring-before($triple,'/');
+            if ((contains(interface-name,"ge") || contains(interface-name,"xe") || contains(interface-name,"ae")) && (not($fpc) || ($fpc == $ct1))) {
+     
+/*
+*
+*   Output has unit appended to the interface name.  Drop it because
+*      it is always 0 for "family ethernet-switching", which are the
+*      only interfaces returned from the RPC call above.
+*
+*/
+                var $interface = substring-before(interface-name,".");
+                call mash-up($interface = $interface, $physical-output = $physical-output, $switch-output = .);
+            }
+        }
+    }
+}
+/*
+*   NAME: MASH-UP
+*   PURPOSE: To combine the ethernet-switching-interface-information output
+*            with the interface-information output.
+*   CALLED: Called for all "ge" or "xe" that are returned by the RPC
+*           to ethernet-switching-interface-information and that match any
+*           additional criteria, such fpc #
+*
+*   PARMS PASSED:
+*        $interface = interface to mash-up
+*        $physical-output = the structure that is returned with the
+*                           RPC interface-information call.
+*        $switch-output = the structure that goes with the interface
+*                         that was returned with the RPC
+*                         ethernet-switching-interface-information.
+*
+*/
+template mash-up($interface, $physical-output, $switch-output) {
+
+ 
+
+ 
+
+ 
+
+/*
+*
+*   Save the initial information into a formated string.
+*   This is needed to prevent a newline from being inserted before
+*   the initial string is complete.
+*
+*/
+    var $phy-prnt = { if ($physical-output/physical-interface/name == $interface) {
+                          expr jcs:printf("%-12s %-8s ",$interface, $switch-output/interface-state);
+                      }
+                    }
+    if ($phy-prnt) {
+/*
+*
+*   Vlan membership for each interface comes back as a list, so
+*   a for loop is needed to process it.
+*
+*   IF THE SCRIPT IS NOT OUTPUTTING ANY DATA,
+*   NOTE THE VERSION OF JUNOS BEING USED AND
+*   CHANGE THE NEXT FOR-EACH!!!!!!!!!!!!!!
+*
+*   interface-vlan-member was returned in JUNOS 9.1
+*      as a leaf, so interface-vlan-name did not
+*      exist as a leaf and block-status was 1 leaf up.
+*   interface-vlan-member was returned in JUNOS 9.3
+*      as a node set with interface-vlan-name and
+*      bock-status as leafs.
+*
+*/
+       for-each($switch-output/interface-vlan-member-list/interface-vlan-member) {
+/*
+*
+*  Reduce the length of blocked status by using a shorter string.
+*
+*/
+          var $status = { if (contains(blocking-status,"STP")) {
+                             expr "STP Blocked";
+                          }
+                          else if (contains(blocking-status,"RTG")) {
+                             expr "RTG Blocked";
+                          }
+                          else {
+                             expr blocking-status;
+                          }
+                        }
+/*
+*
+*    The first line for each interface is different than the other
+*    output lines.   Check for the first time in the for loop and
+*    add the saved initial string from above.
+*/
+          var $first = position();
+          if ($first == 1) {
+              <output> jcs:printf("%-22s%-23s %-12s  %-s\n", $phy-prnt, interface-vlan-name, $status, $physical-output/physical-interface[name=$interface]/description);
+          }
+          else {
+/*
+*
+*   printf may look odd, but it is correct.  It must account for the
+*   embedded spaces in the initial string.
+*/
+              <output> jcs:printf("%-22s%-23s %-12s\n", " ", interface-vlan-name, $status);
+          }
+          
+       }
+    }
+}
