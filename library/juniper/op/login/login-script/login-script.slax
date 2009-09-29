@@ -1,0 +1,67 @@
+/*
+ *
+ * Login-script.
+ *
+ * Displays the banner and ask for login confirmation.
+ *
+ * Should be configured as op-script under [system scripts op] and 
+ * and as login-script under [system login class login-script].
+ * Script will be executed each time whenever the user of this class login 
+ * into system.
+ *
+ * Available from 9.5 onwards.
+ *
+ */
+version 1.0;
+ 
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ 
+import "../import/junos.xsl";
+ 
+match / {
+
+    var $banner = '
+* ****************************************************************************
+*
+*  Company-xyz - Authorized Access Only
+* 
+*  This system is for the authorized use of employees of xyz 
+*  and authorized contractors. Individuals using this computer system 
+*  without authority, will be punished.
+* 
+* ****************************************************************************
+';
+    <op-script-results> {
+	expr jcs:output($banner);
+
+	var $response = {
+	    call get-response();
+	}
+
+	if ($response == "no") {
+	    /*
+	     * Logging out, Bye, bye
+	     */
+	    var $rpc = <command> "request system logout user " _ $user;
+	    var $noresponse = jcs:invoke($rpc);
+	} 
+    }
+}
+
+template get-response()
+{
+    var $newline = jcs:printf("\n");
+
+    expr jcs:output($newline);
+
+    var $res = jcs:input("Are you sure you are authorized? (yes/no) ");
+
+    if ($res !=  "yes" && $res != "no") {
+	call get-response();
+    } else {
+	expr $res;
+    }
+}
+

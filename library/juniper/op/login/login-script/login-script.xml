@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<script>
+  <title>login-script.slax</title>
+  <author>rsankar</author>
+  <synopsis>
+	Display the banner and ask for login confirmation
+  </synopsis>
+  <coe>op</coe>
+  <type>login</type>
+
+  <description>
+Should be configured as op-script under [system scripts op] and as login-script under [system login class login-script]
+Script will be executed each time whenever the user of this class login into system. Available from 9.5 onwards</description> 
+
+  </description>
+
+  <example>
+    <title>Example</title>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
