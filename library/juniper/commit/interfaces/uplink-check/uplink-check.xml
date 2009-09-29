@@ -10,7 +10,6 @@ Check to make sure that no interface with "CORE" or "core" in the description is
 
 <description>
 This commit-script checks to ensure that no interface with "CORE" or "core" in the descriptiong is disabled.
-
 </description>
 
 
