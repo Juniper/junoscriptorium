@@ -1,0 +1,132 @@
+/*
+ * YOU MUST ACCEPT THE TERMS OF THIS DISCLAIMER TO USE THIS SOFTWARE.
+ *
+ * JUNIPER IS WILLING TO MAKE THE INCLUDED SCRIPTING SOFTWARE AVAILABLE TO YOU
+ * ONLY UPON THE CONDITION THAT YOU ACCEPT ALL OF THE TERMS CONTAINED IN THIS
+ * DISCLAIMER. PLEASE READ THE TERMS AND CONDITIONS OF THIS DISCLAIMER CAREFULLY.
+ *
+ * THE SOFTWARE CONTAINED IN THIS FILE IS PROVIDED "AS IS".  JUNIPER MAKES NO
+ * WARRANTIES OF ANY KIND WHATSOEVER WITH RESPECT TO SOFTWARE. ALL EXPRESS OR
+ * IMPLIED CONDITIONS, REPRESENTATIVES AND WARRANTIES, INCLUDING ANY WARRANTY
+ * OF NON-INFRINGEMENT OR WARRANTY OF MERCHANTABILITY OR FITNESS FOR A 
+ * PARTICULAR PURPOSE, ARE HEREBY DISCLAIMED AND EXCLUDED TO THE EXTENT
+ * ALLOWED BY APPLICABLE LAW.
+ *
+ * IN NO EVENT WILL JUNIPER BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR
+ * FOR DIRECT, SPECIAL, INDIRECT, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE DAMAGES
+ * HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY ARISING OUT OF THE
+ * USE OF OR INABILITY TO USE THE SOFTWARE, EVEN IF JUNIPER HAS BEEN ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGES.
+ *
+ * 
+ * Author        : Sriram Sankar
+ * Version       : 1.0
+ * Last Modified : 2008-12-01
+ * 
+ * Description   : check-netconf-acl.slax
+ * This event script is written to restrict the netconf access with a given login
+ * from an authorized subnet only. This can be easily extended to multiple
+ * authorized subnets, or use 0.0.0.0/32 to deny any access. 
+ *
+ *
+ * Below is a sample event policy configuration which will be triggered
+ * when the automation user "automation2" has login to the device via netconf. 
+ * The name of the user and the authorized subnet are the two arguments passed 
+ * to the event-script.
+ *
+ * ---
+ * event-options {
+ *     policy netconf-for-automation-user {
+ *         events ui_login_event; 
+ *         within 1 {
+ *             trigger on 2;
+ *             events [ ui_cmdline_read_line SYSTEM ]; 
+ *         } 
+ *         attributes-match {
+ *             ui_cmdline_read_line.command matches "^xml-mode netconf";
+ *             ui_cmdline_read_line.username equals ui_login_event.username;
+ *             ui_login_event.username matches "automation1|automation2"; 
+ *         } then {
+ *             event-script check-netconf-acl.slax {
+ *                 arguments {
+ *                     sshd-message "{$SYSTEM.message}";
+ *                     mgd-pid "{$$.pid}";
+ *                     username "{$$.username}";
+ *                     auth-subnet 172.17.28.0/24;
+ *                 }
+ *             }
+ *         }
+ *     }
+ *     policy bypass-message {
+ *         events SYSTEM; 
+ *            attributes-match {
+ *                SYSTEM.message matches "subsystem request for netconf"; 
+ *            } then {
+ *              ignore;
+ *          }
+ *      }
+ *  }
+ * ---
+ *
+ * When a netconf user login with the matching username is found, the script
+ * will compare its source IP with the authorized subnet. It will forcibly
+ * log out the user who is not connected from the authorized subnet.  
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+
+param $mgd-pid;
+param $sshd-message;
+param $auth-subnet;
+param $username;
+
+match / {
+     <op-script-results> {
+
+         /*
+          * Extract the source ip from the SSHD message:
+          * "Accepted password for automation from 172.17.28.133 port 2331
+          * ssh2"
+          */
+         var $pattern = "([0-9]+)(.)([0-9]+)(.)([0-9]+)(.)([0-9]+)";
+         var $str = jcs:regex($pattern, $sshd-message);
+
+         var $ipaddr = $str[1];
+
+         /*
+          * Process the authorized subnet params using jcs:parse-ip(),
+          * then extract the subnet and prefix, i.e.
+          *     auth-ip[3] is the prefix,
+          *     auth-ip[4] is the subnet
+          */
+         var $auth-ip = jcs:parse-ip($auth-subnet);
+
+         /*
+          * Append the prefix to ipaddr and
+          * then parse it
+          */
+         var $temp = $ipaddr _ "/" _ $auth-ip[3];
+         var $user-ip = jcs:parse-ip($temp);
+
+         /*
+          * Now match the subnet
+          */
+         if ($user-ip[4] != $auth-ip[4]) {
+             var $logout = <kill-session> {
+                     <session-id> $mgd-pid;
+             }
+             var $result = jcs:invoke($logout);
+             expr jcs:output("Logging out netconf user ", $username);
+             expr jcs:output(" connected from an unauthorized subnet.");
+         }
+     }
+}
+
+
+
