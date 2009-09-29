@@ -1,0 +1,366 @@
+/*
+ * Script to add a node to the existing BGP mesh.
+ * 
+ * This script uses the remote-rpc mechanism available from 9.3 onwards.
+ *
+ * Remote-rpc meachanism works only with ssh-agent setup. The prerequisite for
+ * this script to work is the ssh-agent should be configured properly and the
+ * ssh connection from the current node to all the peers in the BGP mesh should
+ * work without password/passpharse.
+ *
+ * This scripts takes the following input:
+ *
+ *  bgp-peer-group     BGP peer group name
+ *  bgp-peer-type      BGP peer type
+ *  local-address      IP-address of local machine (This node)
+ *  local-as-number    Local AS Number
+ *  peer-address       IP-address of one of the peer
+ *
+ * 'peer-address' is the address of one-of-the member in the BGP mesh. 
+ * The script gets the BGP peer information from 'peer-address' and add this
+ * node ('local-address') as neighbor in all the peers. Also configure the
+ * peer details locally.
+ *
+ * Run the script from the node which you want to add to BGP mesh.
+ *
+ * Steps to setup ssh-agent.
+ * -------------------------
+ *
+Note: The below steps are given very briefly, for details please refer the 
+appropriate manuals.
+
+1) Configure user's to connect.
+
+   Note: User name should be same in desktop and all the peers. Since I am 
+         executing this from my desktop with my userid, I have created the
+         same user in all the peers.
+
+regress@ritter# show system login user rsankar 
+uid 2000;
+class super-user;
+
+regress@waffy# show system login user rsankar 
+uid 2000;
+class super-user;
+
+2) Configure ssh-key and associate the public key with rsankar login account
+in both the machines.
+
+Please refer the below JUNOS document for details regarding ssh key generation.
+
+http://www.juniper.net/techpubs/software/junos/junos90/netconf-guide/creating-a-publicprivate-key-pair.html#id-10314765
+
+3) Make sure routers are added to ssh-known-hosts under 
+   [security ssh-know-hosts]
+
+4) Run ssh-agent in desktop
+
+   # Execute the below command from bash shell.
+
+   >`ssh-agent -s `  
+
+   # Make sure ssh-agent is running.
+
+   >ps -auwwx | grep ssh-agent
+rsankar  99086  0.0  0.1  3164  2000  ??  Is    3:23PM   0:00.00 ssh-agent -s
+
+5) Add identities to ssh-agent.
+ 
+   > ssh-add
+
+   # ssh-add will ask for passphrase, give the passphrase given during the 
+   # key generation. 
+
+6) Make sure the ssh forwarding is enabled in your desktop.
+
+  To enable forwarding add the following lines  to ~/.ssh/config
+
+Host *
+ForwardAgent yes
+ForwardX11 yes
+
+7) Login to all the peers and verify the setup. Login should succeed without
+asking password or passphrase.
+
+ *
+ */
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+	<name> "bgp-peer-group";
+	<description> "BGP peer group name";
+    }
+    <argument> {
+	<name> "bgp-peer-type";
+	<description> "BGP peer type";
+    }
+    <argument> {
+	<name> "local-as-number";
+	<description> "Local AS Number";
+    }
+    <argument> {
+	<name> "peer-address";
+	<description> "IP-address of one of the peer";
+    }
+    <argument> {
+	<name> "local-address";
+	<description> "IP-address of local machine (This node)";
+    }
+}
+
+param $bgp-peer-group;
+param $bgp-peer-type;
+param $local-as-number;
+param $peer-address;
+param $local-address;
+
+match / {
+    <op-script-results> {
+	/*
+	 * Validate the paramaters passed
+	 */
+	if ($bgp-peer-type != "internal" && $bgp-peer-type != "external") {
+	    call emit-error($message = "bgp-peer-type is mandatory and should" _
+			    " be either 'internal' or 'external'");
+	} else if (jcs:empty($local-address)) {
+	    call emit-error($message = "local-address is mandatory");
+	} else if (jcs:empty($local-as-number)) {
+	    call emit-error($message = "local-as-number is mandatory");
+	} else if (jcs:empty($peer-address)) {
+	    call emit-error($message = "peer-address is mandatory");
+	} else if (jcs:empty($bgp-peer-group)) {
+	    call emit-error($message = "bgp-peer-group is mandatory");
+	} else {
+	    call main-template();
+	}
+    }
+
+}
+
+template main-template()
+{
+    expr jcs:progress("Connecting locally ... ");
+
+    var $local-con = jcs:open();
+
+    if (jcs:empty($local-con)) {
+	call emit-error($message = "Not able to connect locally");
+    } else {
+	expr jcs:progress("Connected locally ... ");
+
+	var $peer-bgp-config := {
+	    call get-peer-bgp-group-config($address = $peer-address); 
+	}
+
+	var $peer-group = 
+	    $peer-bgp-config/configuration/protocols/bgp/group[name == $bgp-peer-group];
+
+	if (not($peer-group)) {
+	    call emit-error($message = "BGP configuration for group '" _
+			    $bgp-peer-group _ "' does not exist in peer '" _
+			    $peer-address _ "'");
+	} else if ($peer-group/type != $bgp-peer-type) {
+	    call emit-error($message = "Given peer type does not match with " _
+			    "the peer type configured in '" _ 
+			    $peer-address _ "'");
+	} else {
+	    expr jcs:progress("Adding this node as peer in all the BGP ",
+			      "peers ...");
+
+	    call add-bgp-peer($peer = $peer-address);
+	    for-each ($peer-group/neighbor) {
+		if (name != $local-address) {
+		    call add-bgp-peer($peer = name);
+		}
+	    }
+
+	    expr jcs:progress("Added this node as peer in all the BGP ", 
+			      "peers ...");
+
+	    /*
+	     * BGP group config in the given peer will not have its own
+	     * entry in 'protocols bgp group <group-name> neighbor' hierarchy.
+	     * So, get the detail about the given peer from one of the
+	     * neighbor configured.
+	     */
+
+	    var $another-peer-bgp-config := {
+		call get-peer-bgp-group-config($address = 
+					       $peer-group/neighbor/name);
+	    }
+
+	    var $given-peer-detail = 
+	       	$another-peer-bgp-config/configuration/protocols/bgp/group[name == $bgp-peer-group]/neighbor[name == $peer-address];
+
+
+	    expr jcs:progress("Configuring BGP locally ...");
+
+	    var $local-xml = {
+		<configuration> {
+		    <protocols> {
+			<bgp> {
+			    <group> {
+				<name> $bgp-peer-group;
+				<type> $bgp-peer-type;
+				<local-as> {
+				    <as-number> $local-as-number;
+				}
+				<local-address> $local-address;
+				for-each ($peer-group/neighbor) {
+				    if (name != $local-address) {
+					copy-of .;
+				    }
+				}
+				copy-of $given-peer-detail;
+			    }
+			}
+		    }
+		}
+	    }
+
+	    var $results := {
+		call jcs:load-configuration($connection = $local-con,
+					    $configuration = $local-xml);
+	    }
+
+	    if ($results//xnm:error) {
+		call emit-warning($message = "Got the following error while " _
+				  "adding configuring BGP locally");
+
+		for-each ($results//xnm:error) {
+		    call emit-error($message = message);
+		}
+	    } else {
+		expr jcs:progress("Successfully configured BGP locally");
+	    }
+	}
+	expr jcs:close($local-con);
+    }
+}
+
+/*
+* Add the current node as BGP peer in the given peer machine
+*/
+template add-bgp-peer($peer) 
+{
+
+    expr jcs:progress("Adding this node as peer in '", $peer, "' ...");
+
+    expr jcs:progress("Connecting to peer '", $peer, "' ...");
+
+    var $conn = jcs:open($peer);
+
+    var $xml = {
+	<configuration> {
+	    <protocols> {
+		<bgp> {
+		    <group> {
+			<name> $bgp-peer-group;
+			<type> $bgp-peer-type;
+			<neighbor> {
+			    <name> $local-address;
+			    if ($bgp-peer-type == "external") {
+				<peer-as> $local-as-number;
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    }
+			
+    if (jcs:empty($conn)) {
+	call emit-warning($message = "Not able to connect to peer " _ 
+			$peer-address);
+	call emit-warning($message = "Not able to add this node as peer in '" _
+			  $peer _ "',  add it manually");
+    } else {
+
+	expr jcs:progress("Connected to peer '", $peer, "' ...");
+	expr jcs:progress("Loading configuration on to peer '", $peer, "' ...");
+
+	var $results := {
+	    call jcs:load-configuration($connection = $conn, 
+					$configuration = $xml);
+	}
+
+	if ($results//xnm:error) {
+	    call emit-warning($message = "Got the following error while " _
+			      "adding the node as peer in '" _ $peer _
+			      "', add it manually");
+
+	    for-each ($results//xnm:error) {
+		call emit-error($message = message);
+	    }
+	} else {
+	    expr jcs:progress("Successfully loaded configuration on to peer '",
+			      $peer, "' ...");
+	}
+    }
+
+    expr jcs:close($conn);
+
+}
+
+/*
+* Get the bgp group configuration of the peer
+*/
+template get-peer-bgp-group-config ($address)
+{
+    var $conn = jcs:open($address);
+
+    if (jcs:empty($conn)) {
+	call emit-error($message = "Not able to connect to peer " _ $address);
+    }
+
+    if ($conn) {
+	var $get-config-remote = {
+    	    <get-configuration database="committed" inherit="inherit"> {
+    		<configuration> {
+    		    <protocols> {
+    			<bgp> {
+    			    <group> {
+    				<name> $bgp-peer-group;
+    			    }
+    			}
+    		    }
+    		}
+    	    }
+       	}
+
+	expr jcs:progress("Getting BGP group '", $bgp-peer-group, 
+	    		"' configuration from '", $address, "' ...");
+	
+	var $peer-config = jcs:execute($conn, $get-config-remote);
+
+	expr jcs:close($conn);
+
+	copy-of $peer-config;
+    }
+}
+
+/*
+ * Emit the give error message
+ */
+template emit-error($message) {
+    <xnm:error> {
+	<message> $message;
+    }
+}
+
+/*
+ * Emit the give warning message
+ */
+template emit-warning($message) {
+    <xnm:warning> {
+	<message> $message;
+    }
+}
+
