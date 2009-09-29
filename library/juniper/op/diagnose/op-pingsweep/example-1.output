@@ -1,0 +1,10 @@
+user@cli> op pingsweep remote-host waffy min-size 1400 max-size 1600 step 100
+
+Executing command: ping waffy size 1400 count 1 do-not-fragment
+Ping Success!!!
+
+Executing command: ping waffy size 1500 count 1 do-not-frament
+Ping Success!!!
+
+Executing command: ping waffy size 1600 count 1 do-not-frament
+Ping Failed!!!

@@ -1,0 +1,83 @@
+/*
+ * Op script to send series of pings to remote-host, each one increasing in
+ * size, may be useful for troubleshooting MTU/MSS issues.
+ *
+ * Size of the packet starts from $min-size, increases by $step and
+ * ends at $max-size
+ * 
+ * E.g
+ * regress@chennai> op pingsweep remote-host waffy min-size 1400 max-size 1600
+ *                  step 100
+ *    Executing command: ping waffy size 1400 count 1 do-not-fragment
+ *    Ping Success!!!
+ *    Executing command: ping waffy size 1500 count 1 do-not-fragment
+ *    Ping Failed!!!
+ *    Executing command: ping waffy size 1600 count 1 do-not-fragment
+ *    Ping Failed!!!
+ */ 
+
+version 1.1;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+	<name> "remote-host";
+	<description> "Host name or ip-address to ping";
+    }
+    <argument> {
+	<name> "min-size";
+	<description> "Minimum packet size";
+    }
+    <argument> {
+	<name> "max-size";
+	<description> "Maximum packet size";
+    }
+    <argument> {
+	<name> "step";
+	<description> "Packet size difference";
+    }
+}
+
+param $remote-host;
+param $min-size;
+param $max-size;
+param $step;
+
+match / {
+
+    call ping($remote-host, $cur-size = $min-size, $max-size, $step);
+
+}
+
+template ping ($remote-host, $cur-size, $max-size, $step) {
+
+    if ($cur-size <= $max-size) {
+	var $ping-rpc = {
+	    <ping> {
+		<host> $remote-host;
+		<size> $cur-size;
+		<count> 1;
+		<do-not-fragment>;
+	    }
+	}
+
+        expr jcs:output("Executing command: ping ", $remote-host, " size ", 
+			 $cur-size, " count 1 do-not-fragment");
+
+	var $ping-out = jcs:invoke($ping-rpc);
+
+	if ($ping-out/ping-success) {
+	    expr jcs:output("Ping Success!!!");
+	} else {
+	    expr jcs:output("Ping Failed!!!");
+	}
+
+    	call ping($remote-host, $cur-size = $cur-size + $step, $max-size, 
+		  $step);
+    }
+}
