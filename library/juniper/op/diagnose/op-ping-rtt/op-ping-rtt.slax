@@ -1,0 +1,65 @@
+/*
+ * Op script to ping the given host and print the rtt details.
+ *
+ * When $silent parameter is set it syslog the rtt details, when $silent is not
+ * passed it prints the rtt details to console.
+ *
+ * This op-script can be called from timer based event-policy to continuously
+ * ping the remote host and log the rtt details.
+ *
+ * When syslog the message it logs it with "user.info" priority.
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+ <name> "remote-host";
+ <description> "Host name or ip-address to ping";
+    }
+    <argument> {
+ <name> "ping-request";
+ <description> "Number of ping requests to send";
+    }
+    <argument> {
+ <name> "silent";
+ <description> "Set to syslog the details";
+    }
+}
+
+param $remote-host;
+param $ping-request;
+param $silent; 
+ 
+match / {
+    var $ping-rpc = {
+ <ping> {
+     <host> $remote-host;
+     <count> $ping-request;
+ }
+    }
+
+    var $ping-out = jcs:invoke($ping-rpc);
+
+    if ($ping-out/ping-failure) {
+
+ call display($message = "Ping to host '" _  $remote-host _ "' failed", $silent);
+    } else {
+ call display($message = "Rtt details for host '" _ $remote-host _ "' at time '" _ $localtime _ "' Minimum = " _ $ping-out/probe-results-summary/rtt-minimum _ " Maximum = " _ $ping-out/probe-results-summary/rtt-maximum _ " Average = " _ $ping-out/probe-results-summary/rtt-average, $silent);
+    }
+}
+
+template display($message, $silent) {
+    if ($silent) {
+ expr jcs:syslog("user.info", $message);
+    } else {
+ expr jcs:output($message);
+    }
+}
+
