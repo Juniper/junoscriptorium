@@ -14,7 +14,7 @@ This script demonstrates this be setting a given utility MIB to the value 100
 
  <example>
  <title>Sample output</title>
- <config>example-1.conf</config>
+ <output>example-1.output</output>
  </example>
 
 <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
