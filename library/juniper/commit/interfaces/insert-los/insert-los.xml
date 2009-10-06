@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>insert-los.slax</title>
-  <author>curtisstephencall</author>
+  <author>matthews</author>
   <synopsis>
 	Inserts LOS if an interface in an AS link is disabled to bring down the sonet link
   </synopsis>
