@@ -20,8 +20,7 @@
   <keyword>ex</keyword>
   <example>
     <title>Output</title>
-    <description>Output</description>
-    <config>example-1.conf</config>
+    <output>example-1.conf</output>
   </example>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
