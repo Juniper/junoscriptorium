@@ -1,0 +1,40 @@
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+
+/* 
+ * Shows a summarisez output of autobandwidth parameters for each MPLS LSP
+ */
+
+var $arguments = {
+   <argument> {
+      <name> "lsp";
+      <description> "Name of LSP to display";
+      }
+   }
+   param $lsp;
+   match / {
+   <op-script-results> {
+       var $rpc = {
+          <get-mpls-lsp-information> {
+          <detail>;
+          }
+       }
+       var $out = jcs:invoke($rpc);
+       <rsvp-session junos:style="detail"> {
+         <output> 'To              State  MinBW        MaxAvBW      BW           AdjustTime LSPname';
+       if ($lsp != '') {
+          for-each ($out/rsvp-session-data/rsvp-session/mpls-lsp[name = $lsp]) {
+             <output> jcs:printf('%-15s %-6s %-12s %-12s %-12s %10s %-s', destination-address, lsp-state, mpls-lsp-autobandwidth/minimum-bandwidth, mpls-lsp-autobandwidth/bandwidth, mpls-lsp-path/bandwidth, mpls-lsp-autobandwidth/time-to-adjust, name);
+             }
+          } 
+       else {
+          for-each ($out/rsvp-session-data/rsvp-session/mpls-lsp) {
+             <output> jcs:printf('%-15s %-6s %-12s %-12s %-12s %10s %-s', destination-address, lsp-state, mpls-lsp-autobandwidth/minimum-bandwidth, mpls-lsp-autobandwidth/bandwidth, mpls-lsp-path/bandwidth, mpls-lsp-autobandwidth/time-to-adjust, name);
+             }
+          }
+       }
+    }
+ }
