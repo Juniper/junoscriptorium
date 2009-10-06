@@ -1,0 +1,180 @@
+/*
+ * This op script displays the full chain of policy configuration for a given
+ * neighbor and import/export direction.  Either the candidate or the committed
+ * database can be used, with the committed database used by default.
+ *
+ * Usage: op show-bgp-policy neighbor 10.0.0.1 direction import
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* 
+ * The $arguments global variable is a special variable which JUNOS reads to build
+ * the CLI help for the script.  The command-line arguments will appear within the help
+ * along with their description as long as the following format is followed.
+ */
+var $arguments = {
+    <argument> {
+        <name> "neighbor";
+        <description> "Required: The BGP neighbor address";
+    }
+    <argument> {
+        <name> "direction";
+        <description> "Required: Policy direction, either import or export";
+    }
+    <argument> {
+        <name> "database";
+        <description> "Optional: Specify either the [committed] or candidate database";
+    }
+}
+
+/* These global parameters are assigned based on their corresponding command-line arguments */
+param $neighbor;
+param $direction;
+param $database="committed";
+
+match / {
+    <op-script-results> {
+    
+        /*
+         * The script first sanity checks the $neighbor and $direction command-line arguments.  If they
+         * have not been set correctly then the script exits by using the <xsl:message> command element
+         * and specifying that the script should end by setting the terminate attribute to "yes".
+         */
+        if( jcs:empty( $neighbor ) or jcs:empty( $direction ) or 
+            ( $direction != "import" and $direction != "export" ) ) {
+            <xsl:message terminate="yes"> "The neighbor address and policy direction must be specified.";
+        }
+        
+        /* 
+         * The database should be set to either "committed" or "candidate", if not then exit the script
+         * with an error
+         */
+        if( $database != "committed" and $database != "candidate" ) {
+            <xsl:message terminate="yes"> "The database is not set correctly.";
+        }
+    
+        /* 
+         * This API element is used to retrieve the configuration.  Either the candidate or the committed
+         * configuration can be used.  The choice is based on the $database command-line argument.  In 
+         * addition the inherit attribute has been set.  This is used to request that the configuration be 
+         * retrieved in inherited mode meaning that all configuration from configuration groups will be 
+         * inherited into its proper hierarchy level.  This is done so that the script has an accurate view
+         * of the current BGP policy configuration.
+         */
+        var $get-bgp-rpc =  <get-configuration database=$database inherit="inherit"> {
+                                <configuration> {
+                                    <protocols> {
+                                        <bgp>;
+                                    }
+                                }
+                            }
+        
+        /* 
+         * The assembled API element is sent to JUNOS through jcs:invoke and the XML response stored in 
+         * $bgp-config 
+         */                    
+        var $bgp-config = jcs:invoke( $get-bgp-rpc );
+        
+        /*
+         * The BGP neighbor is extracted from the configuration through a location path.  The last() 
+         * function is used to guarantee that only one element node will be returned.  It returns true 
+         * only if the node is the last in the node list so only one node can be selected and assigned to 
+         * $bgp-neighbor.
+         */
+        var $bgp-neighbor = $bgp-config/protocols/bgp//neighbor[name == $neighbor ][last()];
+        
+        /* 
+         * Error check, if the $bgp-neighbor is missing than jcs:empty() will return true and the script
+         * will be terminated with an error message.
+         */
+        if( jcs:empty( $bgp-neighbor ) ) {
+            <xsl:message terminate="yes"> "BGP Neighbor " _ $neighbor _ " isn't configured.";
+        }
+        
+        /*
+         * Begin the output.  The BGP neighbor will be shown first as well as the BGP group it is in.
+         */
+        <output> "BGP Neighbor: " _ $neighbor _ " in group " _ $bgp-neighbor/../name;
+        
+        /*
+         * The BGP policy list will now be retrieved.  To do this the jcs:first-of() function is used.
+         * This is necessary because a BGP peers policy can be configured at up to three different 
+         * hierarchy levels: the neighbor level, the group level, or the bgp level.  The peer uses the 
+         * policy configuration at the most specific level.  jcs:first-of() works by checking multiple 
+         * node-set arguments.  The first node-set that is not empty will be returned.  So in this case 
+         * three separate location paths are provided (each of which results in a node-set).  The first 
+         * location path refers to any policies at the neighbor level, the second pulls policies at the 
+         * group level, and the last pulls policies at the bgp level.
+         */
+        var $policy-list = jcs:first-of( $bgp-neighbor/*[name()==$direction], 
+                                         $bgp-neighbor/../*[name()==$direction], 
+                                         $bgp-neighbor/../../*[name()==$direction] );
+        
+        /* 
+         * Error check, if there are no policies then the script can terminate.
+         */
+        if( jcs:empty( $policy-list ) ) {
+            <xsl:message terminate="yes"> "There are no " _ $direction _ " policies for " _ $neighbor;
+        }
+        
+        /*
+         * The policy chain is now output to the console.  This is done all within one line by writing
+         * the text strings to a single <output> element through the expr statement.
+         */
+        <output> {
+            if( $direction == "import" ) {
+                expr "Import Policies:";
+            }
+            else {
+                expr "Export Policies:";
+            }
+            for-each( $policy-list ) {
+                expr " " _ .;
+            }
+        }
+        
+        /* A for-each will now loop through each policy individually to allow them to be displayed */
+        for-each( $policy-list ) {
+        
+            /* Output the policy name */
+            <output> "\nPolicy: " _ .;
+            
+            /*
+             * The script must retrieve the text version of each policy one by one.  By default the 
+             * returned configuration is always in XML format.  To see the configuration in text format 
+             * use the format attribute and set it to "text".
+             */
+            var $get-policy-rpc = <get-configuration format="text" database=$database inherit="inherit"> {
+                                      <configuration> {
+                                          <policy-options> {
+                                              <policy-statement> {
+                                                  <name> .;
+                                              }
+                                          }
+                                      }
+                                  }
+            
+            /* Send assembled API element to JUNOS through jcs:invoke(); */                        
+            var $policy-text = jcs:invoke( $get-policy-rpc );
+            
+            /*
+             * The returned configuration will include the entire hierarchy including the policy-options 
+             * statement and enclosing brackets.  This is extra clutter that is not needed so it is removed 
+             * by using the substring-after and substring functions to remove all the unnecessary characters.  
+             * After which the complete text policy is output to the console.
+             */
+            var $cropped-text =substring-after( $policy-text, "policy-options {" );
+            <output> substring( $cropped-text, 1, string-length( $cropped-text )-2 );
+        }
+    }
+}
+
+

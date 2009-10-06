@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<script>
+  <title>show-bgp-policy.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	Display all routing-policies in sequential order for a selected peer
+  </synopsis>
+  <coe>op</coe>
+  <type>display</type>
+
+  <description>
+The goal of this script is to provide an easy
+way to peruse the complete policy chain of a BGP peer. With multiple
+BGP policies in an import or export policy chain, it can become
+troublesome to determine exactly when or if a prefix is accepted/
+rejected as the policies typically do not appear in the desired order
+within the policy-options configuration.
+This script extracts the policy chain for the selected peer in the import
+or export direction. It then retrieves the configuration text for each
+policy, and displays it on the console in sequential order. Now a user
+only has to execute the op script and he can then read the complete
+policy chain from start to finish.
+
+  </description>
+
+  <keyword>slax</keyword>
+  <keyword>bgp</keyword>
+  <keyword>peers</keyword>
+  <keyword>policy</keyword>
+  <keyword>routing</keyword>
+  <example>
+    <title>Example</title>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
