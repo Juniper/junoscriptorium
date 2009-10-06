@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>bgp-active.slax</title>
-  <author>curtisstephencall</author>
+  <author>jpanagos</author>
   <synopsis>
 	This commit script ensures that BGP both exists and is active
   </synopsis>
