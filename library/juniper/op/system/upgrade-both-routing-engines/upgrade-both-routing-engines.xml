@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<script>
+  <title>upgrade-both-routing-engines.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	Does a non-graceful upgrade of both routing-engines through a single command.
+  </synopsis>
+  <coe>op</coe>
+  <type>system</type>
+
+  <description>
+  This script provides a quick and dirty way to upgrade both routing-engines
+  with a single command.  Note that there is no attempt at ISSU or graceful
+  switchover between routing-engines.  This is only intended for lab use or
+  when initially deploying routers, not during production.
+  
+  The usage is simple, at a minimum specify the file parameter with the filename.
+  If the force or validate upgrade knobs are desired then those are be specified
+  on the command-line as well, otherwise they default to their default value.
+
+  
+
+  </description>
+
+  <keyword>slax</keyword>
+  <keyword>upgrade</keyword>
+  <keyword>lab</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
