@@ -3,25 +3,32 @@
   <title>show-bgp-policy.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Display all routing-policies in sequential order for a selected peer
+	Display all routing-policies in sequential order for a selected BGP peer
   </synopsis>
   <coe>op</coe>
   <type>display</type>
 
-  <description>
-The goal of this script is to provide an easy
-way to peruse the complete policy chain of a BGP peer. With multiple
-BGP policies in an import or export policy chain, it can become
-troublesome to determine exactly when or if a prefix is accepted/
-rejected as the policies typically do not appear in the desired order
-within the policy-options configuration.
-This script extracts the policy chain for the selected peer in the import
-or export direction. It then retrieves the configuration text for each
-policy, and displays it on the console in sequential order. Now a user
-only has to execute the op script and he can then read the complete
-policy chain from start to finish.
+  <description><![CDATA[
+This script provides an easy way to study the complete policy chain of a BGP peer. With multiple BGP policies in an
+import or export policy chain, it can become troublesome to determine what action will be taken for a particular
+prefix because the policies will usually not appear in the desired order within the policy-options hierarchy in the
+configuration.
 
-  </description>
+The configuration text for each policy in the policy chain for the selected peer is extracted by the script and then
+displayed to the console in the correct sequential order.  Through use of this op script, a user can earily read the 
+complete policy chaing from start to finish.
+
+Three are three command-line arguments:
+* neighbor - Specificies which BGP peer to view
+* direction - Either the import or export direction
+* database - The policies can be viewed from either the committed database (the default), or the candidate database.
+
+Minimum JUNOS Version: 8.2.
+Latest Script Version: 1.0
+MD5 Checksum: 4b830f1cc024657d621d0668e4af092f
+SHA-256 Checksum: 963dd0f98f7f15d8728343b77d37e07b202362a7c8f682c464600fefeec86787
+]]>
+</description>
 
   <keyword>slax</keyword>
   <keyword>bgp</keyword>
@@ -30,6 +37,35 @@ policy chain from start to finish.
   <keyword>routing</keyword>
   <example>
     <title>Example</title>
+    <description><![CDATA[
+[edit protocols bgp group test]
+user@cli# run op show-bgp-policy neighbor 10.0.0.1 direction import database candidate
+BGP Neighbor: 10.0.0.1 in group test
+Import Policies: block-private block-local adjust-local-pref
+Policy: block-private
+    policy-statement block-private {
+        from {
+            route-filter 192.168.0.0/16 orlonger;
+            route-filter 10.0.0.0/8 orlonger;
+            route-filter 172.16.0.0/12 orlonger;
+        }
+        then reject;
+    }
+Policy: block-local
+    policy-statement block-local {
+        from {
+            route-filter 1.0.0.0/24 orlonger;
+        }
+        then reject;
+    }
+Policy: adjust-local-pref
+    policy-statement adjust-local-pref {
+        then {
+            local-preference 90;
+        }
+    }    
+    ]]>
+    </description>
   </example>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
