@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>show-trunk.slax</title>
-  <author>curtisstephencall</author>
+  <author>jayw</author>
   <synopsis>
 	Provide vlan information for all interfaces that are defined as trunk interfaces
   </synopsis>
