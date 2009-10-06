@@ -17,8 +17,11 @@
   The usage is simple, at a minimum specify the file parameter with the filename.
   If the force or validate upgrade knobs are desired then those are be specified
   on the command-line as well, otherwise they default to their default value.
-
-  
+ 
+  Minimum JUNOS Version: 8.2
+  Latest Script Version: 1.0
+  MD5 Checksum: c626cd768863b21b131287fa6af94750
+  SHA-256 Checksum: 32a65194bfd9f01d57e163e85b1c9d6eb2a6ff9496fbdcd4f53acc21688aa275
 
   </description>
 
