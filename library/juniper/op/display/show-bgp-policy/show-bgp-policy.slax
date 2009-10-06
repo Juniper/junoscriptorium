@@ -1,4 +1,11 @@
 /*
+ * Author        : Curtis Call
+ * Version       : 1.0
+ * Last Modified : October 6, 2009
+ * Platform      : all
+ * JUNOS Release : 8.2 and above
+ * License       : Public Domain
+ *
  * This op script displays the full chain of policy configuration for a given
  * neighbor and import/export direction.  Either the candidate or the committed
  * database can be used, with the committed database used by default.
