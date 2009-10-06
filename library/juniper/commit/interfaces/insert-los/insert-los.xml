@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<script>
+  <title>insert-los.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	Inserts LOS if an interface in an AS link is disabled to bring down the sonet link
+  </synopsis>
+  <coe>commit</coe>
+  <type>interfaces</type>
+
+  <description>
+Inserts LOS if an interface in an AS link is disabled to bring down the sonet link
+
+  </description>
+
+  <keyword>slax</keyword>
+  <keyword>los</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

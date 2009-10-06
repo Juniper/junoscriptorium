@@ -1,0 +1,32 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+
+/* 
+ * Inserts LOS if an interface in an AS link is disabled to bring down the sonet link
+ */
+
+match configuration {
+for-each (interfaces/interface[starts-with(name, 'so-') and (sonet-options/aggregate) and disable]) {
+call jcs:emit-change($tag = 'change') {
+with $content = {
+<sonet-options> {
+<insert-los>;
+}
+}
+}
+}
+for-each (interfaces/interface[starts-with(name, 'so-') and (sonet-options/aggregate) and not(disable) and (sonet-options/undocumented/insert-los)]) {
+call jcs:emit-change($tag = 'change') {
+with $content = {
+<sonet-options> {
+<insert-los delete= 'delete'>;
+}
+}
+}
+}
+}
+
