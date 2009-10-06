@@ -9,10 +9,202 @@
   <type>display</type>
 
   <description>
-Reports EOL status for chassis components and JUNOS version.
-
+    <![CDATA[
+ This script scans the installed hardware components and reports if they are on
+ the EOL list.  It also checks the current JUNOS version against the JUNOS EOL
+ list and reports its status.
+ 
+ To perform chassis scans, copy and enable eol-scanner.slax as an op-script:
+ 1. Copy to /var/db/scripts/op
+ 2. Enable via set system scripts op file eol-scanner.slax
+ 
+ Then execute in the following manner:
+ user@junos> op eol-scanner
+ 
+ This script can also be run as an event script in JUNOS 9.3 and above by
+ following these instructions:
+ 1. Copy to /var/db/scripts/event
+ 2. Enable via set event-options event-script file eol-scanner.slax
+  
+ When run as an event script, every time a FRU is inserted the part will be 
+ checked against the EOL list.  A syslog message will be logged if the part 
+ appears on the list:
+ 
+ Oct  5 15:47:39  host cscript: New FRU: 710-009178 'M320 FPC Type 3' is on EOL list with status: No warranty conversion
+ 
+ Also, when run as an event script in JUNOS 9.4 about above the software support
+ status will be logged to the syslog at every reboot:
+ 
+ Oct  6 06:52:07  host cscript: JUNOS version 9.6 support status: Active engineering support
+ 
+ Caveats:
+ - Integrated FPC + PIC cards may not display correctly.
+ - Not all FRUs will be checked by the event script
+ 
+ If the script does not report the EOL components of your chassis correctly then
+ please email the following two outputs:
+ show chassis hardware | display xml
+ op eol-scanner
+ (Contact information can be retrieved by clicking on the upper-right link).
+ 
+ Minimum JUNOS Version: 8.2 (Unofficially, late versions of 7.6)
+ Latest Script Version: 1.0
+ MD5 Checksum: 6088db00621c255ff946d7a9b9fbd96e
+ SHA-256 Checksum: 2d2fe50949cb735b81daa7436125ac45858cd795b1e67457432277e7577ce8ae
+]]>
   </description>
+  <example>
+    <description>
+     <![CDATA[
+user@M20> op eol-scanner
+Performing best-effort scan for EOL parts and software.
+(Contact your Service Manager for a comprehensive report)
+Version: 1.0.  EOL lists updated: 10/06/2009
+Date format is: MM/DD/YYYY
 
+10 EOL parts found:
+-------------------
+
+PSN-2004-08-024   EOL Announced: 12/31/2001   Status: No longer supported
+-----------------------------------------------------------------------------
+        Last Order Date: 12/31/2001  Last Warranty Conversion: 12/31/2002
+  Same-day Support Ends: 12/31/2002     Next-Day Support Ends: 12/31/2003
+End New Release Support: 12/31/2003            End of Support: 12/31/2004
+
+Model Number          Part Number  Description
+---------------------------------------------------------------
+I-4GE-SX              750-002879   4-port GE-SX PIC+FPC
+FPC                   710-001292   FPC
+-----------------------------------------------------------------------------
+
+
+PSN-2007-07-019   EOL Announced: 06/30/2007   Status: No warranty conversion
+-----------------------------------------------------------------------------
+        Last Order Date: 12/31/2007  Last Warranty Conversion: 12/31/2008
+  Same-day Support Ends: 12/31/2009     Next-Day Support Ends: 12/31/2011
+End New Release Support: 09/30/2011            End of Support: 12/31/2012
+
+Model Number          Part Number  Description
+---------------------------------------------------------------
+CHAS-MP-M20-S         710-001517   M20 Backplane
+PWR-M20-AC-S          740-001465   AC Power Supply         (x2)
+CRAFT-M20-S           710-001519   M20 FPM Board
+SSB-E-16-M20          710-009790   Internet Processor IIv2
+-----------------------------------------------------------------------------
+
+
+PSN-2007-07-020   EOL Announced: 06/30/2007   Status: No longer orderable
+-----------------------------------------------------------------------------
+        Last Order Date: 12/31/2008  Last Warranty Conversion: 12/31/2009
+  Same-day Support Ends: 12/31/2009     Next-Day Support Ends: 12/31/2011
+End New Release Support: 09/30/2011            End of Support: 12/31/2012
+
+Model Number          Part Number  Description
+---------------------------------------------------------------
+P-1OC12-SON-MM        750-001020   1x OC-12 SONET, MM
+P-TUNNEL              750-001323   1x Tunnel
+-----------------------------------------------------------------------------
+
+
+PSN-2008-02-018   EOL Announced: 02/15/2008   Status: No warranty conversion
+-----------------------------------------------------------------------------
+        Last Order Date: 08/15/2008  Last Warranty Conversion: 08/15/2009
+  Same-day Support Ends: 08/15/2010     Next-Day Support Ends: 08/15/2012
+End New Release Support: 05/15/2012            End of Support: 08/15/2013
+
+Model Number          Part Number  Description
+---------------------------------------------------------------
+RE-600-2048-BB        740-005022   RE-3.0
+RE-600-2048-R
+RE-600-2048-S
+RE-600-2048-WW-S
+RE-M40-600-2048-S
+RE-M40-600-2048-WW-S
+RE-M40-600-2048-BB
+-----------------------------------------------------------------------------
+
+
+JUNOS EOL Status
+-----------------------------------------------------------------------------
+ Version: 7.6             Support status: End of life
+Released: 05/15/2006  End of Engineering: 02/15/2007  End of Life: 08/15/2007
+
+
+
+
+user@M320> op eol-scanner
+Performing best-effort scan for EOL parts and software.
+(Contact your Service Manager for a comprehensive report)
+Version: 1.0.  EOL lists updated: 10/06/2009
+Date format is: MM/DD/YYYY
+
+5 EOL parts found:
+-------------------
+
+PSN-2007-12-035   EOL Announced: 12/14/2007   Status: No warranty conversion
+-----------------------------------------------------------------------------
+        Last Order Date: 07/31/2008  Last Warranty Conversion: 07/31/2009
+  Same-day Support Ends: 07/31/2010     Next-Day Support Ends: 07/31/2012
+End New Release Support: 03/31/2012            End of Support: 07/31/2013
+
+Model Number          Part Number  Description
+---------------------------------------------------------------
+M320-FPC3             710-009178   M320 FPC Type 3         (x3)
+-----------------------------------------------------------------------------
+
+
+PSN-2008-02-019   EOL Announced: 02/15/2008   Status: No warranty conversion
+-----------------------------------------------------------------------------
+        Last Order Date: 08/15/2008  Last Warranty Conversion: 08/15/2009
+  Same-day Support Ends: 08/15/2010     Next-Day Support Ends: 08/15/2012
+End New Release Support: 05/15/2012            End of Support: 08/15/2013
+
+Model Number          Part Number  Description
+---------------------------------------------------------------
+RE-1600-2048-BB       740-008883   RE-4.0                  (x2)
+RE-1600-2048-R
+RE-1600-2048-S
+RE-1600-2048-WW-S
+-----------------------------------------------------------------------------
+
+
+JUNOS EOL Status
+-----------------------------------------------------------------------------
+ Version: 9.3             Support status: Active engineering support
+Released: 11/14/2008  End of Engineering: 11/14/2011  End of Life: 05/14/2012
+
+
+
+
+user@J4350> op eol-scanner
+Performing best-effort scan for EOL parts and software.
+(Contact your Service Manager for a comprehensive report)
+Version: 1.0.  EOL lists updated: 10/06/2009
+Date format is: MM/DD/YYYY
+
+1 EOL part found:
+-------------------
+
+PSN-2008-11-091   EOL Announced: 11/10/2008   Status: EOL announced
+-----------------------------------------------------------------------------
+        Last Order Date: 12/31/2009  Last Warranty Conversion: 12/31/2010
+  Same-day Support Ends: 12/31/2011     Next-Day Support Ends: 12/31/2013
+End New Release Support: 03/31/2012            End of Support: 12/31/2014
+
+Model Number          Part Number  Description
+---------------------------------------------------------------
+JXE-4FE-TX-S          750-013492   4x FE
+-----------------------------------------------------------------------------
+
+
+JUNOS EOL Status
+-----------------------------------------------------------------------------
+ Version: 9.6             Support status: Active engineering support
+Released: 08/06/2009  End of Engineering: 05/06/2010  End of Life: 11/06/2010
+
+]]>
+    </description>
+  </example>
   <keyword>display</keyword>
   <keyword>slax</keyword>
   <keyword>eol</keyword>
