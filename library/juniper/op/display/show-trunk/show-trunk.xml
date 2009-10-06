@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<script>
+  <title>show-trunk.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	Provide vlan information for all interfaces that are defined as trunk interfaces
+  </synopsis>
+  <coe>op</coe>
+  <type>display</type>
+
+  <description>
+  This op-script displays vlan information for all interfaces that are defined as trunk
+  
+
+  </description>
+
+  <keyword>slax</keyword>
+  <keyword>vlan</keyword>
+  <keyword>trunk</keyword>
+  <keyword>ex</keyword>
+  <example>
+    <title>Output</title>
+    <description>Output</description>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
