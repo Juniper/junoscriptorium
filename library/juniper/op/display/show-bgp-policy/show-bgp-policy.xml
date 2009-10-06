@@ -15,15 +15,15 @@ prefix because the policies will usually not appear in the desired order within 
 configuration.
 
 The configuration text for each policy in the policy chain for the selected peer is extracted by the script and then
-displayed to the console in the correct sequential order.  Through use of this op script, a user can earily read the 
-complete policy chaing from start to finish.
+displayed to the console in the correct sequential order.  Through use of this op script, a user can easily read the 
+complete policy chain from start to finish.
 
 Three are three command-line arguments:
-* neighbor - Specificies which BGP peer to view
-* direction - Either the import or export direction
+* neighbor - Specificy which BGP peer to view
+* direction - Choose the import or export direction
 * database - The policies can be viewed from either the committed database (the default), or the candidate database.
 
-Minimum JUNOS Version: 8.2.
+Minimum JUNOS Version: 8.2
 Latest Script Version: 1.0
 MD5 Checksum: 4b830f1cc024657d621d0668e4af092f
 SHA-256 Checksum: 963dd0f98f7f15d8728343b77d37e07b202362a7c8f682c464600fefeec86787
