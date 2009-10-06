@@ -32,7 +32,7 @@
  
  Oct  5 15:47:39  host cscript: New FRU: 710-009178 'M320 FPC Type 3' is on EOL list with status: No warranty conversion
  
- Also, when run as an event script in JUNOS 9.4 about above the software support
+ Also, when run as an event script in JUNOS 9.4 and above the software support
  status will be logged to the syslog at every reboot:
  
  Oct  6 06:52:07  host cscript: JUNOS version 9.6 support status: Active engineering support
@@ -47,7 +47,7 @@
  op eol-scanner
  (Contact information can be retrieved by clicking on the upper-right link).
  
- Minimum JUNOS Version: 8.2 (Unofficially, late versions of 7.6)
+ Minimum JUNOS Version: 8.2 (Unofficially, late revisions of 7.6-8.1 should work as well)
  Latest Script Version: 1.0
  MD5 Checksum: 6088db00621c255ff946d7a9b9fbd96e
  SHA-256 Checksum: 2d2fe50949cb735b81daa7436125ac45858cd795b1e67457432277e7577ce8ae
