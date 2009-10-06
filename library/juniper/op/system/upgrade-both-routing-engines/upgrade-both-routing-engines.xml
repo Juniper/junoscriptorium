@@ -15,7 +15,7 @@
   when initially deploying routers, not during production.
   
   The usage is simple, at a minimum specify the file parameter with the filename.
-  If the force or validate upgrade knobs are desired then those are be specified
+  If the force or validate upgrade knobs are desired then those should be specified
   on the command-line as well, otherwise they default to their default value.
  
   Minimum JUNOS Version: 8.2
