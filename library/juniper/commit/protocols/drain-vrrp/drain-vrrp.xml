@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>drain-vrrp.slax</title>
-  <author>curtisstephencall</author>
+  <author>matthews</author>
   <synopsis>
 	This script changes VRRP parameters if a named apply-group is also configured
   </synopsis>
