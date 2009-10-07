@@ -1,0 +1,160 @@
+/*
+ * Author        : Curtis Call
+ * Version       : 1.0
+ * Last Modified : October 7, 2009
+ * Platform      : all
+ * Release       : 9.4 and above
+ * License       : Public Domain
+ *
+ * This script provides a safe version of the clear bgp neighbor command.  That command
+ * allows an operator to accidently clear all BGP sessions when no peer is specified.
+ * This script requires "peer all" to be specified in order to clear all BGP peers,
+ * and it requires confirmation from the operator that they do indeed wish to clear
+ * all their BGP peers.
+ *
+ * Minimum JUNOS version is 9.4 due to the new jcs:input() extension function.
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Command-line arguments */
+var $arguments = {
+    <argument> {
+        <name> "peer";
+        <description> "Neighbor Address to drop or ALL for all sessions";
+    }
+    <argument> {
+        <name> "instance";
+        <description> "Perform action on specific routing-instance";
+    }
+    <argument> {
+        <name> "logical-system";
+        <description> "Perform action on specific logical-system or ALL";
+    }
+    <argument> {
+        <name> "refresh";
+        <description> "Specify 'soft', 'soft-inbound', or 'soft-minimum-igp'";
+    }
+}
+param $peer;
+param $logical-system;
+param $instance;
+param $refresh;
+
+/* The base BGP command, we'll add to this based on the selected options */
+var $base-command = "clear bgp neighbor";
+
+match / {
+    <op-script-results> {
+        
+        /* A peer is required, if not set then error and exit */
+        if( not( $peer ) ) {
+            <xsl:message terminate="yes"> "You must specify which peer you want to clear.";
+        }
+    
+        /* Convert to upper case to check if they specified all peers */ 
+        var $check-all = { call to-upper-case( $string = $peer ); }
+		
+        /* If peer ALL is used then ask for confirmation */
+		if( $check-all == "ALL" ) {
+		
+            /* Request confirmation from user */
+            var $response = jcs:input("This will clear ALL sessions\nAre you sure you want to do this? (yes/[no])" );
+			
+            /* Translate user response into upper case for easier matching */
+            var $check-response = { call to-upper-case( $string = $response ); }
+			
+            /* If they want to go ahead with it then assemble the command */
+            if( $check-response == "YES" ) { 
+			
+                /* Retrieve all BGP neighbors */
+                var $bgp-neighbors = jcs:invoke( "get-bgp-neighbor-information" );  
+                
+                var $results := {
+                    for-each( $bgp-neighbors/bgp-peer ) {
+                        /* Execute for each neighbor */
+                        call execute-command( $passed-command = $base-command _ " " _ peer-address );
+                    }
+                }
+                /* Return any errors */
+                for-each ( $results//xnm:error ) {
+                    copy-of .;
+                }
+                /* Report how many were cleared */
+                var $count = count( $results/*[. == "Cleared 1 connections"] );
+                if( $count > 0 ) {
+                    <output> "Cleared " _ $count _ " connections";
+                }
+            }
+            /* They decided not to clear all the sessions */
+            else {
+                <output> "Clear ALL cancelled";
+            }
+        }
+		/* In this case, a specific peer has been specified */
+        else {
+            /* Execute with the base-command and a specific peer */
+            call execute-command( $passed-command = $base-command _ " " _ $peer );
+        }
+    }
+}
+
+/*
+ * This template executes the provided command along with any set global
+ * parameters and prints the output to the screen.
+ */
+ 
+template execute-command( $passed-command ) {
+	
+    var $command-string = {
+        expr $passed-command;
+        if( string-length($refresh) > 0 ) {
+            if( $refresh == "soft" ) {
+                expr " soft";
+            }
+            else if( $refresh == "soft-inbound" ) { 
+                expr " soft-inbound";
+            }
+            else if( $refresh == "soft-minimum-igp" ) {
+                expr " soft-minimum-igp";
+            }
+            else { /* Invalid setting, complain and exit now */
+                <xsl:message terminate="yes"> "Invalid refresh argument: " _ $refresh;
+            }
+        }	
+        if( string-length($instance) > 0 ) {
+            expr " instance " _ $instance;
+        }
+        if( string-length($logical-system) > 0 ) {
+            expr " logical-system " _ $logical-system;
+        }	
+    }
+
+    /* There is no rpc for this command until JUNOS 9.6 so we have to do the raw command */
+    var $command = <rpc> {
+        <command> $command-string;
+    }
+
+    /* Execute the assembled command and print any output to the screen */
+    var $result = jcs:invoke( $command );
+    /* 
+     * Copy any output from the command to the screen.  Either error or
+     * success will be shown to the user.  Use jcs:output so that the output
+     * is shown inline with the other commands.
+     */
+    copy-of $result;
+}
+
+/*
+ * Converts the provided string into upper case and returns the upper case
+ * string to the starting template for variable assignment.
+ */ 
+template to-upper-case( $string = "" ) {
+    expr translate( $string, "abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ" );
+}

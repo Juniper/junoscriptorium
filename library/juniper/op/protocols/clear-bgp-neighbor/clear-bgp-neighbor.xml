@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<script>
+  <title>clear-bgp-neighbor.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	Safe version of clear bgp neighbor, requires confirmation before clearing all peers.
+  </synopsis>
+  <coe>op</coe>
+  <type>protocols</type>
+
+  <description>
+<![CDATA[
+ This script provides a safe version of the clear bgp neighbor command.  That command
+ allows an operator to accidently clear all BGP sessions when no peer is specified.
+ This script requires "peer all" to be specified in order to clear all BGP peers,
+ and it requires confirmation from the operator that they do indeed wish to clear
+ all their BGP peers.
+
+ Minimum JUNOS Version: 9.4.
+ Latest Script Version: 1.0
+ MD5 Checksum: 25fce00659624c11c49d99101564be1d
+ SHA-256 Checksum: bd7ff2f070008a05c6a5ea44ed9ead97bd26db274021c2d61f25db689a0e3f6c
+]]>
+
+  </description>
+
+  <keyword>slax</keyword>
+  <keyword>bgp</keyword>
+  <keyword>clear</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
