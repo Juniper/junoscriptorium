@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<script>
+  <title>utility-mib-helper.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	Simplifies working with the SNMP Utility MIB
+  </synopsis>
+  <coe>op</coe>
+  <type>snmp</type>
+
+  <description>
+utility-mib-help performs a handful of small but very useful tasks related to the Utility MIB.
+
+Possible Actions:
+
+walk-mib - This performs a MIB walk of all the Utility MIB values.  Each object can be displayed
+in either oid or ascii format.
+
+get-instance - Retrieves an instance from the Utility MIB.  The object-type must be specified.
+
+set-instance - Sets an instance into the Utility MIB.  The object-type must be specified.
+
+clear-instance - Removes an instance from the Utility MIB.  The object-type must be specified.
+
+clear-instance-regex - Removes multiple instances from the Utility MIB, based on a regular
+expression.  The object-types are ignored.
+
+
+Minimum JUNOS Version: 8.4
+Latest Script Version: 1.0
+MD5 Checksum: 1ed1d48364f3cc62aa5feb87b9eb7e4a
+SHA-256 Checksum: 51df53bcaea3ef2891122b185271c711c26e4ce6cc34570a65bce49c631bd2aa
+
+  </description>
+
+  <keyword>slax</keyword>
+  <keyword>snmp</keyword>
+  <keyword>utility-mib</keyword>
+  <keyword>regex</keyword>
+  <example>
+    <title>Usage Example</title>
+    <description>utility-mib-helper.slax performing various actions</description>
+    <output>example-1.output</output>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

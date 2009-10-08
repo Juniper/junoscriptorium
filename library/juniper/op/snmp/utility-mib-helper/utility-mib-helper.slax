@@ -1,0 +1,481 @@
+/*
+ * Author        : Curtis Call
+ * Version       : 1.0
+ * Last Modified : October 8, 2009
+ * Platform      : all
+ * Release       : 8.4 and above
+ * License       : Public Domain
+ *
+ * Description   : utility-mib-helper is a script designed to perform helpful actions
+ * to the SNMP Utility MIB:
+ *
+ * walk-mib - Display the Utility MIB with the instances names optionally printed in 
+ * ASCII.  This ability to view them in ascii was added into JUNOS 9.6, but 
+ * utility-mib-helper can be used to achieve this as far back as JUNOS 8.4.
+ *
+ * clear-instance - Clears a specific instance from the Utility MIB.
+ *
+ * clear-instance-regex - Clears multiple instances based on a regex value
+ *
+ * get-instance - Displays a specific instance in the Utility MIB.
+ *
+ * set-instance - Add/Edit an instance in the Utility MIB
+ *
+ */ 
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+/* Command line arguments */
+var $arguments = {
+    <argument> {
+        <name> "walk-mib";
+        <description> "Walk all instance values in the Utility MIB.  Either 'ascii' or 'oid' format should be selected.";
+    }
+    <argument> {
+        <name> "get-instance";
+        <description> "Display instance in Utility MIB.  An object-type is required.";
+    }
+    <argument> {
+        <name> "clear-instance";
+        <description> "Remove instance from Utility MIB.  An object-type is required.";
+    }
+    <argument> {
+        <name> "clear-instance-regex";
+        <description> "Clear multiple instances from Utility MIB, regardless of object-type, using a regex.";
+    }
+    <argument> {
+        <name> "set-instance";
+        <description> "Add/edit instance in Utility MIB.  An object-type and object-value are required.";
+    }
+    <argument> {
+        <name> "object-type";
+        <description> "The object data type: string, integer, unsigned-integer, counter, counter64.";
+    }
+    <argument> {
+        <name> "object-value";
+        <description> "The object data value.";
+    }
+}
+param $walk-mib;
+param $clear-instance;
+param $get-instance;
+param $set-instance;
+param $clear-instance-regex;
+param $object-type;
+param $object-value;
+
+
+/*
+ * Main match / template.  Determine what action should be taken and call the appropriate
+ * template to perform it.
+ */
+match / {
+    <op-script-results> {
+    
+        /* Count actions, exit if more than one is attempted */
+        var $action-count = { call count-actions(); }
+        if( $action-count == 0 ) {
+            expr jcs:output("Nothing to do...");
+        }
+        else if( $action-count  > 1 ) {
+            expr jcs:output("Only one action at a time please...");
+        }
+        else if( string-length( $walk-mib ) > 0 ) {
+            call walk-mib();
+        }
+        else if( string-length( $clear-instance-regex ) > 0 ) {
+            call clear-instance-regex();
+        }
+        /* Complain about a missing type - the rest need one */
+        else if( string-length( $object-type ) == 0 ) {
+            expr jcs:output("An object-type must be specified for that action.");
+        }
+        else if( string-length( $clear-instance ) > 0 ) {
+            call clear-instance();
+        }
+        else if( string-length( $get-instance ) > 0 ) {
+            call get-instance();
+        }
+        /* Complain about a missing value - the rest need one */
+        else if( string-length( $object-value ) == 0 ) {
+            expr jcs:output("An object-value must be specified for that action.");
+        }
+        else if( string-length( $set-instance ) > 0 ) {
+            call set-instance();
+        }
+    }
+}
+
+
+/*
+ * count-actions - Determine how many command-line actions were requested and return 
+ * the count in the result tree.
+ */
+template count-actions() {
+    var $count-rtf = {
+        if( string-length( $walk-mib ) > 0 ) {
+            <count>;
+        }
+        if( string-length( $clear-instance ) > 0 ) {
+            <count>;
+        }
+        if( string-length( $get-instance ) > 0 ) {
+            <count>;
+        }
+        if( string-length( $set-instance ) > 0 ) {
+            <count>;
+        }
+        if( string-length( $clear-instance-regex ) > 0 ) {
+            <count>;
+        }
+    }
+    
+    /* Convert the old-school way */
+    var $count-set = ext:node-set( $count-rtf );
+    
+    /* Write the count */
+    expr count( $count-set/count );
+}
+
+
+/*
+ * walk-mib - Walks the Utility MIB in ascii or oid mode
+ */
+template walk-mib() {
+
+    /* Gather walk output */
+    var $walk-rpc = {
+        <walk-snmp-object> {
+            <snmp-object-name> "jnxUtil";
+        }
+    }
+    var $mib-objects = jcs:invoke( $walk-rpc );
+
+    for-each( $mib-objects/snmp-object[ jcs:regex( "jnxUtil.*Value\\.", name ) ] ) {
+        var $name = {
+            if( $walk-mib == "oid" ) {
+                expr name;
+            }
+            else {
+                call translate-to-instance-format( $oid-name = name );
+            }
+        }
+        expr jcs:output( $name, " = ", object-value );
+    }
+}
+
+
+/*
+ * get-instance - Writes the instance value to the console
+ */
+template get-instance() {
+    
+    var $instance = $get-instance;
+    var $type = $object-type;
+
+    /* Retrieve the OID and type name */
+    var $oid-name = { call build-oid-name( $instance, $type ); }
+    var $type-name = { call get-type-name( $type ); }
+    
+    /* Build RPC and invoke it */ 
+    var $rpc = {
+        <get-snmp-object> {
+            <snmp-object-name> $oid-name;
+        }
+    }
+    var $object = jcs:invoke( $rpc );
+
+    /* If there is an error then report it */
+    if( $object/..//xnm:error ) {
+        for-each( $object/..//xnm:error ) {
+            expr jcs:output( "ERROR: ", . );
+        }
+    }
+    /* Display value */
+    else {
+        expr jcs:output( $type-name, ".", $instance, " = ", $object/snmp-object/object-value );
+    }
+}
+ 
+ 
+/*
+ * clear-instance - Removes the instance from the MIB
+ */
+template clear-instance() {
+    
+    var $instance = $clear-instance;
+    var $type = $object-type;
+
+    /* Build RPC and invoke it */ 
+    var $rpc = {
+        <request-snmp-utility-mib-clear> {
+            <instance> $instance;
+            <object-type> $type;
+        }
+    }
+    var $results = jcs:invoke( $rpc );
+    /* Copy results to result tree to display to user */
+    copy-of $results;
+}
+
+
+/*
+ * clear-instance-regex - Removes multiple instances from the MIB based on the regex
+ */
+template clear-instance-regex() {
+    
+    var $instance-regex = $clear-instance-regex;
+
+    /* First walk the MIB and gather all instances */
+    var $walk-rpc = {
+        <walk-snmp-object> {
+            <snmp-object-name> "jnxUtil";
+        }
+    }
+    var $mib-objects = jcs:invoke( $walk-rpc );
+
+    /* Gather all instances that match the regex, regardless of the object-type */
+    var $objects-rtf = {
+        for-each( $mib-objects/snmp-object[ jcs:regex( "jnxUtil.*Value\\.", name ) ] ) {
+            var $name = { call translate-to-instance-format( $oid-name = name ); }
+            
+            /* Check if the instance matches the regex */
+            var $result = jcs:regex( $instance-regex, substring-after( $name, "." ) );
+            if( not( jcs:empty( $result ) ) ) {
+                <object> $name;
+            }
+        }
+    }
+    /* old-school conversion */
+    var $objects-set = ext:node-set( $objects-rtf );
+
+    /* Report how many will be cleared */
+    if( count( $objects-set/object ) > 0 ) {
+        expr jcs:output( "[" , count( $objects-set/object ), " instances will be cleared]" );
+    }
+    else {
+        expr jcs:output("No instances match that regular expression." );
+    }
+    
+    /* Go through and clear each one */
+    for-each( $objects-set/object ) {
+        /* Display the name */
+        <output> "Clearing " _ . _ ":";
+        
+        var $type = { call get-object-type( $mib-type-name = substring-before( ., "." ) ); }
+        var $instance = substring-after( ., "." );
+        /* Only remove if it has a valid type */
+        if( string-length( $type ) > 0 ) {
+            /* Build RPC and invoke it */ 
+            var $rpc-clear = {
+                <request-snmp-utility-mib-clear> {
+                    <instance> $instance;
+                    <object-type> $type;
+                }
+            }
+            var $results = jcs:invoke( $rpc-clear );
+            /* Copy results to result tree to display to user */
+            copy-of $results;
+        }
+    }
+}
+
+
+/*
+ * set-instance - Sets the instance in the MIB
+ */
+template set-instance() {
+    
+    var $instance = $set-instance;
+    var $type = $object-type;
+
+    /* Build RPC and invoke it */ 
+    var $rpc = {
+        <request-snmp-utility-mib-set> {
+            <instance> $instance;
+            <object-type> $type;
+            <object-value> $object-value;
+        }
+    }
+    var $results = jcs:invoke( $rpc );
+    /* Copy results to result tree to display to user */
+    copy-of $results;
+}
+
+
+/*
+ * get-type-name - Converts $type into MIB string type name
+ *
+ * $type - Data type = string, counter, count64, integer, or unsigned-integer
+ *
+ * Returns the MIB string type name in the result tree
+ */
+template get-type-name( $type ) {
+    if( $type == "string" ) {
+        expr "jnxUtilStringValue";
+    }
+    else if( $type == "counter" ) {
+        expr "jnxUtilCounter32Value";
+    }
+    else if( $type == "integer" ) {
+        expr "jnxUtilIntegerValue";
+    }
+    else if( $type == "counter64" ) {
+        expr "jnxUtilCounter64Value";
+    }
+    else if( $type == "counter" ) {
+        expr "jnxUtilUintValue";
+    }
+    else {
+        expr jcs:output("ERROR: Invalid data type: ", $type );
+    }
+}
+
+
+/*
+ * get-object-type - Converts MIB string type name into object-type
+ *
+ * $mib-type-name - jnxUtilStringValue, jnxUtilCounter32Value, jnxUtilIntegerValue,
+ * jnxUtilUintValue, or unxUtilCounter64Value
+ *
+ * Returns the object-type in the result tree
+ */
+template get-object-type( $mib-type-name ) {
+    if( $mib-type-name == "jnxUtilStringValue" ) {
+        expr "string";
+    }
+    else if( $mib-type-name == "jnxUtilCounter32Value" ) {
+        expr "counter";
+    }
+    else if( $mib-type-name == "jnxUtilIntegerValue" ) {
+        expr "integer";
+    }
+    else if( $mib-type-name == "jnxUtilCounter64Value" ) {
+        expr "counter64";
+    }
+    else if( $mib-type-name == "jnxUtilUintValue" ) {
+        expr "counter";
+    }
+    else {
+        expr jcs:output("ERROR: Invalid type name: ", $mib-type-name );
+    }
+}
+
+
+/*
+ * translate-to-instance-format - Translates an OID name into a corresponding
+ * instance name
+ *
+ * $oid-name - The oid name returned by <walk-snmp-object>.
+ *
+ * Returns the instance formatted name in the result tree
+ */
+template translate-to-instance-format( $oid-name ) {
+    
+    /* Get the type portion of name */
+    var $type-name = substring-before( $oid-name, "." );
+    
+    /* The oid portion */
+    var $oid = substring-after( $oid-name, "." );
+    
+    /* Break up the parts into different numbers */
+    var $number-set = jcs:split("\\.", $oid );
+    
+    /* Convert everything to characters */
+    var $instance-name = {
+        for-each( $number-set ) {
+            var $number = .;
+            /* Use substring to workaround PR 436699 */
+            expr substring( $ascii-set/char[num == $number]/sym, 1, 1 ); 
+        }
+    }
+    
+    /* Combine the two parts and write to result tree */
+    expr $type-name _ "." _ $instance-name;
+}
+ 
+ 
+/*
+ * build-oid-name - Translates the $instance and $type into a valid OID name for
+ * use with <get-snmp-object>.
+ *
+ * $instance - The Utility MIB instance name
+ * $type - string, counter, counter64, integer, or unsigned-integer
+ *
+ * Writes the full OID name to the result tree.
+ */
+template build-oid-name( $instance, $type ) {
+
+    /* Build the type portion of the name */
+    var $string-portion = { call get-type-name( $type ); }
+
+    /* Split the name into characters */    
+    var $characters-rtf = { call split-chars( $string = $instance ); }
+    /* Convert old-school style */
+    var $characters-set = ext:node-set( $characters-rtf );
+    
+    var $number-portion = {
+        for-each( $characters-set/char ) {
+    
+            /* Convert the characters to their ASCII code equivalent */
+            var $char = .;
+            /* Use substring to workaround PR 436699 */
+            var $ascii-char = $ascii-set/char[ substring( sym, 1, 1 ) == $char ];
+            expr "." _ $ascii-char/num;
+        }
+    }
+    
+    /* Return the full string */
+    expr $string-portion _ $number-portion;
+}
+
+
+/*
+ * split-chars - Recursive template that converts a string into a XML structure
+ * of <char> elements.  With one <char> per letter.
+ *
+ * $string - The string to convert
+ *
+ * Writes multiple <char> elements to the result tree.
+ */
+template split-chars( $string ) {
+    if( string-length( $string) > 0 ) {
+        <char> substring( $string, 1, 1 );
+        
+        /* Go recursive if necessary */
+        if( string-length( $string ) > 1 ) {
+            call split-chars( $string = substring( $string, 2 ) );
+        }
+    }
+}
+
+
+var $ascii-rtf = {
+<char> { <num> 32; <sym xml:space="preserve"> " "; }<char> { <num> 33; <sym> "!"; }<char> { <num> 34; <sym> "\""; }<char> { <num> 35; <sym> "#"; }<char> { <num> 36; <sym> "$"; }
+<char> { <num> 37; <sym> "%"; }<char> { <num> 38; <sym> "&"; }<char> { <num> 39; <sym> "'"; }<char> { <num> 40; <sym> "("; }<char> { <num> 41; <sym> ")"; }
+<char> { <num> 42; <sym> "*"; }<char> { <num> 43; <sym> "+"; }<char> { <num> 44; <sym> ","; }<char> { <num> 45; <sym> "-"; }<char> { <num> 46; <sym> "."; }
+<char> { <num> 47; <sym> "/"; }<char> { <num> 48; <sym> "0"; }<char> { <num> 49; <sym> "1"; }<char> { <num> 50; <sym> "2"; }<char> { <num> 51; <sym> "3"; }
+<char> { <num> 52; <sym> "4"; }<char> { <num> 53; <sym> "5"; }<char> { <num> 54; <sym> "6"; }<char> { <num> 55; <sym> "7"; }<char> { <num> 56; <sym> "8"; }
+<char> { <num> 57; <sym> "9"; }<char> { <num> 58; <sym> ":"; }<char> { <num> 59; <sym> ";"; }<char> { <num> 60; <sym> "<"; }<char> { <num> 61; <sym> "="; } /* >" */
+<char> { <num> 62; <sym> ">"; }<char> { <num> 63; <sym> "?"; }<char> { <num> 64; <sym> "@"; }<char> { <num> 65; <sym> "A"; }<char> { <num> 66; <sym> "B"; }
+<char> { <num> 67; <sym> "C"; }<char> { <num> 68; <sym> "D"; }<char> { <num> 69; <sym> "E"; }<char> { <num> 70; <sym> "F"; }<char> { <num> 71; <sym> "G"; }
+<char> { <num> 72; <sym> "H"; }<char> { <num> 73; <sym> "I"; }<char> { <num> 74; <sym> "J"; }<char> { <num> 75; <sym> "K"; }<char> { <num> 76; <sym> "L"; }
+<char> { <num> 77; <sym> "M"; }<char> { <num> 78; <sym> "N"; }<char> { <num> 79; <sym> "O"; }<char> { <num> 80; <sym> "P"; }<char> { <num> 81; <sym> "Q"; }
+<char> { <num> 82; <sym> "R"; }<char> { <num> 83; <sym> "S"; }<char> { <num> 84; <sym> "T"; }<char> { <num> 85; <sym> "U"; }<char> { <num> 86; <sym> "V"; }
+<char> { <num> 87; <sym> "W"; }<char> { <num> 88; <sym> "X"; }<char> { <num> 89; <sym> "Y"; }<char> { <num> 90; <sym> "Z"; }<char> { <num> 91; <sym> "["; }
+<char> { <num> 92; <sym> "\\"; }<char> { <num> 93; <sym> "]"; }<char> { <num> 94; <sym> "^"; }<char> { <num> 95; <sym> "_"; }<char> { <num> 96; <sym> "`"; }
+<char> { <num> 97; <sym> "a"; }<char> { <num> 98; <sym> "b"; }<char> { <num> 99; <sym> "c"; }<char> { <num> 100; <sym> "d"; }<char> { <num> 101; <sym> "e"; }
+<char> { <num> 102; <sym> "f"; }<char> { <num> 103; <sym> "g"; }<char> { <num> 104; <sym> "h"; }<char> { <num> 105; <sym> "i"; }<char> { <num> 106; <sym> "j"; }
+<char> { <num> 107; <sym> "k"; }<char> { <num> 108; <sym> "l"; }<char> { <num> 109; <sym> "m"; }<char> { <num> 110; <sym> "n"; }<char> { <num> 111; <sym> "o"; }
+<char> { <num> 112; <sym> "p"; }<char> { <num> 113; <sym> "q"; }<char> { <num> 114; <sym> "r"; }<char> { <num> 115; <sym> "s"; }<char> { <num> 116; <sym> "t"; }
+<char> { <num> 117; <sym> "u"; }<char> { <num> 118; <sym> "v"; }<char> { <num> 119; <sym> "w"; }<char> { <num> 120; <sym> "x"; }<char> { <num> 121; <sym> "y"; }
+<char> { <num> 122; <sym> "z"; }<char> { <num> 123; <sym> "{"; }<char> { <num> 124; <sym> "|"; }<char> { <num> 125; <sym> "}"; }<char> { <num> 126; <sym> "~"; }
+}
+/* old-school conversion */
+var $ascii-set = ext:node-set( $ascii-rtf );

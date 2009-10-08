@@ -1,0 +1,26 @@
+jnpr@Jawa-RE0> op utility-mib-helper set-instance example1 object-type string object-value 123
+Utility mib result: successfully populated utility mib database
+
+jnpr@Jawa-RE0> op utility-mib-helper set-instance example2 object-type counter object-value 123
+Utility mib result: successfully populated utility mib database
+
+jnpr@Jawa-RE0> op utility-mib-helper set-instance example2 object-type string object-value hey!
+Utility mib result: successfully populated utility mib database
+
+jnpr@Jawa-RE0> op utility-mib-helper walk-mib ascii
+jnxUtilCounter32Value.example2 = 123
+jnxUtilStringValue.example1 = 123
+jnxUtilStringValue.example2 = hey!
+
+jnpr@Jawa-RE0> op utility-mib-helper clear-instance-regex .*
+[3 instances will be cleared]
+Clearing jnxUtilCounter32Value.example2:
+Utility mib result: successfully de-populated utility mib database
+Clearing jnxUtilStringValue.example1:
+Utility mib result: successfully de-populated utility mib database
+Clearing jnxUtilStringValue.example2:
+Utility mib result: successfully de-populated utility mib database
+
+jnpr@Jawa-RE0> op utility-mib-helper walk-mib ascii
+
+jnpr@Jawa-RE0>
