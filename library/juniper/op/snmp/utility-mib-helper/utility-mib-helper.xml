@@ -9,7 +9,7 @@
   <type>snmp</type>
 
   <description>
-utility-mib-help performs a handful of small but very useful tasks related to the Utility MIB.
+utility-mib-helper performs a handful of small but very useful tasks related to the Utility MIB.
 
 Possible Actions:
 
@@ -39,7 +39,6 @@ SHA-256 Checksum: 51df53bcaea3ef2891122b185271c711c26e4ce6cc34570a65bce49c631bd2
   <keyword>regex</keyword>
   <example>
     <title>Usage Example</title>
-    <description>utility-mib-helper.slax performing various actions</description>
     <output>example-1.output</output>
   </example>
 
