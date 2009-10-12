@@ -1,0 +1,47 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+
+param $file = "rtt-details.prf";
+
+match / {
+    /*
+     * Get the rtt details for the last 60 minutes
+     */
+    var $rpc = <get-accounting-file-record-information> {
+  	  <file> $file;
+	   <since> "-3600";
+    }
+    var $results = jcs:invoke($rpc);
+
+    for-each ($results/file-accounting-records/file-accounting-record/message) {
+
+	var $translated = {
+	    call replace-string($text = ., $from = "~", $to = " ");
+	}
+	expr jcs:output($translated);
+    }
+}
+
+template replace-string ($text, $from, $to) {
+
+    if (contains($text, $from)) {
+        var $before = substring-before($text, $from);
+        var $after = substring-after($text, $from);
+        var $prefix = $before _  $to;
+
+        expr $before;
+        expr $to;
+        call replace-string($text = $after, $from, $to);
+    
+    } else {
+        expr $text;
+    }
+}
+

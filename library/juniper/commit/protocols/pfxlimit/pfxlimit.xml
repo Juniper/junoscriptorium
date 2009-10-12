@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<script>
+  <title>pfxlimit.slax</title>
+  <author>phil</author>
+  <synopsis>
+	Provides a simplified interface to creating and managing prefix-limits on BGP neighbors
+  </synopsis>
+  <coe>commit</coe>
+  <type>protocols</type>
+
+  <description>
+By providing a separate configuration for prefix-limits, configure BGP "family" settings can be inherited from higher-level groups without requiring restating of the family settings for every BGP neighbor.
+
+  </description>
+
+  <keyword>prefix</keyword>
+  <keyword>interface</keyword>
+  <example>
+    <title>Sample Output</title>
+    <description>Configuration required for this commit script</description>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
