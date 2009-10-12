@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>ex-add-accept.slax</title>
-  <alternate>ex-add-accept.xsl</alternate>
+  <title>add-accept.slax</title>
+  <alternate>add-accept.xsl</alternate>
   <author>phil</author>
   <synopsis>
     Adds a 'then accept' to firewall filters that do not have one
@@ -25,8 +25,8 @@
   </implementation>
 
   <example>
-    <config>ex-add-accept.conf</config>
-    <output>ex-add-accept.output</output>
+    <config>add-accept.conf</config>
+    <output>add-accept.output</output>
   </example>
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" type="text/javascript"/>
