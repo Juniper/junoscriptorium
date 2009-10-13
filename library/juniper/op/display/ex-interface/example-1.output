@@ -24,9 +24,9 @@ me0.0       up     mgmt                 unblocked
  
 What the customer wanted was the output to include the "description" field from each interface.
  
-Output from the operation script "ex-interface"
+Output from the operation script "interface"
 
-jnpr@VC2-SPP> op ex-interface
+jnpr@VC2-SPP> op interface
 Interface  State  VLAN Member           Blocked     Description
 ae0        up     vlan200               unblocked  
 ae1        up     vlan200               RTG Blocked
@@ -44,9 +44,9 @@ ge-1/0/0   down   vlan200               unblocked   Link to NY
 ge-2/0/0   up     netman                unblocked 
 
 
-Output from the operation script limited to a member "ex-interface fpc 1"
+Output from the operation script limited to a member "interface fpc 1"
 
-jnpr@VC2-SPP> op ex-interface fpc 1
+jnpr@VC2-SPP> op interface fpc 1
 Interface  State  VLAN Member           Blocked     Description
 ge-1/0/0   down   vlan200               unblocked   Link to NY
 
