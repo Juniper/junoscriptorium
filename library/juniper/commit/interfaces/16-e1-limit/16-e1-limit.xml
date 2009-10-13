@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>ex-16-e1-limit.slax</title>
-  <alternate>ex-16-e1-limit.xsl</alternate>
+  <title>16-e1-limit.slax</title>
+  <alternate>16-e1-limit.xsl</alternate>
   <author>phil</author>
   <synopsis>
     Limit the number of channelized e1 interfaces on a  cstm1 interface
@@ -24,8 +24,8 @@
   </implementation>
 
   <example>
-    <config>ex-16-e1-limit.conf</config>
-    <errors>ex-16-e1-limit.output</errors>
+    <config>16-e1-limit.conf</config>
+    <errors>16-e1-limit.output</errors>
   </example>
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" type="text/javascript"/>
