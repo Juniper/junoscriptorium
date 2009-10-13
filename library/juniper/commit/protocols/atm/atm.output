@@ -48,7 +48,7 @@ groups {
 system {
     scripts {
         commit {
-            file ex-atm.slax;
+            file atm.slax;
         }
     }
     ## Warning: missing mandatory statement(s): 'root-authentication'
