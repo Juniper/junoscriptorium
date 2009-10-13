@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>ex-import.slax</title>
-  <alternate>ex-import.xsl</alternate>
+  <title>import.slax</title>
+  <alternate>import.xsl</alternate>
   <author>phil</author>
   <synopsis>
     Require that import policies do  contain bare 'then accept' terms
@@ -23,9 +23,9 @@
     likely not sufficient, but can easily be tuned or improved.
   </implementation>
   <example>
-    <config>ex-import.conf</config>
+    <config>import.conf</config>
     <title>A simple configuration</title>
-    <errors>ex-import.output</errors>
+    <errors>import.output</errors>
   </example>
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" type="text/javascript"/>
