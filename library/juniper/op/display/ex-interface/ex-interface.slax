@@ -1,6 +1,6 @@
 /*
 *
-*    NAME: interface.slax
+*    NAME: ex-interface.slax
 *    PURPOSE: Enhance the output of the
 *             "show ethernet-switching interfaces" command.
 *
