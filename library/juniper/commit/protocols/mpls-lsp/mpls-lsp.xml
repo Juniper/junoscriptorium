@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>ex-anton.slax</title>
-  <alternate>ex-anton.xsl</alternate>
+  <title>mpls-lsp.slax</title>
+  <alternate>mpls-lsp.xsl</alternate>
   <author>phil</author>
   <synopsis>Turn a list of addresses into a list of MPLS LSPs</synopsis>
   <keyword>MPLS</keyword>
@@ -18,9 +18,9 @@
   </implementation>
 
   <example>
-    <config>ex-anton.conf</config>
+    <config>mpls-lsp.conf</config>
     <title>A simple configuration</title>
-    <output>ex-anton.output</output>
+    <output>mpls-lsp.output</output>
   </example>
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" type="text/javascript"/>

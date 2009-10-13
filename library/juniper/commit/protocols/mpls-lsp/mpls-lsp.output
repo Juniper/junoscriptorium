@@ -5,7 +5,7 @@ system {
     scripts {
         commit {
             allow-transients;
-            file ex-anton.slax;
+            file mpls-lsp.slax;
         }
     }
     ## Warning: missing mandatory statement(s): 'root-authentication'
