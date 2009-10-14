@@ -1,0 +1,61 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+/* 
+ * Created by Michael Pergament, mpergament@juniper.net, Rel.1 - 
+ *
+ * This scripts limits the number of MAC addresses and set bpdu-drop
+ * on access ports based on description
+ *
+ * If description contains MACLIM then number of MAC addressed is limited
+ * to 100 + action is set to drop
+ *
+ * If description contains BPDUDROP then bpdu-drop is set on this port.
+ */
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match configuration {
+    var $top = .;
+    
+    for-each (interfaces/interface/unit[family/ethernet-switching[port-mode == "access"]]) {
+        var $phyifname = ../name;
+        var $ifname = ../name _ "." _ name;
+        var $if = $top/ethernet-switching-options/secure-access-port/interface[starts-with(name, $ifname)];
+        var $descr = $top/interfaces/interface[name == $phyifname]/description;
+        var $maclimit = contains($descr, "MACLIM");
+        var $bpdudrop = contains($descr, "BPDUDROP");
+        
+        if (not($if) && $maclimit) {
+            <change> {
+                <ethernet-switching-options> {
+                    <secure-access-port> {
+                        <interface> {
+                            <name> $ifname;
+                            <mac-limit> {
+                                <limit> "100";
+                                <action> "drop";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (not($if) && $bpdudrop) {
+            <change> {
+                <ethernet-switching-options> {
+                    <bpdu-block> {
+                        <interface> {
+                            <name> $ifname;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

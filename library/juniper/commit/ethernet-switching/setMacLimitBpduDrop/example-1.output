@@ -1,0 +1,7 @@
+Usage:
+
+1) Save the script under /var/db/scripts/commit
+2) "set systems script commit file setMacLimitBpduDrop.xsl"
+3) "set interface ge-0/0/20.0 family Ethernet-switching port-mode access description
+   "Test1_MACLIM_BPDUDROP_PROFX"
+4) commit
