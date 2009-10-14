@@ -1,0 +1,111 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+
+/*
+- ex-vrf-import.xsl v0.1 Created by travisohara@juniper.net
+-
+- Usage :
+-   lab@r2# show routing-instances
+-   myvrf1 {
+-       apply-macro vrf-targets {   # Mandatory
+-           1 aaaa:bbbbbb;    # Mandatory
+-           2 cccc:dddddd;
+-       }
+-
+- Will automatically create either single route target or multiple
+- route targets using policies.  Use of the key-word 'vrf-targets' is
+- required to identify the macro and numbering or the route
+- distinguishers and route distinguishers are mandatory.
+ */
+import "../import/junos.xsl";
+match configuration {
+    /* selecting the macros and creating variables */
+    for-each (routing-instances/instance/apply-macro[name = 'vrf-targets']) {
+        var $rin = ../name;
+        var $vrfi = $rin _ '-import';
+        var $vrfe = $rin _ '-export';
+        
+        if (count(data) = 1) {
+            /* Creating IF test for Single RT */
+            <xnm:warning> {
+                call jcs:statement();
+                <message> {
+                    expr "Single RT contained in vrf targets macro for this instance ";
+                    expr $rin;
+                }
+            }
+        
+        } else {
+            /* creating change for multiple rt's */
+            <transient-change> {
+                /* creating policy references within vrf */
+                <routing-instances> {
+                    <instance> {
+                        <name> $rin;
+                        <vrf-import> {
+                            <name> $vrfi;
+                        }
+                        <vrf-export> {
+                            <name> $vrfe;
+                        }
+                    }
+                }
+                /* Creating import policy */
+                <policy-options> {
+                    <policy-statement> {
+                        <name> $vrfi;
+                        <term> {
+                            <name> "import-rt";
+                            <from> {
+                                for-each (data) {
+                                    <community> $rin _  '-rt' _  name;
+                                }
+                            }
+                            <then> {
+                                <accept>;
+                            }
+                        }
+                        <term> {
+                            <name> "drop-others";
+                            <then> {
+                                <reject>;
+                            }
+                        }
+                    }
+                }
+
+                /* Creating export policy */
+                <policy-options> {
+                    <policy-statement> {
+                        <name> $vrfe;
+                        <term> {
+                            <name> "export-rt";
+                            <then> {
+                                for-each (data) {
+                                    <community> {
+                                        <add>;
+                                        <community-name> $rin _  '-rt' _  name;
+                                    }
+                                }
+                                <accept>;
+                            }
+                        }
+                    }
+
+		    /* Creating communities */
+                    for-each (data) {
+                        <community> {
+                            <name> $rin _  '-rt' _  name;
+                            <members> 'target:' _  value;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

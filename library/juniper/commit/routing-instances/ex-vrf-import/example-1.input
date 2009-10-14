@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<script version="0.1">
+  <title>ex-vrf-import.slax</title>
+  <author>travisohara</author>
+  <synopsis>
+    This script will automatically create either single route target or multiple route targers using policies. 
+  </synopsis>
+  <keyword>vrf</keyword>
+
+  <description>
+    Use of the key-word 'vrf-targets' is required to identify the macro and numbering or the route distinguishers and route distinguishers are mandatory.
+  </description>
+
+  <example>
+    <config>ex-vrf-import.conf</config>
+  </example>
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" type="text/javascript" />
+</script>
