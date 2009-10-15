@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>atm.slax</title>
-  <alternate>atm.xsl</alternate>
+  <title>check-atm.slax</title>
+  <alternate>check-atm.xsl</alternate>
   <author>phil</author>
   <synopsis>
     Classifies interfaces by their vc numbers and places them into groups
@@ -21,9 +21,9 @@
   </implementation>
 
   <example>
-    <config>atm.conf</config>
+    <config>check-atm.conf</config>
     <title>A simple configuration</title>
-    <output>atm.output</output>
+    <output>check-atm.output</output>
   </example>
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" type="text/javascript"/>
