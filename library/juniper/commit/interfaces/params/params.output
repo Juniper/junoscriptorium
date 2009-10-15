@@ -2,7 +2,7 @@ system {
     scripts {
         commit {
             allow-transients;
-            file ex-params.xsl;
+            file params.xsl;
         }
     }
     ## Warning: missing mandatory statement(s): 'root-authentication'

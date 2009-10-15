@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>ex-params.slax</title>
-  <alternate>ex-params.xsl</alternate>
+  <title>params.slax</title>
+  <alternate>params.xsl</alternate>
   <author>phil</author>
   <synopsis>
     Turns simplified interface configuration into diverse configuration
@@ -22,8 +22,8 @@
   </implementation>
 
   <example>
-    <config>ex-params.conf</config>
-    <output>ex-params.output</output>
+    <config>params.conf</config>
+    <output>params.output</output>
   </example>
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" type="text/javascript"/>
