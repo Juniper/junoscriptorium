@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>ldp.slax</title>
+  <title>check-ldp.slax</title>
   <author>phil</author>
   <synopsis>Enforce LDP - IGP cosistency</synopsis>
   <keyword>ospf</keyword>
@@ -19,11 +19,11 @@
     they are configured for an IGP.  If no IGP is found and the 'no-igp'
     apply-macro has not been configured, a warning is emitted.
   </implementation>
-  <alternate>ldp.xsl</alternate>
+  <alternate>check-ldp.xsl</alternate>
   <example>
-    <config>ldp.conf</config>
+    <config>check-ldp.conf</config>
     <title>A simple configuration</title>
-    <errors>ldp.output</errors>
+    <errors>check-ldp.output</errors>
   </example>
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" type="text/javascript"/>
