@@ -1,0 +1,67 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+- $Id: ldp.slax,v 1.1 2007/10/17 18:37:04 phil Exp $
+-
+- Copyright (c) 2004-2005, Juniper Networks, Inc.
+- All rights reserved.
+-
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+- This example tests for interfaces that are listed under
+- either [protocols ospf] or [protocols isis] which are
+- not configured under [protocols ldp].  If there is no
+- configuration for ldp, there is no problem, but otherwise
+- a warning is emitted telling the user that the interface
+- does not have ldp enabled.  The warning can be avoided
+- by configuring the 'no-ldp' apply-macro wherever the
+- interface is referenced.
+- A second test is then made of all ldp-enabled interfaces
+- to ensure that they are configured for an IGP.  If no
+- IGP is found and the 'no-igp' apply-macro has not been
+- configured, a warning is emitted.
+ */
+match configuration {
+    var $ldp = protocols/ldp;
+    var $isis = protocols/isis;
+    var $ospf = protocols/ospf;
+    
+    if ($ldp) {
+        
+        for-each ($isis/interface/name | $ospf/area/interface/name) {
+            var $ifname = .;
+            
+            if (not(../apply-macro[name == "no-ldp"]) && not($ldp/interface[name == $ifname])) {
+                <xnm:warning> {
+                    call jcs:edit-path();
+                    call jcs:statement();
+                    <message> "ldp not enabled for this interface";
+                }
+            }
+        }
+        
+        for-each (protocols/ldp/interface/name) {
+            var $ifname = .;
+            
+            if (not(apply-macro[name == "no-igp"]) && not($isis/interface[name == $ifname]) && not($ospf/area/interface[name == $ifname])) {
+                <xnm:warning> {
+                    call jcs:edit-path();
+                    call jcs:statement();
+                    <message> {
+                        expr "ldp-enabled interface does not have ";
+                        expr "an IGP configured";
+                    }
+                }
+            }
+        }
+    }
+}
+
