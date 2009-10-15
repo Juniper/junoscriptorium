@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>iso.slax</title>
-  <alternate>iso.xsl</alternate>
+  <title>check-iso.slax</title>
+  <alternate>check-iso.xsl</alternate>
   <author>phil</author>
   <synopsis>
     Enable mpls on iso-enabled interfaces
@@ -22,8 +22,8 @@
   </implementation>
 
   <example>
-    <config>iso.conf</config>
-    <output>iso.output</output>
+    <config>check-iso.conf</config>
+    <output>check-iso.output</output>
   </example>
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" type="text/javascript"/>
