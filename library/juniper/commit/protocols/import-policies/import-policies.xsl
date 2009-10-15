@@ -1,6 +1,6 @@
 <?xml version="1.0" standalone="yes"?>
 <!--
-- $Id: import.xsl,v 1.1 2007/10/17 18:37:04 phil Exp $
+- $Id: import-policies.xsl,v 1.1 2007/10/17 18:37:04 phil Exp $
 -
 - Copyright (c) 2004-2005, Juniper Networks, Inc.
 - All rights reserved.
