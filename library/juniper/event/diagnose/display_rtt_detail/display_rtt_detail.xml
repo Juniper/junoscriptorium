@@ -9,7 +9,12 @@
   <type>diagnose</type>
 
   <description>
-This op script is similar to op-ping-rtt.slax but without using jcs:syslog(), which is available in JUNOS 9.0 and later. Note this script is used in conjunction with the event script display_rtt_detail.slax, which runs for every hour and read the same accounting profile file and get the last 1 hour data and write to console. Eventd will capture the data written to console and will write into file and upload to a configured destination.
+This op script is similar to op-ping-rtt.slax but without using jcs:syslog(),
+which is available in JUNOS 9.0 and later. Note this script is used in
+conjunction with the event script display_rtt_detail.slax, which runs for
+every hour and read the same accounting profile file and get the last 1 hour
+data and write to console. Eventd will capture the data written to console
+and will write into file and upload to a configured destination.
 
   </description>
 
