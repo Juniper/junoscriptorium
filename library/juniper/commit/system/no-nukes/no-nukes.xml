@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script version="0.1">
-  <title>ex-no-nukes.slax</title>
-  <alternate>ex-no-nukes.xsl</alternate>
+  <title>no-nukes.slax</title>
+  <alternate>no-nukes.xsl</alternate>
   <author>phil</author>
   <synopsis>Report missing configuration statements</synopsis>
   <keyword>channelization</keyword>
@@ -18,12 +18,12 @@
     to your specific need.
   </implementation>
   <example>
-    <config>ex-no-nukes.conf</config>
+    <config>no-nukes.conf</config>
     <title>A simple configuration</title>
     <description>
       This is a simple example of how this script is invoked
     </description>
-    <errors>ex-no-nukes.output</errors>
+    <errors>no-nukes.output</errors>
   </example>
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" type="text/javascript"/>
