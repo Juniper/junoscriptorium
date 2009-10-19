@@ -6,7 +6,7 @@ ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
 
 import "../import/junos.xsl";
 
-var $script-name = "ex-max-prefix.slax";
+var $script-name = "max-prefix.slax";
 
 match configuration {
     for-each (.//maximum-routes) {

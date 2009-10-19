@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <script>
-  <title>ex-max-prefix.slax</title>
+  <title>max-prefix.slax</title>
   <author>phil</author>
   <synopsis>
 	Move from "route limit" (deprecated) to "prefix limit"
