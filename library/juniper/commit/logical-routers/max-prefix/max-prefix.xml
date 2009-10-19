@@ -9,7 +9,9 @@
   <type>logical-routers</type>
 
   <description>
-Update a hundred boxes with a small change can be effectively done via a commit script, which converts [...maximum-routes] to [...maximum-prefixes]. Important for routes learned from multiple paths, especially for route reflectors
+Update a hundred boxes with a small change can be effectively done via a
+commit script, which converts [...maximum-routes] to [...maximum-prefixes].
+Important for routes learned from multiple paths, especially for route reflectors
 
   </description>
 
