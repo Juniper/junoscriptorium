@@ -12,12 +12,12 @@
   <keyword>protocol</keyword>
 
   <description>
-    We want to ensure that the interface setup as iso
+    We want to ensure that the interface setup as iso 
     has mpls enabled. If it is not enabled the script makes it so.
   </description>
   <implementation>
-    For every logical unit with iso enabled, we test to see if
-    mpls is enabled.  If it isn't, we call jcs:emit-change()
+    For every logical unit with iso enabled, we test to see if 
+    mpls is enabled.  If it isn't, we call jcs:emit-change() 
     to add it for us.
   </implementation>
 
