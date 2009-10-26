@@ -23,6 +23,7 @@ match / {
 	                <object-value> $result;
 	            }
 	            var $res = jcs:invoke($rpc);
+                }
         }
     }
 }
