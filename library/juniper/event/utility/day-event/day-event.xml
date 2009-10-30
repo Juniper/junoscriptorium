@@ -47,10 +47,10 @@
          If you ever manually change your system time, then you need to do a "commit full" or "restart event-process" or 
          "request system scripts event-scripts reload" because your time-of-day events will be off time.
          
-Minimum JUNOS Version: 9.0.
-Latest Script Version: 1.00
-MD5 Checksum: c1be241d0d9f04d1190e4b17c78f18d6
-SHA-256 Checksum: 9a64bc692a11bf89e1a910e4f962321a19d7afce4d242995020f879f404cffdf
+         Minimum JUNOS Version: 9.0.
+         Latest Script Version: 1.00
+         MD5 Checksum: c1be241d0d9f04d1190e4b17c78f18d6
+         SHA-256 Checksum: 9a64bc692a11bf89e1a910e4f962321a19d7afce4d242995020f879f404cffdf
 ]]>
   </description>
   <keyword>utility</keyword>
