@@ -9,10 +9,50 @@
   <type>utility</type>
 
   <description>
-Logs daily syslog message for event policies to trigger on
+    <![CDATA[
+         This script logs a message to the syslog every day in the following format:
+         
+         Oct 30 00:00:00  j4350 cscript: Day-Event: Fri Oct 30 00:00
+         
+         With this in place, other event polices can now trigger based on the current day.  For example, if a policy
+         should run every friday then the following match conditions should be used:
+         
+         policy friday-policy {
+             events system;
+             attributes-match {
+                 system.message matches "Day-Event: Fri";
+             }
+             then {
+                 ...
+             }
+         }
+         
+         By default, the message is logged every day at 00:00.  If a different time is desired then configured one of
+         the following generate events with the needed time-of-day: day-event-time-1, day-event-time-2, day-event-time-3,
+         day-event-time-4, or day-event-time-5:
+         
+         generate-event {
+             day-event-time-2 time-of-day "02:00:00";
+         }
+         
 
+         To use, copy the day-event.slax script into your /var/db/scripts directory and then enable it using the following
+         command:
+         set event-options event-script file day-event.slax
+         
+         Restrictions & Misc
+         -------------------
+         Only the UTC time-zone is supported due to PR 459078.
+
+         If you ever manually change your system time, then you need to do a "commit full" or "restart event-process" or 
+         "request system scripts event-scripts reload" because your time-of-day events will be off time.
+         
+Minimum JUNOS Version: 9.0.
+Latest Script Version: 1.00
+MD5 Checksum: c1be241d0d9f04d1190e4b17c78f18d6
+SHA-256 Checksum: 9a64bc692a11bf89e1a910e4f962321a19d7afce4d242995020f879f404cffdf
+]]>
   </description>
-
   <keyword>utility</keyword>
   <keyword>slax</keyword>
   <keyword>syslog</keyword>
