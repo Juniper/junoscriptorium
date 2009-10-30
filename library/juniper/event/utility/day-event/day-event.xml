@@ -35,8 +35,19 @@
              day-event-time-2 time-of-day "02:00:00";
          }
          
+         After adding the new time, the specific hourly event can be matched in the following fashion:
+         
+         policy friday-at-2-policy {
+             events system;
+             attributes-match {
+                 system.message matches "Day-Event: Fri .* 02:00";
+             }
+             then {
+                 ...
+             }
+         }
 
-         To use, copy the day-event.slax script into your /var/db/scripts directory and then enable it using the following
+         To use the script, copy the day-event.slax file into your /var/db/scripts directory and then enable it using the following
          command:
          set event-options event-script file day-event.slax
          
