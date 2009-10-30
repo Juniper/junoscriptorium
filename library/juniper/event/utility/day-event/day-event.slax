@@ -1,0 +1,71 @@
+/*
+ * Author        : Curtis Call
+ * Version       : 1.0
+ * Last Modified : October 30, 2009
+ * Platform      : all
+ * Release       : 9.0 and above
+ * License       : Public Domain
+ *
+ * Description   : This event script logs a message to the syslog every day with
+ * the day / time included, in this format:
+ *
+ * Oct 30 00:00:00  j4350 cscript: Day-Event: Fri Oct 30 00:00
+ *
+ * Event policies can catch this message in order to have their policies trigger
+ * on specific days:
+ *
+ * policy friday-policy {
+ *     events system;
+ *     attributes-match {
+ *         system.message matches "Day-Event: Fri";
+ *     }
+ *     then {
+ *         ...
+ *     }
+ * }
+ * 
+ * By default, the message is logged at 00:00.  Additional times can be added
+ * by configuring time-of-day generate events for day-event-time-2, day-event-time-3,
+ * day-event-time-4, and day-event-time-5:
+ *
+ * generate-event {
+ *    day-event-time-2 time-of-day "02:00:00";
+ * }
+ *
+ */ 
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $event-definition = {
+    <event-options> {
+        <generate-event> {
+            <name> "day-event-time-1";
+            <time-of-day> "00:00";
+        }
+        <policy> {
+            <name> "day-event";
+            <events> "day-event-time-1";
+            <events> "day-event-time-2";
+            <events> "day-event-time-3";
+            <events> "day-event-time-4";
+            <events> "day-event-time-5";
+            <then> {
+                <event-script> {
+                    <name> "day-event.slax";
+                }
+            }
+        }
+    }
+}
+
+match / {
+    /* Syslog the current day/time without the seconds and year */
+    expr jcs:syslog( "daemon.info", "Day-Event: ", substring( $localtime, 1, string-length( $localtime) - 8 ) );
+}
+
+
