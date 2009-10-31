@@ -1,0 +1,338 @@
+version 1.0;
+
+/* SLAX script to warn if MTUs are incorrectly set on physical 
+ * and logical interfaces.  Borrows heavily from scripts written
+ * by Phil Shafer.
+ */
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace"; /* http://exslt.org/common */
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+	<name> "verbose";
+	<description> "Maximum verbosity ('on')";
+    }
+    <argument> {
+      <name> "ge-mtu";
+      <description> "Media MTU for Gigabit Ethernet (and 10GE) interfaces";
+    }
+    <argument> {
+      <name> "so-mtu";
+      <description> "Media MTU for all SONET/SDH interfaces";
+    }
+    <argument> {
+      <name> "fe-mtu";
+      <description> "Media MTU for Fast Ethernet interfaces";
+    }
+    <argument> {
+      <name> "ip-mtu";
+      <description> "IP MTU for non-Jumbo Frame capable interfaces";
+    }
+    <argument> {
+      <name> "mp-mtu";
+      <description> "MPLS MTU for non-Jumbo Frame capable interfaces";
+    }
+    <argument> {
+      <name> "jumbo-ip-mtu";
+      <description> "IP MTU for Jumbo Frame capable interfaces";
+    }
+    <argument> {
+      <name> "jumbo-mp-mtu";
+      <description> "MPLS MTU for Jumbo Frame capable interfaces";
+    }
+}
+
+var $software = jcs:invoke('get-software-information');
+
+param $verbose;
+param $ge-mtu = 9046;
+param $fe-mtu = 1514;
+param $so-mtu = 9036;
+param $ip-mtu = 1500;
+param $mp-mtu = 1500;
+param $jumbo-ip-mtu = 9032;
+param $jumbo-mp-mtu = 9016;
+
+var $fmt = "%-8s %s";
+
+match / {
+    <op-script-output> {
+        call enter($mode = $software/host-name);
+        call test-interfaces();
+    }
+}
+
+/*
+ * Announce we are entering a section of the test
+ */
+enter($mode) {
+    expr jcs:output("Testing ", $mode, " ...");
+}
+
+/*
+ * Output error messages
+ */
+err($name, $value) {
+    var $tag = $name _ ":";
+
+    expr jcs:output(jcs:printf($fmt, $tag, $value));
+}
+
+/*
+ * Output verbose data, if $verbose is set
+ */
+out($name, $value) {
+    if ($verbose == "on" || $verbose == "full") {
+	var $tag = $name _ ":";
+
+	expr jcs:output(jcs:printf($fmt, $tag, $value));
+    }
+}
+
+/*
+ * Output message indicating that a node is being ignored
+ */
+ignore($name) {
+    if ($verbose == "full") {
+        var $action = "Ignoring";
+
+        expr jcs:output(jcs:printf($fmt, $action, $name));
+    }
+}
+
+/*
+ * Test interfaces for correct MTU at physical and logical level
+ */
+test-interfaces() {
+
+    var $interfaces = jcs:invoke('get-interface-information');
+
+    /*
+     * Cycle through each physical interface
+     */
+    for-each ($interfaces/physical-interface) {
+        var $phy-int-name = ./name;
+        var $mtu = ./mtu;
+
+        /*
+         * Test Fast Ethernet Interfaces
+         */
+        if (starts-with($phy-int-name, 'fe-')) {
+            call enter($mode = "physical interface " _ $phy-int-name);
+            if (not ($mtu == $fe-mtu)) {
+                call err($name = $phy-int-name, $value = "Incorrect Ethernet MTU configured (" _ $mtu _").  All Fast Ethernet interfaces should have an MTU of " _ $fe-mtu _ ".");
+            }
+
+            /*
+             * Cycle through each logical subinterface
+             * of the current physical interface
+             */
+            for-each (./logical-interface) {
+                var $log-int-name = ./name;
+
+                /*
+                 * If this interface is not a contributing
+                 * interface to an aggregate Ethernet
+                 */
+                if (not (./address-family[address-family-name == "aenet"])) {
+                    call enter($mode = "logical interfaces " _ $log-int-name);
+                    var $family-inet-mtu = ./address-family[address-family-name == "inet"]/mtu;
+                    var $family-mpls-mtu = ./address-family[address-family-name == "mpls"]/mtu;
+                    
+                    /*
+                     * Slightly redundant (paranoid) check for same 
+                     * physical interface type
+                     */
+                    if (starts-with($log-int-name, 'fe-')) {
+
+                        /*
+                         * Cycle through the various address families
+                         * under each logical interface
+                         */
+                        for-each (./address-family) {
+
+                            /*
+                             * Check for presence of both family inet
+                             * and incorrectly set IP MTU
+                             */
+                            if (./address-family-name == "inet") {
+                                if (not ($family-inet-mtu == $ip-mtu)) {
+                                    call err($name = $log-int-name, $value = "Incorrect IP MTU configured (" _ $family-inet-mtu _ ").  All logical subinterfaces of Fast Ethernet interfaces should have an IP MTU of " _ $ip-mtu _ ".");
+                                } else {
+                                    call out($name = $log-int-name, $value = "IP MTU is correctly configured.");
+                                }
+                            } else {
+                                /* noop */
+                            }
+
+                            /*
+                             * Check for presence of both family mpls
+                             * and incorrectly set MPLS MTU
+                             */
+                            if (./address-family-name == "mpls") {
+                                if (not ($family-mpls-mtu == $mp-mtu)) {
+                                    call err($name = $log-int-name, $value = "Incorrect MPLS MTU configured (" _ $family-mpls-mtu _ ").  All logical subinterfaces of Fast Ethernet interfaces should have an MPLS MTU of " _ $mp-mtu _ ".");
+                                } else {
+                                    call out($name = $log-int-name, $value = "MPLS MTU is correctly configured.");
+                                }
+                            } else {
+                                /* noop */
+                            }
+                        }
+                    }
+                } else {
+                    call ignore($name = $log-int-name);
+                }
+            }
+ 
+        /*
+         * Test GE and 10GE Interfaces
+         */
+        } else if (starts-with($phy-int-name, 'ge-')) {
+            call enter($mode = "physical interface " _ $phy-int-name);
+            if (not ($mtu == $ge-mtu)) {
+                call err($name = $phy-int-name, $value = "Incorrect Ethernet MTU configured (" _ $mtu _").  All GE and 10GE interfaces should have an MTU of " _ $ge-mtu _ ".");
+            }
+
+            /*
+             * Cycle through each logical subinterface
+             * of the current physical interface
+             */
+            for-each (./logical-interface) {
+                var $log-int-name = ./name;
+
+                /*
+                 * If this interface is not a contributing
+                 * interface to an aggregate Ethernet
+                 */
+                if (not (./address-family[address-family-name == "aenet"])) {
+                    call enter($mode = "logical interfaces " _ $log-int-name);
+                    var $family-inet-mtu = ./address-family[address-family-name == "inet"]/mtu;
+                    var $family-mpls-mtu = ./address-family[address-family-name == "mpls"]/mtu;
+                    
+                    /*
+                     * Slightly redundant (paranoid) check for same 
+                     * physical interface type
+                     */
+                    if (starts-with($log-int-name, 'ge-')) {
+
+                        /*
+                         * Cycle through the various address families
+                         * under each logical interface
+                         */
+                        for-each (./address-family) {
+
+                            /*
+                             * Check for presence of both family inet
+                             * and incorrectly set IP MTU
+                             */
+                            if (./address-family-name == "inet") {
+                                if (not ($family-inet-mtu == $jumbo-ip-mtu)) {
+                                    call err($name = $log-int-name, $value = "Incorrect IP MTU configured (" _ $family-inet-mtu _ ").  All logical subinterfaces of GE and 10GE interfaces should have an IP MTU of " _ $jumbo-ip-mtu _ ".");
+                                } else {
+                                    call out($name = $log-int-name, $value = "IP MTU is correctly configured.");
+                                }
+                            } else {
+                                /* noop */
+                            }
+
+                            /*
+                             * Check for presence of both family mpls
+                             * and incorrectly set MPLS MTU
+                             */
+                            if (./address-family-name == "mpls") {
+                                if (not ($family-mpls-mtu == $jumbo-mp-mtu)) {
+                                    call err($name = $log-int-name, $value = "Incorrect MPLS MTU configured (" _ $family-mpls-mtu _ ").  All logical subinterfaces of GE and 10GE interfaces should have an MPLS MTU of " _ $jumbo-mp-mtu _ ".");
+                                } else {
+                                    call out($name = $log-int-name, $value = "MPLS MTU is correctly configured.");
+                                }
+                            } else {
+                                /* noop */
+                            }
+                        }
+                    }
+                } else {
+                    call ignore($name = $log-int-name);
+                }
+            }
+
+        /*
+         * Test SONET/SDH Interfaces
+         */
+        } else if (starts-with($phy-int-name, 'so-')) {
+            call enter($mode = "physical interface " _ $phy-int-name);
+            if (not ($mtu == $so-mtu)) {
+                call err($name = $phy-int-name, $value = "Incorrect Media MTU configured (" _ $mtu _").  All SONET/SDH interfaces should have an MTU of " _ $so-mtu _ ".");
+            }
+
+            /*
+             * Cycle through each logical subinterface
+             * of the current physical interface
+             */
+            for-each (./logical-interface) {
+                var $log-int-name = ./name;
+
+                /*
+                 * If this interface is not a contributing
+                 * interface to an aggregate Ethernet
+                 */
+                if (not (./address-family[address-family-name == "aenet"])) {
+                    call enter($mode = "logical interfaces " _ $log-int-name);
+                    var $family-inet-mtu = ./address-family[address-family-name == "inet"]/mtu;
+                    var $family-mpls-mtu = ./address-family[address-family-name == "mpls"]/mtu;
+                    
+                    /*
+                     * Slightly redundant (paranoid) check for same 
+                     * physical interface type
+                     */
+                    if (starts-with($log-int-name, 'so-')) {
+
+                        /*
+                         * Cycle through the various address families
+                         * under each logical interface
+                         */
+                        for-each (./address-family) {
+
+                            /*
+                             * Check for presence of both family inet
+                             * and incorrectly set IP MTU
+                             */
+                            if (./address-family-name == "inet") {
+                                if (not ($family-inet-mtu == $ip-mtu)) {
+                                    call err($name = $log-int-name, $value = "Incorrect IP MTU configured (" _ $family-inet-mtu _ ").  All logical subinterfaces of SONET/SDH interfaces should have an IP MTU of " _ $jumbo-ip-mtu _ ".");
+                                } else {
+                                    call out($name = $log-int-name, $value = "IP MTU is correctly configured.");
+                                }
+                            } else {
+                                /* noop */
+                            }
+
+                            /*
+                             * Check for presence of both family mpls
+                             * and incorrectly set MPLS MTU
+                             */
+                            if (./address-family-name == "mpls") {
+                                if (not ($family-mpls-mtu == $mp-mtu)) {
+                                    call err($name = $log-int-name, $value = "Incorrect MPLS MTU configured (" _ $family-mpls-mtu _ ").  All logical subinterfaces of SONET/SDH interfaces should have an MPLS MTU of " _ $jumbo-mp-mtu _ ".");
+                                } else {
+                                    call out($name = $log-int-name, $value = "MPLS MTU is correctly configured.");
+                                }
+                            } else {
+                                /* noop */
+                            }
+                        }
+                    }
+                } else {
+                    call ignore($name = $log-int-name);
+                }
+            }
+        } else {
+            call ignore($name = $phy-int-name);
+        }
+    }
+}
