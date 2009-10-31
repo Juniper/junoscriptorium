@@ -1,0 +1,112 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "target";
+        <description> "Address of ping target";
+    }
+    <argument> {
+	<name> "count";
+	<description> "Number of packets to send";
+    }
+}
+
+param $target;
+param $file;
+param $count;
+param $layout;
+
+match / {
+    <op-script-output> {
+	var $config-raw = {
+	    call get-config();
+	}
+	var $config = ext:node-set($config-raw);
+
+	expr jcs:output("config: ", name($config[1]));
+
+	var $control = $config[1]/groups/apply-macro[name == "control"];
+
+	var $cfile = $control/data[name == "file"]/value;
+	var $lfile = jcs:first-of($file, $cfile, "ping-recorder");
+
+	var $clayout = $control/data[name == "layout"]/value;
+	var $llayout = jcs:first-of($layout, $clayout, 8, "ping-data");
+
+	var $ccount = $control/data[name == "count"]/value;
+	<ccount> $ccount;
+	var $lcount = jcs:first-of($count, $ccount, 10);
+	<lcount> $lcount;
+
+	if ($target) {
+	    call pinger($target, $file = $lfile,
+			$layout = $llayout, $count = $lcount);
+	} else {
+	    for-each ($config/groups/
+	    		apply-macro[name == "targets"]/data/name) {
+		call pinger($target = ., $file = $lfile,
+			    $layout = $llayout, $count = $lcount);
+	    }
+	}
+    }
+}
+
+template get-config ($name ="ping-recorder")
+{
+    var $rpc = <get-configuration database="committed"> {
+	<configuration> {
+	    <groups> {
+		<name> $name;
+	    }
+	}
+    }
+    var $config = jcs:invoke($rpc);
+    copy-of $config/groups;
+}
+
+template pinger ($target, $file, $layout, $count)
+{
+    expr jcs:output("ping target='" , $target, "; file='", $file,
+		    "'; layout='", $layout, "'; count='", $count, "'");
+    var $rpc = <ping> {
+	<count> $count;
+	<host> $target;
+    }
+    var $out = jcs:invoke($rpc);
+
+    expr jcs:output("ping complete");
+    copy-of $out;
+
+    var $res = $out/probe-results-summary;
+    if ($res) {
+	<ping-results> {
+	    copy-of $res;
+	}
+
+	if ($file) {
+	    var $add = <add-accounting-file-record> {
+		<file> $file;
+		<layout> $layout;
+		<fields> "target,loss,min,max,ave,std";
+		<data> $target _ "," _
+			$res/packet-loss _ "," _
+			$res/rtt-minimum _ "," _
+			$res/rtt-maximum _ "," _
+			$res/rtt-average _ "," _
+			$res/rtt-stddev;
+	    }
+
+	    var $done = jcs:invoke($add);
+	    copy-of $done;
+	}
+    } else {
+	copy-of $out;
+    }
+}
