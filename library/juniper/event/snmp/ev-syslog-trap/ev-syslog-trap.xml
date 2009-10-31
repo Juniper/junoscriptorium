@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <script>
-<title>ev-heap.slax</title>
+<title>ev-syslog-trap.slax</title>
 <author>travisohara</author>
 <synopsis>
 Event script to turn syslog event into an snmp trap
@@ -11,11 +11,10 @@ Event script to turn syslog event into an snmp trap
 <description>
 This script is triggered when UI_COMMIT_NOT_CONFIRMED event is received.
     It matches the "complete" message of the event, and generates an SNMP trap.
-
 </description>
 
  <example>
- <title>Config</title>
+ <title>Example</title>
  <description>Configuration example</description>
  <config>example-1.conf</config>
  </example>

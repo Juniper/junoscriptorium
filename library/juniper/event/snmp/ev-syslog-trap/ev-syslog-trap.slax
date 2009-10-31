@@ -1,0 +1,76 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+param $event;
+param $message;
+
+match / {
+
+    /*
+     * trapm utilty wants the following characters in the value to be escaped
+     * '[', ']', ' ', '=', and ','
+     */
+    var $event-escaped = {
+        call escape-string($text = $event, $vec = '[] =,');
+    }
+
+    var $message-escaped = {
+        call escape-string($text = $message, $vec = '[] =,');
+    }
+
+    <op-script-results> {
+	var $rpc = <request-snmp-generate-trap> {
+	    <trap> "jnxEventTrap";
+	    <variable-bindings> "jnxEventTrapDescr[0]='Event-Trap' , "
+		_ "jnxEventAvAttribute[1]='event' , "
+		_ "jnxEventAvValue[1]='" _ $event-escaped _ "' , "
+		_ "jnxEventAvAttribute[2]='message' , "
+		_ "jnxEventAvValue[1]='" _ $message-escaped _ "'";
+	}
+
+	var $res = jcs:invoke($rpc);
+    }
+}
+
+template escape-string ($text, $vec) {
+
+    if (jcs:empty($vec)) {
+        expr $text;
+
+    } else {
+        var $index = 1;
+        var $from = substring($vec, $index, 1);
+        var $changed-value = {
+            call replace-string($text, $from) {
+                with $to = {
+                    expr "\\";
+                    expr $from;
+                 }
+            }
+        }
+
+        call escape-string($text = $changed-value, $vec = substring($vec, $index
+ + 1));
+    }
+}
+
+template replace-string ($text, $from, $to) {
+
+    if (contains($text, $from)) {
+        var $before = substring-before($text, $from);
+        var $after = substring-after($text, $from);
+        var $prefix = $before _  $to;
+
+        expr $before;
+        expr $to;
+        call replace-string($text = $after, $from, $to);
+
+    } else {
+        expr $text;
+    }
+}
+
+
