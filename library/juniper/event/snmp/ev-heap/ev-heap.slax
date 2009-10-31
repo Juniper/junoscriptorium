@@ -1,0 +1,66 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+/*
+ * Inspect FPC kernel heap usage, and put values into the Utility MIB
+ *
+ * New in JUNOS 8.4
+ * Simple mib containing (name,value) pairs
+ *    
+ *   FPC1(vty)# show heap
+ *   ID       Base    Total(b)      Free(b)      Used(b)   %   Name
+ *   --    -------    --------    ---------   ---------  ---   -------
+ *    0     3d7d38     2261704      1705716      555988   24   Kernel
+ *    1    9060000     2097152      1765680      331472   15   Uncached
+ *
+ *   user@cli> show snmp mib walk jnxUtilData
+ *   jnxUtilIntegerValue.70.80.67.48 = 29
+ *   jnxUtilIntegerValue.70.80.67.49 = 24
+ *   jnxUtilIntegerTime.70.80.67.48 = 07 d7 05 0b  08 30 0a 00  2d 04 00
+ *   jnxUtilIntegerTime.70.80.67.49 = 07 d7 05 0b  08 30 0b 00  2d 04 00
+ */
+
+match / {
+    <op-script-results> {
+        var $chassis = jcs:invoke('get-chassis-inventory');
+    
+        for-each ($chassis/chassis/chassis-module[starts-with(name, "FPC ")]) {
+            var $slot = substring-after(name, " ");
+
+            var $heap = {
+                call get-heap($slot);
+            }
+
+            var $rpc = <request-snmp-utility-mib-set> {
+                <object-type> "integer";
+                <instance> "FPC" _ $slot;
+                <object-value> $heap;
+            }
+            var $res = jcs:invoke($rpc);
+        }
+    }
+}
+
+
+template get-heap($slot = 0) {
+    var $rpc = <request-pfe-execute> {
+        <target> "fpc" _ $slot;
+        <command> "show heap";
+    }
+    var $out = jcs:invoke($rpc);
+    var $lines = jcs:break_lines($out);
+
+    for-each ($lines) {
+        var $re = jcs:regex("([0-9]+) +Kernel", .);
+        if ($re[1]) {
+            <heap> $re[2];
+        }    
+    }
+}
+
