@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
 <title>check-mtu.slax</title>
-<author>travisohara</author>
+<author>phil.shafer</author>
 <synopsis>
 Check if MTUs are correctly configured on physical and logical interfaces
 </synopsis>
