@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
 <title>ev-syslog-trap.slax</title>
-<author>travisohara</author>
+<author>phil.shafer</author>
 <synopsis>
 Event script to turn syslog event into an snmp trap
 </synopsis>
