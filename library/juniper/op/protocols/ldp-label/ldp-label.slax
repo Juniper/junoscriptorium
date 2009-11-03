@@ -1,0 +1,251 @@
+/*
+ *  ldp-label.slax
+ *
+ *  Created by Jeffrey Wei (jeffwei@juniper.net) on 20090816.
+ *  Copyright (c) 2009 Juniper Networks. All rights reserved.
+ *
+ *  Version History
+ *  ===============
+ *  v1.0	 Initial release.
+ *
+ */
+
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+
+param $session;
+param $label;
+param $fec;
+param $direction;
+param $logical-router;
+
+var $arguments = {
+	<argument> {
+		<name> "label";
+		<description> "MPLS label for a FEC";
+	}
+	<argument> {
+		<name> "session";
+		<description> "IP address of session destination";
+	} 
+	<argument> {
+		<name> "fec";
+		<description> "FEC in inet.3";
+	}
+	<argument> {
+		<name> "direction";
+		<description> "Direction for session, Input for label from peer, Output for label sent to peer";
+	}
+	<argument> {
+		<name> "logical-router";
+		<description> "Name of logical system, or 'all'";
+	}
+}
+
+match / {
+	<op-script-results> {
+		var $ldp = <get-ldp-database-information> {
+			if (jcs:empty($logical-router)) {
+				<instance> "master";
+			}
+			else {
+				<logical-router> $logical-router;
+			}
+		}
+		var $ldpinfo = jcs:invoke($ldp);
+		<ldp-database-information> {
+			if ($ldpinfo//xnm:error) {
+				copy-of $ldpinfo//xnm:error;
+			}
+			else if (jcs:empty($direction)) {
+				if (jcs:empty($label) && jcs:empty($session) && jcs:empty($fec)) {
+					copy-of $ldpinfo/*;
+				}
+				else if (jcs:empty($label) && not(jcs:empty($session)) && jcs:empty($fec)) {
+					for-each ($ldpinfo/ldp-database) {
+						call session($session);
+					}
+				}
+				else {
+					for-each ($ldpinfo/ldp-database[ldp-database-type="Input label database"]/ldp-binding) {
+						if (not(jcs:empty($label)) && jcs:empty($session) && jcs:empty($fec)) {
+							call label($label);
+						}
+						else if (jcs:empty($label) && jcs:empty($session) && not(jcs:empty($fec))) {
+							call fec($fec);
+						}
+						else if (not(jcs:empty($label)) && not(jcs:empty($session)) && jcs:empty($fec)) {
+							call label-session($label,$session);
+						}
+						else if (jcs:empty($label) && not(jcs:empty($session)) && not(jcs:empty($fec))) {
+							call session-fec($session,$fec);
+						}
+						else if (not(jcs:empty($label)) && jcs:empty($session) && not(jcs:empty($fec))) {
+							call label-fec($label,$fec);
+						}
+						else {
+							call session-label-fec($label,$session,$fec);
+						}
+					}
+					for-each ($ldpinfo/ldp-database[ldp-database-type="Output label database"]/ldp-binding) {
+						if (not(jcs:empty($label)) && jcs:empty($session) && jcs:empty($fec)) {
+							call label($label);
+						}
+						else if (jcs:empty($label) && jcs:empty($session) && not(jcs:empty($fec))) {
+							call fec($fec);
+						}
+						else if (not(jcs:empty($label)) && not(jcs:empty($session)) && jcs:empty($fec)) {
+							call label-session($label,$session);
+						}
+						else if (jcs:empty($label) && not(jcs:empty($session)) && not(jcs:empty($fec))) {
+							call session-fec($session,$fec);
+						}
+						else if (not(jcs:empty($label)) && jcs:empty($session) && not(jcs:empty($fec))) {
+							call label-fec($label,$fec);
+						}
+						else {
+							call session-label-fec($label,$session,$fec);
+						}
+					}
+				}
+			}
+			else {
+				var $path = <output> jcs:printf("%jcs label database",$direction);
+				if ($path = "Input label database" || $path = "Output label database") {
+					if (jcs:empty($label) && jcs:empty($session) && jcs:empty($fec)) {
+						copy-of $ldpinfo/ldp-database[ldp-database-type = $path];
+					}
+					else if (jcs:empty($label) && not(jcs:empty($session)) && jcs:empty($fec)) {
+						for-each ($ldpinfo/ldp-database[ldp-database-type=$path]) {
+							call session($session);
+						}
+					}
+					else {
+						for-each ($ldpinfo/ldp-database[ldp-database-type=$path]/ldp-binding) {
+							if (not(jcs:empty($label)) && jcs:empty($session) && jcs:empty($fec)) {
+								call label($label);
+							}
+							else if (jcs:empty($label) && jcs:empty($session) && not(jcs:empty($fec))) {
+								call fec($fec);
+							}
+							else if (not(jcs:empty($label)) && not(jcs:empty($session)) && jcs:empty($fec)) {
+								call label-session($label,$session);
+							}
+							else if (jcs:empty($label) && not(jcs:empty($session)) && not(jcs:empty($fec))) {
+								call session-fec($session,$fec);
+							}
+							else if (not(jcs:empty($label)) && jcs:empty($session) && not(jcs:empty($fec))) {
+								call label-fec($label,$fec);
+							}
+							else {
+								call session-label-fec($label,$session,$fec);
+							}
+						}
+					}
+				}
+				else {
+					<xnm:error> {
+						<message> "You need to type Input or Output!!";
+					}
+				}
+			}
+		}
+	}
+}
+
+template label() {
+	<ldp-database> {
+		var $ldp-label = ./ldp-label;
+		if ($ldp-label = $label) {
+			copy-of ../ldp-database-type;
+			copy-of ../ldp-session-id;
+			copy-of .;
+		}
+	}
+}
+
+template session() {
+	var $session-id = ./ldp-session-id;
+	var $remote-session = jcs:split("--",$session-id);
+	var $remote-ip = jcs:split(":",$remote-session[2]);
+	if ($remote-ip[1] = $session) {
+		copy-of .;
+	}
+}
+
+template fec() {
+	<ldp-database> {
+		var $prefix = ./ldp-prefix;
+		var $regex = "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+";
+		var $ip = jcs:regex($regex,$prefix);
+		if ($ip[1] = $fec) {
+			copy-of ../ldp-database-type;
+			copy-of ../ldp-session-id;
+			copy-of .;
+		}
+	}
+}
+
+template label-session() {
+	<ldp-database> {
+		var $session-id = ../ldp-session-id;
+		var $remote-session = jcs:split("--",$session-id);
+		var $remote-ip = jcs:split(":",$remote-session[2]);
+		var $ldp-label = ./ldp-label;
+		if ($ldp-label = $label && $remote-ip[1] = $session) {
+			copy-of ../ldp-database-type;
+			copy-of ../ldp-session-id;
+			copy-of .;
+		}
+	}
+}
+
+template session-fec() {
+	<ldp-database> {
+		var $session-id = ../ldp-session-id;
+		var $remote-session = jcs:split("--",$session-id);
+		var $remote-ip = jcs:split(":",$remote-session[2]);
+		var $prefix = ./ldp-prefix;
+		var $regex = "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+";
+		var $ip = jcs:regex($regex,$prefix);
+		if ($remote-ip[1] = $session && $ip[1] = $fec) {
+			copy-of ../ldp-database-type;
+			copy-of ../ldp-session-id;
+			copy-of .;
+		}
+	}
+}
+
+template label-fec() {
+	<ldp-database> {
+		var $ldp-label = ./ldp-label;
+		var $prefix = ./ldp-prefix;
+		var $regex = "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+";
+		var $ip = jcs:regex($regex,$prefix);
+		if ($ldp-label = $label && $ip[1] = $fec) {
+			copy-of ../ldp-database-type;
+			copy-of ../ldp-session-id;
+			copy-of .;
+		}
+	}
+}
+
+template session-label-fec() {
+	<ldp-database> {
+		var $session-id = ../ldp-session-id;
+		var $remote-session = jcs:split("--",$session-id);
+		var $remote-ip = jcs:split(":",$remote-session[2]);
+		var $ldp-label = ./ldp-label;
+		var $prefix = ./ldp-prefix;
+		var $regex = "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+";
+		var $ip = jcs:regex($regex,$prefix);
+		if ($ldp-label = $label && $remote-ip[1] = $session && $ip[1] = $fec) {
+			copy-of ../ldp-database-type;
+			copy-of ../ldp-session-id;
+			copy-of .;
+		}
+	}
+}

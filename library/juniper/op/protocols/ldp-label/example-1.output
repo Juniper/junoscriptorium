@@ -1,0 +1,118 @@
+user@cli> op ldp-label 
+Input label database, 1.1.1.1:0--2.2.2.2:0
+  Label     Prefix
+ 299840     1.1.1.1/32
+      3     2.2.2.2/32
+ 299792     3.3.3.3/32
+ 299808     4.4.4.4/32
+
+Output label database, 1.1.1.1:0--2.2.2.2:0
+  Label     Prefix
+      3     1.1.1.1/32
+ 299872     2.2.2.2/32
+ 299888     3.3.3.3/32
+ 299904     4.4.4.4/32
+
+Input label database, 1.1.1.1:0--3.3.3.3:0
+  Label     Prefix
+ 299840     1.1.1.1/32
+ 299792     2.2.2.2/32
+      3     3.3.3.3/32
+ 299808     4.4.4.4/32
+
+Output label database, 1.1.1.1:0--3.3.3.3:0
+  Label     Prefix
+      3     1.1.1.1/32
+ 299872     2.2.2.2/32
+ 299888     3.3.3.3/32
+ 299904     4.4.4.4/32
+
+user@cli> op ldp-label session 3.3.3.3 
+Input label database, 1.1.1.1:0--3.3.3.3:0
+  Label     Prefix
+ 299840     1.1.1.1/32
+ 299792     2.2.2.2/32
+      3     3.3.3.3/32
+ 299808     4.4.4.4/32
+
+Output label database, 1.1.1.1:0--3.3.3.3:0
+  Label     Prefix
+      3     1.1.1.1/32
+ 299872     2.2.2.2/32
+ 299888     3.3.3.3/32
+ 299904     4.4.4.4/32
+
+user@cli> op ldp-label direction input 
+Input label database, 1.1.1.1:0--2.2.2.2:0
+  Label     Prefix
+ 299840     1.1.1.1/32
+      3     2.2.2.2/32
+ 299792     3.3.3.3/32
+ 299808     4.4.4.4/32
+
+Input label database, 1.1.1.1:0--3.3.3.3:0
+  Label     Prefix
+ 299840     1.1.1.1/32
+ 299792     2.2.2.2/32
+      3     3.3.3.3/32
+ 299808     4.4.4.4/32
+
+user@cli> op ldp-label fec 3.3.3.3 
+Input label database, 1.1.1.1:0--2.2.2.2:0
+  Label     Prefix
+ 299792     3.3.3.3/32
+
+Input label database, 1.1.1.1:0--3.3.3.3:0
+  Label     Prefix
+      3     3.3.3.3/32
+
+Output label database, 1.1.1.1:0--2.2.2.2:0
+  Label     Prefix
+ 299888     3.3.3.3/32
+
+Output label database, 1.1.1.1:0--3.3.3.3:0
+  Label     Prefix
+ 299888     3.3.3.3/32
+
+user@cli> op ldp-label label 299888 
+Output label database, 1.1.1.1:0--2.2.2.2:0
+  Label     Prefix
+ 299888     3.3.3.3/32
+
+Output label database, 1.1.1.1:0--3.3.3.3:0
+  Label     Prefix
+ 299888     3.3.3.3/32
+
+user@cli> op ldp-label direction output session 3.3.3.3 label 3 fec 1.1.1.1 
+Output label database, 1.1.1.1:0--3.3.3.3:0
+  Label     Prefix
+      3     1.1.1.1/32
+
+user@cli> op ldp-label logical-router r2 
+Input label database, 2.2.2.2:0--1.1.1.1:0
+  Label     Prefix
+      3     1.1.1.1/32
+ 299872     2.2.2.2/32
+ 299888     3.3.3.3/32
+ 299904     4.4.4.4/32
+
+Output label database, 2.2.2.2:0--1.1.1.1:0
+  Label     Prefix
+ 299840     1.1.1.1/32
+      3     2.2.2.2/32
+ 299792     3.3.3.3/32
+ 299808     4.4.4.4/32
+
+Input label database, 2.2.2.2:0--4.4.4.4:0
+  Label     Prefix
+ 299840     1.1.1.1/32
+ 299808     2.2.2.2/32
+ 299776     3.3.3.3/32
+      3     4.4.4.4/32
+
+Output label database, 2.2.2.2:0--4.4.4.4:0
+  Label     Prefix
+ 299840     1.1.1.1/32
+      3     2.2.2.2/32
+ 299792     3.3.3.3/32
+ 299808     4.4.4.4/32
