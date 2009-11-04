@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<script>
+<title>ping-test.slax</title>
+<author>tfiola</author>
+<synopsis>
+Script pings target and deactivates/activates router config stanza based on ping failure/success
+</synopsis>
+<coe>op</coe>
+<type>diagnose</type>
+
+<description>
+  Script pings a remote ip continuously.  If it misses 3 consecutive pings, the script will deactivate a portion of the config and keep pinging.  If it then gets 3 consecutive ping successes, it will then reactivate the deactivated config.  If it misses 2 pings but then gets a 3rd ping successfully, then it does not deactivate the config stanza and it then resets the "missed ping" counter back to 0.  This script utilized recursive templates to get around the problem of immutable variables.  Having immutable variables can make it difficult to work with counters; working with counters is necessary to do in this script.
+  
+
+</description>
+
+ <example>
+ <title>Example</title>
+ <config>example-1.conf</config>
+ <output>example-1.output</output>
+ </example>
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>

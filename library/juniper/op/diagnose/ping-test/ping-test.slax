@@ -1,0 +1,180 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* this script demonstrates how to use counters in a script and get around the 
+*  problem with immutable variables.  It does this by utilizing recursive templates
+*  and calling the template pinger with new values for the template arguments		*/
+
+/* created by Tim Fiola		*/
+
+match / {
+  <op-script-output> {
+    var $ping-failed-counter = 0;
+    var $ping-success-counter = 0;
+    var $peer-state = "1"; /* peer-state can either be "1" (activated) or "0" (deactivated)  */
+    var $ping-target = "192.168.142.11";
+    var $peer-ip = "10.200.7.2";
+
+
+    call pinger($ping-target, $ping-success-counter, $ping-failed-counter, $peer-state, $peer-ip);
+  }   
+     
+}
+
+template pinger($ping-target, $ping-success-counter, $ping-failed-counter, $peer-state, $peer-ip) {
+
+    var $start-msg = "at beginning of pinger, ping-success-counter is " _ $ping-success-counter _ " and the ping-failed-counter is " _ $ping-failed-counter _ " xx";
+    expr jcs:syslog("daemon.crit", $start-msg);
+    
+
+
+    /* since the op script does not get a copy of the config like */
+    /* the commit script does, the syntax below will have the op  */
+    /* script request a copy of the config				  */
+    var $rpc-config-req = <get-configuration database="committed" inherit="inherit">;
+    var $configuration = jcs:invoke($rpc-config-req);
+
+    expr jcs:sleep(5);  /*  ping interval is every 5 seconds	*/
+
+   /* ping the target				*/   
+    var $ping-rpc = {
+    	<ping> {
+	       <host> $ping-target;
+	       <count> "1";
+	       }
+    }
+
+
+    /* this section assumes a beginning BGP peer state of UP, but this can also be parsed from the "bgp summary" output if desired	*/	
+    if ($peer-state = "1") {
+	if ($ping-failed-counter = 3) {
+          expr jcs:syslog("daemon.crit", "BGP neighbor deactivated by script");
+    	  /*
+     	  * Open connection with mgd
+     	  */
+    	  var $con = jcs:open();
+ 
+	  if (not($con)) {
+          call emit-error($message = "Not able to connect to local mgd");
+    	  }
+
+	  /*this is the config change made if 3 consecutive pings to the target fail	*/
+	  var $change = {
+	      <configuration> {
+	         <protocols> {
+		     <bgp> {
+		         <group>{
+			    <name> "internal";	
+			    <neighbor inactive="inactive"> {
+			        <name> $peer-ip;
+				<description>"disabled by script";
+				}
+			}
+		    }
+		}
+    	      }
+	    }
+	    /* use the 'load-configuration' template to load and commit */
+	    /* the configuration							*/
+	    var $results = {
+	      call jcs:load-configuration($connection = $con, $configuration = $change);
+	      }
+	    
+	    /* recursively call the 'pinger' template again with the values specified below		*/
+	    call pinger($ping-target, $ping-success-counter = 0, $ping-failed-counter = 0, $peer-state = "0", $peer-ip);
+	} else { /* ping-failed-counter /= 3		   */
+		var $ping = jcs:invoke($ping-rpc);
+       		if ($ping/ping-failure) {
+		expr jcs:syslog("daemon.crit", "ping bad peer-state is 1 up");
+		     if ($ping-failed-counter > 3) {
+		     	expr jcs:syslog("daemon.crit", "resetting ping-failed-counter");
+		     	call ping-failed-counter($ping-target, $ping-success-counter, $ping-failed-counter = 0, $peer-state, $peer-ip);
+			} else {
+			       expr jcs:syslog("daemon.crit", "NOT resetting ping-failed-counter");
+       	  		       call ping-failed-counter($ping-target, $ping-success-counter, $ping-failed-counter, $peer-state, $peer-ip);
+			       }		
+		} else {
+		        expr jcs:syslog("daemon.crit", "ping good peer state is 1 up");
+			call pinger($ping-target, $ping-success-counter, $ping-failed-counter = 0, $peer-state, $peer-ip);}
+			}
+    }
+
+
+    else { /* peer-state = "0"		*/
+    	 var $message = "peer-state=0 ping-success-counter is " _ $ping-success-counter;
+    	 expr jcs:syslog("daemon.crit", $message);
+       	 
+	if($ping-success-counter = 3) {
+		expr jcs:syslog("daemon.crit", "BGP neighbor re-activated by script");
+    	  	/*
+     	  	* Open connection with mgd
+     	  	*/
+    	  	var $con = jcs:open();
+ 
+		if (not($con)) {
+          	call emit-error($message = "Not able to connect to local mgd");
+    	  	}
+	     	var $change = {
+	      	     <configuration> {
+	         	<protocols> {
+		     	     <bgp> {
+		         	<group>{
+			    	     <name> "internal";	
+			    	     <neighbor active="active"> {
+			        	<name> $peer-ip;
+					<description>"re-enabled by script";
+				}
+			    }
+		    	}
+		     }
+    	      	  }
+	    	}
+	    /* use the 'load-configuration' template to load and commit */
+	    /* the configuration							*/
+	    var $results = {
+	      call jcs:load-configuration($connection = $con, $configuration = $change);
+	      }
+	    call pinger($ping-target, $ping-success-counter = 0, $ping-failed-counter = 0, $peer-state = "1", $peer-ip);
+	    } else { /* ping-success-counter != 3	    */
+		var $ping = jcs:invoke($ping-rpc);
+       		if ($ping/ping-success) {
+		expr jcs:syslog("daemon.crit", "ping good peer state is 0 down");
+		     if ($ping-success-counter > 3) {
+		     	expr jcs:syslog("daemon.crit", "resetting ping-success-counter");
+		     	call ping-success-counter($ping-target, $ping-success-counter = 0, $ping-failed-counter, $peer-state, $peer-ip);
+			} else { /* ping-success-counter < 3	*/
+				
+				var $msg = "NOT resetting ping-success-counter; counter is " _ $ping-success-counter;
+				expr jcs:syslog("daemon.crit", $msg);
+			 	call ping-success-counter($ping-target, $ping-success-counter, $ping-failed-counter, $peer-state, $peer-ip);
+				}		
+		} else { 
+		        expr jcs:syslog("daemon.crit", "ping bad peer state is 0 down");
+			call pinger($ping-target, $ping-success-counter = 0, $ping-failed-counter, $peer-state, $peer-ip);}
+	}	
+   } 
+}
+
+/* this template increments the $ping-failed counter	by 1	*/
+template ping-failed-counter($ping-target, $ping-success-counter, $ping-failed-counter, $peer-state, $peer-ip) {
+	 var $pf-msg = "in ping-failed-counter template, before being incremented, ping-failed-counter is " _ $ping-failed-counter;
+	 expr jcs:syslog("daemon.crit", $pf-msg);
+	call pinger($ping-target, $ping-success-counter, $ping-failed-counter = $ping-failed-counter + 1, $peer-state, $peer-ip);
+}
+
+
+/* this template increments the $ping-success counter	by 1	*/
+template ping-success-counter($ping-target, $ping-success-counter, $ping-failed-counter, $peer-state, $peer-ip) {
+	 var $ps-msg = "in ping-success-counter template, before being incremented, ping-success-counter is " _ $ping-success-counter;
+	 expr jcs:syslog("daemon.crit", $ps-msg);
+	call pinger($ping-target, $ping-success-counter = $ping-success-counter + 1, $ping-failed-counter, $peer-state, $peer-ip);
+}
+
+
+
+

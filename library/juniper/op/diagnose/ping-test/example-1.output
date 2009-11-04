@@ -1,0 +1,26 @@
+Example output - the script itself changes the config and generates no organic output, but with the debugging statements included in the script, the script behavior can be observed in the "messages" file
+
+Jun 12 16:17:42  script-compy cscript: %DAEMON-2: ping bad peer-state is 1 up
+Jun 12 16:17:42  script-compy cscript: %DAEMON-2: NOT resetting ping-failed-counter
+Jun 12 16:17:42  script-compy cscript: %DAEMON-2: in ping-failed-counter template, before being incremented, ping-failed-counter is 0
+Jun 12 16:17:42  script-compy cscript: %DAEMON-2: at beginning of pinger, ping-success-counter is 0 and the ping-failed-counter is 1 xx
+Jun 12 16:17:58  script-compy cscript: %DAEMON-2: ping bad peer-state is 1 up
+Jun 12 16:17:58  script-compy cscript: %DAEMON-2: NOT resetting ping-failed-counter
+Jun 12 16:17:58  script-compy cscript: %DAEMON-2: in ping-failed-counter template, before being incremented, ping-failed-counter is 1
+Jun 12 16:17:58  script-compy cscript: %DAEMON-2: at beginning of pinger, ping-success-counter is 0 and the ping-failed-counter is 2 xx
+Jun 12 16:18:13  script-compy cscript: %DAEMON-2: ping bad peer-state is 1 up
+Jun 12 16:18:13  script-compy cscript: %DAEMON-2: NOT resetting ping-failed-counter
+Jun 12 16:18:13  script-compy cscript: %DAEMON-2: in ping-failed-counter template, before being incremented, ping-failed-counter is 2
+Jun 12 16:18:13  script-compy cscript: %DAEMON-2: at beginning of pinger, ping-success-counter is 0 and the ping-failed-counter is 3 xx
+Jun 12 16:18:19  script-compy cscript: %DAEMON-2: BGP neighbor deactivated by script
+Jun 12 16:18:20  script-compy cscript: %DAEMON-2: at beginning of pinger, ping-success-counter is 0 and the ping-failed-counter is 0 xx
+
+
+Jun 12 16:18:52  script-compy cscript: %DAEMON-2: ping good peer state is 0 down
+Jun 12 16:18:52  script-compy cscript: %DAEMON-2: NOT resetting ping-success-counter; counter is 2
+Jun 12 16:18:52  script-compy cscript: %DAEMON-2: in ping-success-counter template, before being incremented, ping-success-counter is 2
+Jun 12 16:18:52  script-compy cscript: %DAEMON-2: at beginning of pinger, ping-success-counter is 3 and the ping-failed-counter is 0 xx
+Jun 12 16:18:57  script-compy cscript: %DAEMON-2: peer-state=0 ping-success-counter is 3
+Jun 12 16:18:57  script-compy cscript: %DAEMON-2: BGP neighbor re-activated by script
+Jun 12 16:18:58  script-compy cscript: %DAEMON-2: at beginning of pinger, ping-success-counter is 0 and the ping-failed-counter is 0 xx
+
