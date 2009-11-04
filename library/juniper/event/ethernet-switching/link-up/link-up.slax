@@ -1,0 +1,115 @@
+/*
+*
+*    NAME: link-up.slax
+*    PURPOSE: The requirement is that when a link becomes
+*             active, a message needs to be written to
+*             syslog indicating the interface name and
+*             the MAC addresses of the device(s) plugged
+*             into the interface.
+*
+*    CREATED: 08/10/09
+*    BY: Jay Wilson (Solutions Architect - Western Area)
+*    LAST MOD: 08/11/09
+*    BY: Jay Wilson
+*    VERSION: 1.00
+*
+*    MODIFICATION HISTORY:
+*        V1.00 = Initial release
+*        V1.01 = Added delay to allow MAC table to
+*                be populated.
+*
+*/ 
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+
+/*
+*
+*  Define the argument that will be passed into the script.
+*  This argument is by the event attribute "interface-name"
+*  when the event triggers.
+*
+*/
+var $arguments = <argument> {
+    <name> "ifname";
+    <description> "Interface to report about.";
+}
+param $ifname;
+
+/*
+*
+*   debug1 -> Highlevel debugging
+*   debug7 -> Lowlevel debugging
+*   0 == off 
+*   1 == on
+*
+*/
+var $debug1 = "0";
+var $debug7 = "0";
+
+match / {
+/*
+*
+*   Get the MAC table from the switch
+*
+*/
+    expr jcs:sleep(3);
+    var $rpc = <get-ethernet-switching-table-information> {
+        }
+    var $switch-output = jcs:invoke($rpc);
+    call debug ( $type = "r", $on = $debug7, $output = $switch-output//text());
+/*
+* 
+*   Process the MAC table
+*
+*/
+    for-each ($switch-output/ethernet-switching-table/mac-table-entry) {
+        for-each (mac-interfaces-list) {
+        call debug ( $type = "w", $on = $debug1, $output = "In the Loop.");
+        if (contains(mac-interfaces,$ifname)) {
+            var $message = "IFNAME " _ $ifname _ " MAC " _ ../mac-address;
+            call write-it ($message = $message);
+        }
+        }
+    }
+}
+/*
+*   NAME: WRITE-IT
+*   PURPOSE: Writes a message to SYSLOG that is passed to it.
+*   CALLED: Can be called at any time from any where.
+*
+*   PARMS PASSED:
+*        $message = The string to print out 
+*
+*/
+template write-it($message) {
+    expr jcs:syslog("user.warn","link-up.slax: ",$message);
+}
+/*
+*   NAME: DEBUG
+*   PURPOSE: Writes debugging information to SYSLOG.
+*   CALLED: Can be called at any time from any where.
+*
+*   PARMS PASSED:
+*        $type = indicates the type of information
+*                being passed in.  An "r" means the
+*                information is a node-set result.
+*        $on = turns on writing it or not
+*        $output = the string that needs to be
+*                  printed
+*
+*/
+template debug ( $type, $on, $output) {
+    if ($on == "1") {
+        if ($type == "r" ) {
+            for-each( $output ) {
+                call write-it($message = . );
+            }
+        }
+        else {
+            call write-it($message = $output);
+        }
+    }
+}
