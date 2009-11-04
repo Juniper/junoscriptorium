@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<script>
+<title>monitor-interface.slax</title>
+<author>rcameron</author>
+<synopsis>
+This script implements all of the features that are included on the SRX plus the ability to limit the failover of the control plane.
+</synopsis>
+<coe>event</coe>
+<type>HA</type>
+
+<description>
+Interface monitoring is an included feature on the platform but it may not meet all customer requirements. In some scenarios if the control plane is rapidly failed over it can cause instability. This implementation of interface monitoring accounts for this possibility and limits the user to monitoring only the data plane.
+  
+
+</description>
+
+ <example>
+ <title>Example</title>
+ <config>example-1.conf</config>
+ </example>
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>
