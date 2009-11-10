@@ -3,7 +3,7 @@
   <title>expand-interface-ranges.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Treats interface-range statements as instructions to copy their enclosed configuration to all interface members at next commit
+	Automatically copies interface-range configuration to member interfaces and removes interface-range
   </synopsis>
   <coe>commit</coe>
   <type>interfaces</type>
