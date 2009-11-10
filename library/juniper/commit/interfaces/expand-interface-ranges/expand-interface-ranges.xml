@@ -9,10 +9,111 @@
   <type>interfaces</type>
 
   <description>
-Treats interface-range configuration statements as instructions to copy enclosed configuration to all interface members at next commit
+    <![CDATA[
+This script alters the behavior of the interface-range configuration statement.  Rather
+than remaining as a permanent part of the configuration, it is treated as a temporary
+instruction to the commit process to copy all its enclosed configuration statements
+to its member interfaces.  After copying the indicated configuration, the interface-range
+statement is removed from the configuration, leaving only the altered interface
+configurations.
+ 
+Example:
+interface-range example {
+   member ge-4/*/0;
+   flexible-vlan-tagging;
+}
 
+After commit becomes:
+ge-4/0/0 {
+    flexible-vlan-tagging;
+}
+ge-4/1/0 {
+    flexible-vlan-tagging;
+}
+
+Member interfaces are determined based on the installed interfaces within the chassis
+as well as uninstalled interfaces that appear within the configuration.  In the above
+example, both ge-4/0/0 and ge-4/1/0 exist within the router but ge-4/2/0 and ge-4/3/0
+do not.  (Which is why the expanded configuration does not include them).
+
+Interface ranges that do not have any configuration other than member or member-range
+statements will be ignored.  Also, any interface-ranges with apply-macro do-not-expand
+configured will be ignored:
+
+Example ignored ranges:
+interface-range ignored1 {
+    member-range ge-1/0/0 to ge-2/0/0;
+}
+interface-range ignored2 {
+    member ge-5/0/*;
+    apply-macro do-not-expand;
+    mtu 9192;
+}
+
+To enable, perform the following:
+
+1. Copy script file to commit script directory of all routing-engines in the chassis
+     A. /var/db/scripts/commit for most Junos devices
+     B. /config/db/scripts/commit for EX Series
+2. Verify that "system commit synchronize" is enabled on multiple-routing-engine systems
+3. Configure "set system scripts commit file expand-interface-ranges.slax" and commit
+
+Multi-routine-engine Guidelines:
+
+* "system commit synchronize" must be enabled
+* Always perform commits from the Master routing-engine or ranges will not expand
+correctly.
+
+Minimum JUNOS Version: 10.0
+Latest Script Version: 1.0
+MD5 Checksum: ae6f22a3fe11d0454358b3d192706003
+SHA-256 Checksum: 27a426b6914a06da39a5c03a4929fe3d3786ffda17205b6694309f442b91f6b7
+]]>
   </description>
+  <example>
+    <description>
+     <![CDATA[
+[edit interfaces]
+jnpr@r2d2-re0# show
 
+[edit interfaces]
+jnpr@r2d2-re0# set interface-range example member ge-*/*/*
+
+[edit interfaces]
+jnpr@r2d2-re0# set interface-range example mtu 9192
+
+[edit interfaces]
+jnpr@r2d2-re0# commit
+re0:
+warning: Expanding/removing interface-range example (5 interfaces altered)
+configuration check succeeds
+re1:
+commit complete
+re0:
+commit complete
+
+[edit interfaces]
+jnpr@r2d2-re0# show
+ge-2/0/0 {
+    mtu 9192;
+}
+ge-3/0/0 {
+    mtu 9192;
+}
+ge-3/1/0 {
+    mtu 9192;
+}
+ge-4/0/0 {
+    mtu 9192;
+}
+ge-4/1/0 {
+    mtu 9192;
+}
+]]>
+    </description>
+  </example>
+  <keyword>slax</keyword>
+  <keyword>interface-range</keyword>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
