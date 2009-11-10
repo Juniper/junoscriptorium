@@ -1,0 +1,337 @@
+/*
+ * Author        : Curtis Call
+ * Version       : 1.0
+ * Last Modified : November 10, 2009
+ * Platform      : all
+ * Release       : 10.0 and above
+ * Description: The expand-interace-ranges script alters the behavior of the 
+ * interface-range configuration statement.  Rather than remaining a permanent
+ * part of the configuration, the range is instead expanded by copying its 
+ * contents into the indicated member interface configurations.  The range is
+ * also removed at commit time.
+ *
+ * Interface-ranges that do not have any configuration included other than interface
+ * members will not be expanded.  Also, any interface-ranges that have the apply-macro
+ * "do-not-expand" configured will not be expanded.
+ *
+ * The interface selection process differs from that used normally by the interface-
+ * range command.  Any currently installed interface, or interface that appears within
+ * the configuration, will be considered as a possible target of an expanded interface-
+ * range.
+ * 
+ * License       : BSD-Style
+ *  Copyright (c) 2009 Curtis Call. All Rights Reserved.
+ *  Redistribution and use in source and binary forms, with or without modification, 
+ *  are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice, this 
+ *  list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  this list of conditions and the following disclaimer in the documentation and/or
+ *  other materials provided with the distribution.
+ *  3. The name of the author may not be used to endorse or promote products derived 
+ *  from this software without specific prior written permission.
+ *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED 
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+ *  AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE 
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN 
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */ 
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns str = "http://exslt.org/strings";
+ns set = "http://exslt.org/sets";
+
+import "../import/junos.xsl";
+
+/* Fake boolean values */
+var $true = "true";
+var $false = "false";
+
+/* Macro */
+var $do-not-expand-macro = "do-not-expand";
+
+match configuration {
+
+    /*
+     * Ranges are only expanded if they have configuration statements other than members and member-range, and they 
+     * do not have apply-macro do-not-expand configured.
+     */
+    var $interface-ranges = interfaces/interface-range[ jcs:empty( apply-macro[name == $do-not-expand-macro] ) ]
+                                                      [ not( jcs:empty( child::*[name() != "name" && name() != "member-range" && name() != "member"] ) ) ];
+    
+    /* No processing unless an interface-range exists */
+    if( $interface-ranges ) {
+    
+        /* Multi-RE box? - require forced synchronization */
+        var $re-info = jcs:invoke( "get-route-engine-information" );
+        var $vc-info = jcs:invoke( "get-virtual-chassis-information" );
+        var $missing-config = {
+            if( count( $re-info/route-engine ) > 1 || count( $vc-info/member-list/member ) > 1 ) {
+                
+                /* system commit synchronize is required */
+                if( jcs:empty( system/commit/synchronize ) ) {
+                    expr $true;
+                }
+                else {
+                    expr $false;
+                }
+            }
+            else {
+                expr $false;
+            }
+        }
+        
+        /* 
+         * If config is missing then show a warning and do nothing.  Do not show an error because we don't want
+         * to interfere with the commit process.
+         */
+        if( $missing-config == $true ) {
+            <xnm:warning> {
+                <message> "The expand-interface-ranges script requires that multiple-RE systems have 'system commit synchronize' enabled."; 
+            }
+        }
+        else {
+        
+            /* Get interface names */
+            var $interface-rpc = {
+                <get-interface-information> {
+                    <terse>;
+                }
+            }
+            var $interfaces = jcs:invoke( $interface-rpc );
+            var $interface-config = interfaces;
+            /*
+             * Go through each range and expand it into the appropriate interfaces
+             */
+            var $interface-changes := {
+                for-each( $interface-ranges ) {
+                    
+                    /* Get the interfaces to expand into */
+                    var $interface-set := { call get-interfaces( $interfaces, $interface-range = ., $interface-config ); }
+                    
+                    var $range-configuration = ./*[name() != "name" && name() != "member-range" && name() != "member"];
+                    
+                    /* Describe the change that is taking place */
+                    <xnm:warning> {
+                        <message> "Expanding/removing interface-range " _ name _ " (" _ count( $interface-set/interface ) _ " interfaces altered)";
+                    }
+                    
+                    /* Create changes for the interfaces with the relevant configuration */
+                    for-each( $interface-set/interface ) {
+                        <interface> {
+                            <name> .;
+                            copy-of $range-configuration;
+                        }
+                    }
+                    
+                    /* Create interface-range deletion change */
+                    <interface-range delete="delete"> {
+                        <name> name;
+                    }
+                }
+            }
+
+            /* Display any warnings */
+            for-each( $interface-changes/xnm:warning ) {
+                copy-of .;
+            }
+            
+            /* If there are changes present, then bundle them all into a single change */
+            if( count( $interface-changes/interface | $interface-changes/interface-range ) > 0 ) {
+                <change> {
+                    <interfaces> {
+                        copy-of $interface-changes/interface;
+                        copy-of $interface-changes/interface-range;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/*
+ * This template returns the names of the interfaces that match the member and
+ * member-range statements included within the $interface-range.  $interfaces
+ * is the contents of show interfaces terse and reflects the current installed
+ * interfaces.  $interface-config points to the interfaces configuration stanza
+ * and references both installed and uninstalled interfaces.  Both pools are drawn
+ * from when determining what interfaces match a range.
+ * Returned data is in the form <interface> name;
+ */
+template get-interfaces( $interfaces, $interface-range, $interface-config ) {
+
+    /* Gather all possible interface names first */
+    var $all-members := {
+        /* Process each member statement */
+        for-each( $interface-range/*[name() == "member"] ) {
+            /* Figure out what $interfaces match based on the regex */
+            var $regex = str:replace( name, "*", ".*" );
+            /* Check installed interfaces */
+            for-each( $interfaces/physical-interface/name ) {
+                var $name = .;
+                var $result = jcs:regex( $regex, $name );
+                if( $result[. == $name] ) {
+                    <interface> $name;
+                }
+            }
+            /* Check configured interfaces */
+            for-each( $interface-config/interface ) {
+                var $name = name;
+                var $result = jcs:regex( $regex, $name );
+                if( $result[. == $name] ) {
+                    <interface> $name;
+                }
+            }
+        }
+        /* Process each member range statement */
+        for-each( $interface-range/*[name() == "member-range"] ) {
+            /* start interface */
+            var $start = name;
+            /* end interface */
+            var $end = end-range;
+            /* Check installed interfaces */
+            for-each( $interfaces/physical-interface/name ) {
+                var $name = .;
+                var $after = { call is-interface-after( $interface = $name, $after-interface = $start ); }
+                var $before = { call is-interface-before( $interface = $name, $before-interface = $end ); }
+                if( ( $start == $name || $after == $true ) && ( $end == $name || $before == $true ) ) {
+                    <interface> $name;
+                }
+            }
+            /* Check configured interfaces */
+            for-each( $interface-config/interface ) {
+                var $name = name;
+                var $after = { call is-interface-after( $interface = $name, $after-interface = $start ); }
+                var $before = { call is-interface-before( $interface = $name, $before-interface = $end ); }
+                if( ( $start == $name || $after == $true ) && ( $end == $name || $before == $true ) ) {
+                    <interface> $name;
+                }
+            }
+        }
+    }
+    
+    /* Get uniques */
+    copy-of set:distinct( $all-members/interface );
+}
+
+
+/* 
+ * Determine if interface comes after a separate interface (in numerical order) or
+ * not.  Returns false boolean values $true or $false
+ */
+template is-interface-after( $interface, $after-interface ) {
+
+    /* Only check if interface type is equal */
+    var $type = substring-before( $interface, "-" );
+    var $after-type = substring-before( $after-interface, "-" );
+    
+    if( $type == $after-type ) {
+        /* Pull out fpcs, pics, etc */
+        var $fpc = substring-before( substring-after( $interface, "-" ), "/" );
+        var $pic = substring-before( substring-after( $interface, "/" ), "/" );
+        var $final-part = substring-after( $interface, "/" );
+        var $port = substring-after( $final-part, "/" );
+        var $after-fpc = substring-before( substring-after( $after-interface, "-" ), "/" );
+        var $after-pic = substring-before( substring-after( $after-interface, "/" ), "/" );
+        var $after-final-part = substring-after( $after-interface, "/" );
+        var $after-port = substring-after( $after-final-part, "/" );
+        
+        /* If FPC is less then it is false */
+        if( $fpc < $after-fpc ) {
+            expr $false;
+        }
+        /* If FPC is more then it is true */
+        else if( $fpc > $after-fpc ) {
+            expr $true;
+        }
+        /* Same FPC, check PIC and port */
+        else {
+            /* If PIC is less then it is false */
+            if( $pic < $after-pic ) {
+                expr $false;
+            }
+            /* If PIC is more then it is true */
+            else if( $pic > $after-pic ) {
+                expr $true;
+            }
+            /* Same PIC, check port */
+            else {
+                /* Port is less or equal, it is false */
+                if( $port <= $after-port ) {
+                    expr $false;
+                }
+                /* Port is greater, it is true */
+                else {
+                    expr $true;
+                }
+            }
+        }
+    }
+    else {
+        expr $false;
+    }
+}
+
+/* 
+ * Determine if interface comes before a separate interface (in numerical order) or
+ * not.  Returns false boolean values $true or $false
+ */
+template is-interface-before( $interface, $before-interface ) {
+
+    /* Only check if interface type is equal */
+    var $type = substring-before( $interface, "-" );
+    var $before-type = substring-before( $before-interface, "-" );
+    
+    if( $type == $before-type ) {
+        /* Pull out fpcs, pics, etc */
+        var $fpc = substring-before( substring-after( $interface, "-" ), "/" );
+        var $pic = substring-before( substring-after( $interface, "/" ), "/" );
+        var $final-part = substring-after( $interface, "/" );
+        var $port = substring-after( $final-part, "/" );
+        var $before-fpc = substring-before( substring-after( $before-interface, "-" ), "/" );
+        var $before-pic = substring-before( substring-after( $before-interface, "/" ), "/" );
+        var $before-final-part = substring-after( $before-interface, "/" );
+        var $before-port = substring-after( $before-final-part, "/" );
+        
+        /* If FPC is more then it is false */
+        if( $fpc > $before-fpc ) {
+            expr $false;
+        }
+        /* If FPC is less then it is true */
+        else if( $fpc < $before-fpc ) {
+            expr $true;
+        }
+        /* Same FPC, check PIC and port */
+        else {
+            /* If PIC is more then it is false */
+            if( $pic > $before-pic ) {
+                expr $false;
+            }
+            /* If PIC is less then it is true */
+            else if( $pic < $before-pic ) {
+                expr $true;
+            }
+            /* Same PIC, check port */
+            else {
+                /* Port is more or equal, it is false */
+                if( $port >= $before-port ) {
+                    expr $false;
+                }
+                /* Port is less, it is true */
+                else {
+                    expr $true;
+                }
+            }
+        }
+    }
+    else {
+        expr $false;
+    }
+}
