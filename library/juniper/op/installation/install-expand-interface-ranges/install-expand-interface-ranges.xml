@@ -9,10 +9,55 @@
   <type>installation</type>
 
   <description>
-Installs expand-interface-ranges script by copying it to all routing-engines and enabling in the configuration
+    <![CDATA[
+This script installs the expand-interface-ranges.slax script into the Junos device by writing the embedded
+contents to the local routing-engine and copying it to all other routing-engines in the chassis.  It also
+automatically enables the script within the configuration.
 
+It can be run by copying it to the local Junos device's op script directory and enabling it in the configuration
+as an op script, or preferably it can be run from a remote location by use of the "op url" command that was 
+introduced in Junos 10.0
+ 
+Restrictions:
+
+* J/SRX chassis clusters are not supported and will not install correctly
+* Multiple-routing-engine systems must have "system commit synchronize" configured
+
+Minimum JUNOS Version: 10.0
+Latest Script Version: 1.0
+MD5 Checksum: 8b1bd2c571c63c32b5a67fe74177654f
+SHA-256 Checksum: 50af1a3fccde0dfa0e11120c411cb7db58e3e8fcd374022bd493eb823d725c34
+]]>
   </description>
+  <example>
+    <description>
+     <![CDATA[
+jnpr@r2d2-re0> op install-expand-interface-ranges
+This script writes the expand-interface-ranges script to all routing-engines
+and enables it in the configuration.  Performing these actions requires
+super-user access or the maintenance permission bit.
+Would you like to continue? (yes/no)yes
 
+Writing script to local re...
+[Success]
+Checking checksum on local re...
+[Success]
+
+Copying script to re1...
+[Success]
+Checking checksum on re1...
+[Success]
+
+Enabling script in configuration...
+[Success]
+
+expand-interface-ranges.slax was installed successfully
+
+]]>
+    </description>
+  </example>
+  <keyword>slax</keyword>
+  <keyword>installation</keyword>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
