@@ -3,18 +3,17 @@
   <title>expand-interface-ranges.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Treats interface-range configuration statements as instructions to copy enclosed configuration to all interface members at next commit
+	Treats interface-range statements as instructions to copy their enclosed configuration to all interface members at next commit
   </synopsis>
   <coe>commit</coe>
   <type>interfaces</type>
 
   <description>
     <![CDATA[
-This script alters the behavior of the interface-range configuration statement.  Rather
-than remaining as a permanent part of the configuration, it is treated as a temporary
-instruction to the commit process to copy all its enclosed configuration statements
-to its member interfaces.  After copying the indicated configuration, the interface-range
-statement is removed from the configuration, leaving only the altered interface
+This script alters the behavior of the interface-range configuration statement.  Rather than remaining as a 
+permanent part of the configuration, it is treated as a temporary instruction to the commit process to copy 
+all its enclosed configuration statements to its member interfaces.  After copying the indicated configuration, 
+the interface-range statement is removed from the configuration, leaving only the altered interface 
 configurations.
  
 Example:
@@ -31,14 +30,12 @@ ge-4/1/0 {
     flexible-vlan-tagging;
 }
 
-Member interfaces are determined based on the installed interfaces within the chassis
-as well as uninstalled interfaces that appear within the configuration.  In the above
-example, both ge-4/0/0 and ge-4/1/0 exist within the router but ge-4/2/0 and ge-4/3/0
-do not.  (Which is why the expanded configuration does not include them).
+Member interfaces are determined based on the installed interfaces within the chassis as well as uninstalled 
+interfaces that appear within the configuration.  In the above example, both ge-4/0/0 and ge-4/1/0 exist within
+the router but ge-4/2/0 and ge-4/3/0 do not.  (Which is why the expanded configuration does not include them).
 
-Interface ranges that do not have any configuration other than member or member-range
-statements will be ignored.  Also, any interface-ranges with apply-macro do-not-expand
-configured will be ignored:
+Interface ranges that do not have any configuration other than member or member-range statements will be ignored.
+Also, any interface-ranges with apply-macro do-not-expand configured will be ignored:
 
 Example ignored ranges:
 interface-range ignored1 {
@@ -50,19 +47,25 @@ interface-range ignored2 {
     mtu 9192;
 }
 
-To enable, perform the following:
+Multiple-routing-engine Guidelines:
 
-1. Copy script file to commit script directory of all routing-engines in the chassis
+* "system commit synchronize" must be enabled
+* Always perform commits from the Master routing-engine or interface-ranges will not expand correctly
+
+Installation Instructions:
+1. Copy script to commit script directory of all routing-engines in the chassis
      A. /var/db/scripts/commit for most Junos devices
      B. /config/db/scripts/commit for EX Series
 2. Verify that "system commit synchronize" is enabled on multiple-routing-engine systems
 3. Configure "set system scripts commit file expand-interface-ranges.slax" and commit
 
-Multi-routine-engine Guidelines:
+Alternatively, an installation op script is available here:
+http://junoscriptorium.googlecode.com/svn/trunk/library/juniper/op/installation/install-expand-interface-ranges/install-expand-interface-ranges.xml
 
-* "system commit synchronize" must be enabled
-* Always perform commits from the Master routing-engine or ranges will not expand
-correctly.
+It can be installed locally and run as a normal op script, or for convenience, can be run from a remote
+location via the "op url" cli command.  Junos devices with an active Internet connection can install the
+expand-interface-ranges script by running a single CLI command:
+op url http://junoscriptorium.googlecode.com/svn/trunk/library/juniper/op/installation/install-expand-interface-ranges/install-expand-interface-ranges.slax
 
 Minimum JUNOS Version: 10.0
 Latest Script Version: 1.0
