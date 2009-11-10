@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<script>
+  <title>install-expand-interface-ranges.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	Installs expand-interface-ranges script by copying it to all routing-engines and enabling in the configuration
+  </synopsis>
+  <coe>op</coe>
+  <type>installation</type>
+
+  <description>
+Installs expand-interface-ranges script by copying it to all routing-engines and enabling in the configuration
+
+  </description>
+
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
