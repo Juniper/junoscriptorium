@@ -19,9 +19,9 @@
   on the command-line as well, otherwise they default to their default value.
  
   Minimum JUNOS Version: 8.2
-  Latest Script Version: 1.0
-  MD5 Checksum: c626cd768863b21b131287fa6af94750
-  SHA-256 Checksum: 32a65194bfd9f01d57e163e85b1c9d6eb2a6ff9496fbdcd4f53acc21688aa275
+  Latest Script Version: 1.1
+  MD5 Checksum: 08eec074be8fc569b38b598ce1dd2838
+  SHA-256 Checksum: 8b4a28c22142fbaa99145161980401c2322a48608695a06f3a3d25479adaa85c
 
   </description>
 
