@@ -1,0 +1,248 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+
+/*
+This is a simple script that looks up all the entries in the policy table that match a particular query
+It is useful to debug polcy configurations
+ */
+import "../import/junos.xsl";
+var $arguments = {
+    <argument> {
+        <name> "source-address";
+        <description> "Source IP address of the initial session creation packet";
+    }
+    <argument> {
+        <name> "destination-address";
+        <description> "Destination IP address of the initial session creation packet";
+    }
+    <argument> {
+        <name> "source-port";
+        <description> "Source port of the packet";
+    }
+    <argument> {
+        <name> "destination-port";
+        <description> "Destination port of the packet";
+    }
+    <argument> {
+        <name> "from-zone";
+        <description> "Ingress zone of the packet";
+    }
+    <argument> {
+        <name> "to-zone";
+        <description> "Egress zone of the packet";
+    }
+}
+param $source-address = {
+    expr "0.0.0.0/0";
+}
+param $destination-address = {
+    expr "0.0.0.0/0";
+}
+param $source-port = {
+    expr "0";
+}
+param $destination-port = {
+    expr "0";
+}
+param $protocol = {
+    expr "0";
+}
+param $from-zone = {
+    call find-zone($ip = $source-address);
+}
+param $to-zone = {
+    call find-zone($ip = $destination-address);
+}
+/* print-policy: Displays the policy info */
+template print-policy ($name, $from-zone, $to-zone, $source-address, $destination-address, $application, $action, $comment, $row = number("1"), $header = false()) {
+    var $format-string = "%-12.11s %-12.11s %-15.14j1s %-15.14s %-15.14s %-12.11s %-10.9s %s\n";
+    
+    if ($header) {
+        expr jcs:printf($format-string, "From-Zone", "To-Zone", "Name", "Src-Addr", "Dst-Addr", "Application", "Action", "");
+    
+    } else {
+        var $num-rows = {
+            if (count($application) >= count($source-address) && count($application) >= count($destination-address)) {
+                expr count($application);
+            
+            } else if (count($source-address) > count($application) && count($source-address) > count($destination-address)) {
+                expr count($source-address);
+            
+            } else {
+                expr count($destination-address);
+            }
+        }
+        
+        if ($row <= $num-rows) {
+            expr jcs:printf($format-string, $from-zone, $to-zone, $name, $source-address[$row] , $destination-address[$row] , $application[$row] , $action, $comment);
+            call print-policy($row = $row + 1, $num-rows, $source-address, $destination-address, $application);
+        }
+    }
+}
+
+/* find-zone: Returns the zone where a given IP is */
+template find-zone ($ip) {
+    
+    if ($ip == "0.0.0.0/0") {
+        expr "any";
+    
+    } else {
+        var $get-route-rpc = <command> {
+            expr "show route ";
+            expr $ip;
+            expr " active-path best";
+        }
+        var $get-rotue = jcs:invoke($get-route-rpc);
+        var $zone = {
+            if ($get-rotue//via) {
+                var $get-int-rpc = <command> {
+                    expr "show interface ";
+                    expr $get-rotue//via;
+                }
+                var $get-int = jcs:invoke($get-int-rpc);
+                
+                expr $get-int//logical-interface-zone-name;
+            
+            } else {
+                expr "any";
+            }
+        }
+        
+        expr $zone;
+    }
+}
+
+/* rshift: Shifts bits to the right. Used to do an IP/MASK comparision */
+template rshift ($number, $count) {
+    
+    /* <output>
+    <xsl:value-of select="jcs:printf('Shifting %i %i times\n',$number, $count)"/>		
+    </output> */
+    if ($count <= 0) {
+        expr $number;
+    
+    } else {
+        call rshift($number = floor($number div 2), $count = ($count) - 1);
+    }
+}
+
+/* match-ip: Returns true if the ip is in the prefix */
+template match-ip ($prefix, $ip) {
+    var $bytes-network = jcs:regex("([0-9]+).([0-9]+).([0-9]+).([0-9]+)/([0-9]+)", $prefix);
+    var $subnet = {
+        call rshift($number = $bytes-network[2] * 16777216 + $bytes-network[3] * 65536 + $bytes-network[4] * 256 + $bytes-network[5], $count = 32 -($bytes-network[6]));
+    }
+    var $bytes-ip = jcs:regex("([0-9]+).([0-9]+).([0-9]+).([0-9]+)", $ip);
+    var $ipnet = {
+        call rshift($number = $bytes-ip[2] * 16777216 + $bytes-ip[3] * 65536 + $bytes-ip[4] * 256 + $bytes-ip[5], $count = 32 - $bytes-network[6]);
+    }
+    
+    if ($ipnet == $subnet) {
+        expr true();
+    
+    } else {
+        expr false();
+    }
+}
+
+/* match-prefix-list: Returns true if the ip is in the prefix list */
+template match-prefix-list ($ip, $prefix-list) {
+    
+    if (not($prefix-list)) {
+        expr false();
+    
+    } else {
+        var $match-prefix = {
+            call match-ip($ip, $prefix = $prefix-list);
+        }
+        
+        if ($match-prefix == "true") {
+            expr true();
+        
+        } else {
+            call match-prefix-list($ip, $prefix-list = $prefix-list[position() > 1]);
+        }
+    }
+}
+
+match / {
+    <op-script-results> {
+        <output> {
+            call print-policy($header = true());
+        }
+        var $filters = {
+            if ($from-zone != "any") {
+                expr " from-zone ";
+                expr $from-zone;
+            }
+            if ($to-zone != "any") {
+                expr " to-zone ";
+                expr $to-zone;
+            }
+        }
+        var $get-policies-rpc = <command> {
+            expr " show security policies ";
+            expr $filters;
+            expr " detail ";
+        }
+        /* Get the list of possible policies */
+        var $policies = jcs:invoke($get-policies-rpc);
+        /* Loop throught the policies to find the matching ones */
+        
+        for-each ($policies//policy-information) {
+            var $match-source = {
+                call match-prefix-list($ip = $source-address, $prefix-list = .//source-address//address-prefix);
+            }
+            var $match-destination = {
+                call match-prefix-list($ip = $destination-address, $prefix-list = .//destination-address//address-prefix);
+            }
+            var $match-destination-port = {
+                if ($destination-port == "0") {
+                    expr true();
+                
+                } else if (./applications/application/application-term/destination-port-range[low == "0" && high == "0"]) {
+                    expr true();
+                
+                } else if (./applications/application/application-term/destination-port-range[low <= $destination-port && high >= $destination-port]) {
+                    expr true();
+                
+                } else {
+                    expr false();
+                }
+            }
+            var $match-source-port = {
+                if ($source-port == "0") {
+                    expr true();
+                
+                } else if (./applications/application/application-term/source-port-range[low == "0" && high == "0"]) {
+                    expr true();
+                
+                } else if (./applications/application/application-term/source-port-range[low <= $source-port && high >= $source-port]) {
+                    expr true();
+                
+                } else {
+                    expr false();
+                }
+            }
+            
+            /* <output>
+            <xsl:value-of select="jcs:printf('Policy name: %s\n',./policy-name)"/>
+            <xsl:value-of select="jcs:printf('  match source: %s\n', $match-source)"/>
+            <xsl:value-of select="jcs:printf('  match destination: %s\n', $match-destination)"/>
+            <xsl:value-of select="jcs:printf('  match source port: %s\n', $match-source-port)"/>
+            <xsl:value-of select="jcs:printf('  match destination port: %s\n', $match-destination-port)"/>
+            </output> */
+            if ($match-source == "true" && $match-destination == "true" && $match-source-port == "true" && $match-destination-port == "true") {
+                <output> {
+                    call print-policy($from-zone = ../../context-information/source-zone-name, $to-zone = ../../context-information/destination-zone-name, $name = ./policy-name, $destination-address = ./destination-addresses/destination-address/address-name, $source-address = ./source-addresses/source-address/address-name, $application = ./applications/application/application-name, $action = ./policy-action/action-type);
+                }
+            }
+        }
+    }
+}
+

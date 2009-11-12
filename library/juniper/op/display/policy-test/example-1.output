@@ -1,0 +1,27 @@
+This script performs a lookup in the policy table and returns the matching policies based on the search criteria. It accepts the following parameters
+
+user@cli> run op policy-test ?
+Possible completions:
+
+  destination-address  Destination IP address of the initial session creation packet
+  destination-port     Destination port of the packet
+  from-zone            Ingress zone of the packet
+  source-address       Source IP address of the initial session creation packet
+  source-port          Source port of the packet
+  to-zone              Egress zone of the packet
+
+If a parameter is not specified it will match all. If no parameter is provided, every policy will be returned.
+
+If a source/dest address is provided, but the security zone is not specified, the zone for that source/dest IP will be determined from the zone of the ingress/egress interface (doing a route lookup). Of course, if a zone is explicitely specified, it will be used instead of the one determined by the route lookup.
+
+user@cli# run op policy-test source-address 10.1.1.1 destination-address 10.2.2.2
+From-Zone    To-Zone      Name            Src-Addr        Dst-Addr        Application  Action
+trust        untrust      ftp-permit      any             any             junos-ftp    permit
+trust        untrust      http-https-rej  any             any             junos-https  reject
+                                                                          junos-http
+
+user@cli# run op policy-test source-address 10.1.1.1 destination-address 10.2.2.2 destination-port 443
+From-Zone    To-Zone      Name            Src-Addr        Dst-Addr        Application  Action
+trust        untrust      http-https-rej  any             any             junos-https  reject
+                                                                          junos-http
+
