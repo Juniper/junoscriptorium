@@ -1,0 +1,134 @@
+/*
+ * Author        : Patricio Giecco
+ * Version       : 1.0
+ * Last Modified :
+ * JUNOS Release : 9.3 and above
+ * Platform      : EX Series
+ *
+ * Description   : poesched.slax
+ * This event script is executed on the occurrence of 'poe-scheduler-start'
+ * event. According to the configuration mentioned in this file, under
+ * 'event-definition', this event is triggered in every 1 hour and this
+ * script get executed. This script disables/enables some interfaces for
+ * poe, based on the configured schedule for a particular time.
+ */ 
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $event-definition = {
+    <event-options> {
+        <generate-event> {
+            <name> 'poe-scheduler-start';
+            <time-interval> '3600';
+        }
+        <policy> {
+            <name> 'poe-scheduler';
+            <events> 'poe-scheduler-start';
+            <then> {
+                <event-script> {
+                    <name> 'poesched.slax';
+                }
+            }
+        }
+    }
+}
+
+var $arguments = <argument> {
+    <name> "time";
+    <description> "execute the scheduled action at the specified time";
+}
+
+/*
+ * This script is executed on the occurrence of event 'poe-scheduler-start'
+ * which occurs in every one hour. On execution of this script POE on/off
+ * on some ports based on a configured schedule. If the time was passed as
+ * a parameter then use the passed value otherwise get the system time-date
+ * and extract the time portion of it i.e. current time (only the hour).
+ */
+param $time = {
+    var $uptime = jcs:invoke("get-system-uptime-information");
+    var $date = $uptime//current-time/date-time;
+    
+    expr substring($date, 12, 2);
+}
+
+match / {
+
+    /*
+     * Get the poe configuration
+     */
+    var $poe-rpc = <get-configuration> {
+        <configuration> {
+            <poe>;
+        }
+    }
+
+    var $poe = jcs:invoke($poe-rpc);
+
+    /*
+     * Open a connection with mgd
+     */
+    var $con = jcs:open();
+
+    if (not($con)) {
+        <xnm:error> {
+            <message> "Not able to connect with local mgd";
+        }
+    }
+
+    /*
+     * Generate the xml formated config delta
+     */
+    var $xml := {
+        <configuration> {
+            <poe> {
+                /*
+                 * Go through all the groups that are scheduled at this time
+                 */
+                for-each ($poe//apply-macro[starts-with(name, "scheduler-") &&
+                          data/value == number($time)]) {
+                    var $splitName = jcs:regex("scheduler-(.+)", name);
+                    var $group = $splitName[2];
+                    var $action = data[value == number($time)]/name;
+
+                    /*
+                     * select all the interfaces belonging to the sceduled
+                     * groups
+                     */
+                    for-each ($poe//interface[apply-macro/name == "scheduler" &&
+                              apply-macro/data/name == "group" &&
+                              apply-macro/data/value == $group]) {
+                        if ($action == "on" && disable) {
+                            <interface> {
+                                <name> name;
+                                <disable delete = "delete">;
+                            }
+                        } else if ($action == "off" && not(disable)) {
+                            <interface> {
+                                <name> name;
+                                <disable>;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /*
+     * If some interface statements are present in the $xml/configuration/poe,
+     * then commit the changes otherwise not required
+     */
+    if ($xml/configuration/poe/interface) {
+        var $results = {
+            call jcs:load-configuration($connection = $con,
+                                        $configuration = $xml);
+        }
+    }
+}
