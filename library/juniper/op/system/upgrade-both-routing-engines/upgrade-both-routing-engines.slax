@@ -1,10 +1,9 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.0
- * Last Modified : October 6, 2009
+ * Version       : 1.1
+ * Last Modified : November 12, 2009
  * Platform      : M/MX/T
  * Release       : 8.2 and above
- * License       : Public Domain
  *
  * This script provides a quick and dirty way to upgrade both routing-engines
  * with a single command.  Note that there is no attempt at ISSU or graceful
@@ -14,6 +13,31 @@
  * The usage is simple, at a minimum specify the file parameter with the filename.
  * If the force or validate upgrade knobs are desired then those are be specified
  * on the command-line as well, otherwise they default to their default value.
+ *
+ * Revisions:
+ *    1.1 - Corrected if statements and added space prior to no-validate in 
+ *    build-upgrade-strings() template.  Added BSD-style license. 
+ *
+ * License       : BSD-Style
+ *  Copyright (c) 2009 Curtis Call. All Rights Reserved.
+ *  Redistribution and use in source and binary forms, with or without modification, 
+ *  are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice, this 
+ *  list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  this list of conditions and the following disclaimer in the documentation and/or
+ *  other materials provided with the distribution.
+ *  3. The name of the author may not be used to endorse or promote products derived 
+ *  from this software without specific prior written permission.
+ *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED 
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+ *  AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE 
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN 
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 version 1.0;
@@ -130,16 +154,16 @@ match / {
  */
 template build-upgrade-string($re, $file, $force, $validate) {
     if( $force == "true" ) {
-        if( $validate == false ) {
-            expr "request system software add " _ $file _ " reboot " _ $re _ " force " _ "no-validate";
+        if( $validate == "false" ) {
+            expr "request system software add " _ $file _ " reboot " _ $re _ " force " _ " no-validate";
         }
         else {
             expr "request system software add " _ $file _ " reboot " _ $re _ " force";
         }
     }
     else {
-        if( $validate == false ) {
-            expr "request system software add " _ $file _ " reboot " _ $re _ "no-validate";
+        if( $validate == "false" ) {
+            expr "request system software add " _ $file _ " reboot " _ $re _ " no-validate";
         }
         else {
             expr "request system software add " _ $file _ " reboot " _ $re;
