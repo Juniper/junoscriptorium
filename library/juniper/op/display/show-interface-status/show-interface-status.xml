@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<script>
+<title>show-interface-status.slax</title>
+<author>tokolowicz</author>
+<synopsis>
+This script mirrors the Cisco IOS comand "show interface status"
+</synopsis>
+<coe>op</coe>
+<type>display</type>
+
+<description>
+This script displays the logical-interface name, status, VLAN members, speed and duplex of the Ethernet switching-interfaces on the system. It is meant to provide similar output to the Cisco IOS command "show interface status". A command-line argument exists (interface) that filters the exact interface. Error checking is performed based on the interface entered by the user. 
+  
+
+</description>
+
+ <example>
+ <title>Example</title>
+ <config>example-1.conf</config>
+ <output>example-1.output</output>
+ </example>
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>
