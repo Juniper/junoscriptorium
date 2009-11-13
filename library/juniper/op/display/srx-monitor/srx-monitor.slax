@@ -1,0 +1,101 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+/*
+ * This op-script is for performance monitoring on the SRX
+ */
+
+import "../import/junos.xsl";
+var $connection = jcs:open();
+
+template monitor-fpc ($fpc-number) {
+    var $rpc-security-monitor-fpc = <rpc> {
+        <command> {
+            expr "show security monitor fpc ";
+            expr $fpc-number;
+            expr " no-forwarding";
+        }
+    }
+    var $security-monitor-results = jcs:execute($connection, $rpc-security-monitor-fpc);
+    
+    for-each ($security-monitor-results//spu-utilization-statistics) {
+        var $fpc-number = ./fpc-number[1];
+        var $pic-number0 = ./pic-number[1];
+        var $spu-cpu-utilization0 = ./spu-cpu-utilization[1];
+        var $spu-memory-utilization0 = ./spu-memory-utilization[1];
+        var $spu-current-flow-session0 = ./spu-current-flow-session[1];
+        var $spu-max-flow-session0 = ./spu-max-flow-session[1];
+        var $spu-current-cp-session0 = ./spu-current-cp-session[1];
+        var $spu-max-cp-session0 = ./spu-max-cp-session[1];
+        var $pic-number1 = ./pic-number[2];
+        var $spu-cpu-utilization1 = ./spu-cpu-utilization[2];
+        var $spu-memory-utilization1 = ./spu-memory-utilization[2];
+        var $spu-current-flow-session1 = ./spu-current-flow-session[2];
+        var $spu-max-flow-session1 = ./spu-max-flow-session[2];
+        var $spu-current-cp-session1 = ./spu-current-cp-session[2];
+        var $spu-max-cp-session1 = ./spu-max-cp-session[2];
+        <output> {
+            expr jcs:printf("%3d %3d %3d %3d %14d %14d %14d %14d
+", $fpc-number, $pic-number0, $spu-cpu-utilization0, $spu-memory-utilization0, $spu-current-flow-session0, $spu-max-flow-session0, $spu-current-cp-session0, $spu-max-cp-session0);
+            expr jcs:printf("%3d %3d %3d %3d %14d %14d %14d %14d
+", $fpc-number, $pic-number1, $spu-cpu-utilization1, $spu-memory-utilization1, $spu-current-flow-session1, $spu-max-flow-session1, $spu-current-cp-session1, $spu-max-cp-session1);
+        }
+    }
+}
+
+template get-srx-spcs () {
+    var $rpc-show-chassis-hardware = <rpc> {
+        <command> "show chassis hardware no-forwarding";
+    }
+    var $show-chassis-hardware-results = jcs:execute($connection, $rpc-show-chassis-hardware);
+    <output> {
+        expr jcs:printf("%4s
+", "SPUs");
+        expr jcs:printf("%-3s %-3jcs %-3jcs %-3jcs %14s %14s %14s %14s
+", "FPC", "PIC", "CPU", "Mem", "Flow Sess Cur", "Flow Ses Max", "CP Ses Cur", "CP Ses Max");
+        expr jcs:printf("%-80j1s
+", "--------------------------------------------------------------------------------");
+    }
+    var $fpc-regex = "(FPC )([0-9]+)";
+    
+    for-each ($show-chassis-hardware-results//chassis/chassis-module) {
+        if (contains(./description, "SPC")) {
+            var $fpc-number = jcs:regex($fpc-regex, ./name);
+            
+            call monitor-fpc($fpc-number = $fpc-number[3]);
+        }
+    }
+}
+
+template get-srx-re () {
+    var $rpc-show-chassis-routing-engine = <rpc> {
+        <command> "show chassis routing-engine no-forwarding";
+    }
+    var $show-chassis-routing-engine-results = jcs:execute($connection, $rpc-show-chassis-routing-engine);
+    <output> {
+        expr jcs:printf("%12s
+", "Route Engine");
+        expr jcs:printf("%-4s %-7jcs %-7jcs %-7jcs %8s %8s %8s %9s %8s
+", "Slot", "Mem Size", "Mem Used", "CPU Avg", "CPU User", "CPU Bkgd", "CPU Krnl", "CPU Intpt", "CPU Idle");
+        expr jcs:printf("%-80j1s
+", "--------------------------------------------------------------------------------");
+        
+        for-each ($show-chassis-routing-engine-results//route-engine) {
+            expr jcs:printf("%4d %7d %9d %7d %8d %8d %8d %9d %8d
+", ./slot, ./memory-dram-size, ./memory-buffer-utilization,(./cpu-user + ./cpu-background + ./cpu-system + ./cpu-interrupt) , ./cpu-user, ./cpu-background, ./cpu-system, ./cpu-interrupt, ./cpu-idle);
+        }
+    }
+}
+
+match / {
+    <op-script-results> {
+        call get-srx-re();
+        call get-srx-spcs();
+    }
+}
+
