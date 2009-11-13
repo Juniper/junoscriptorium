@@ -1,0 +1,775 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+
+/*
+Copyright Juniper Networks 2008
+All rights reserved and owned by Juniper Networks
+
+For the SRX platform, the JUNOScripted track-ip implmentation allows the user to 
+utilize this critical feature on the SRX platform. It allows for path and next
+hop validation through the existing network infrastructure with the ICMP protocol.
+Upon detection of a failure the script will execute a failover to the other node
+in an attempt to prevent downtime.
+
+Authors: Rob Cameron (robc@juniper.net) and Patricio Giecco (pgiecco@juniper.net)
+
+ */
+
+/*
+Things to do:
+Add in more logging
+ */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+/* srx-ha-lib.xsl file start */
+/* use a global connection for all rpc connections */
+var $connection = jcs:open();
+/* Pull the chassis cluster status and use throughout the script */
+var $get-cluster-status = <rpc> {
+    <command> "show chassis cluster status";
+}
+var $cluster-status-results = jcs:execute($connection, $get-cluster-status);
+var $chassis-cluster-rg-rpc = <rpc> {
+    <get-configuration> {
+        <configuration> {
+            <chassis> {
+                <cluster>;
+            }
+        }
+    }
+}
+/* Pull the redundancy group information information out of the configuration, used throughout made global */
+var $chassis-cluster-config = jcs:execute($connection, $chassis-cluster-rg-rpc);
+/* use this as a global to determine the interface ownership by chassis model */
+var $product-model = {
+    call get-product-model();
+}
+var $get-interface-ownership = {
+    if ($product-model == "srx5600") {
+        var $node0-max-interface = 5;
+        var $node0-min-interface = 0;
+        var $node1-max-interface = 11;
+        var $node1-min-interface = 6;
+        <max-interface-number> {
+            <node0-max> $node0-max-interface;
+            <node0-min> $node0-min-interface;
+            <node1-max> $node1-max-interface;
+            <node1-min> $node1-min-interface;
+        }
+    
+    } else if ($product-model == "srx5800") {
+        var $node0-max-interface = 11;
+        var $node0-min-interface = 0;
+        var $node1-max-interface = 23;
+        var $node1-min-interface = 12;
+        <max-interface-number> {
+            <node0-max> $node0-max-interface;
+            <node0-min> $node0-min-interface;
+            <node1-max> $node1-max-interface;
+            <node1-min> $node1-min-interface;
+        }
+    }
+}
+var $chassis-interface-ownership = ext:node-set($get-interface-ownership);
+/* end global section */
+/* start template section */
+/* Determine which interface are monitored */
+template get-monitor-interface-current-weight ($redundancy-group) {
+    var $results-get-monitor-interface-weight = jcs:execute($connection, $chassis-cluster-rg-rpc);
+    var $interface-monitor-weight = $results-get-monitor-interface-weight/chassis/cluster/apply-macro[name == "failover-interface-monitor"]/data[name == "$redundancy-group"]/value;
+    
+    if (boolean($interface-monitor-weight)) {
+        <text> $interface-monitor-weight;
+    
+    } else {
+        <text> "0";
+    }
+}
+
+/* Determine current time */
+template get-current-time () {
+    var $rpc-get-current-time = <rpc> {
+        <get-system-uptime-information>;
+    }
+    var $results-get-current-time = jcs:execute($connection, $rpc-get-current-time);
+    
+    if ($results-get-current-time/multi-routing-engine-item) {
+        var $current-time = $results-get-current-time/multi-routing-engine-item[1]/system-uptime-information/current-time/date-time/@junos:seconds;
+        <text> $current-time;
+    
+    } else {
+        var $current-time = $results-get-current-time/current-time/date-time/@junos:seconds;
+        <text> $current-time;
+    }
+}
+
+/* Check if RG0 is ready to failover */
+template check-RG0-failback () {
+    var $rg0-last-failover = {
+        call get-rg0-last-failover();
+    }
+    var $current-time = {
+        call get-current-time();
+    }
+    var $local-node = {
+        call get-local-node();
+    }
+    var $rg0-master = {
+        call get-master() {
+            with $redundancy-group = {
+                expr "0";
+             }
+        }
+    }
+    var $rg1-master = {
+        call get-master() {
+            with $redundancy-group = {
+                expr "1";
+             }
+        }
+    }
+    var $rg0-primary-node = {
+        /* Check who is the primary and whether the cluster has not been failed over already */
+        if ($cluster-status-results/redundancy-group[1]/device-stats/redundancy-group-status[1] == "secondary" && $cluster-status-results/redundancy-group[1]/device-stats/redundancy-group-status[2] == "primary" && $cluster-status-results/redundancy-group[1]/device-stats/failover-mode[2] == "no") {
+            /* failover RG to node0 */
+            <text> "0";
+        
+        } else if ($cluster-status-results/redundancy-group[1]/device-stats/redundancy-group-status[1] == "primary" && $cluster-status-results/redundancy-group[1]/device-stats/redundancy-group-status[2] == "secondary" && $cluster-status-results/redundancy-group[1]/device-stats/failover-mode[1] == "no") {
+            /* failover RG to node1 */
+            <text> "1";
+        }
+    }
+    
+    if ($local-node == $rg0-master) {
+        if ($rg0-master != $rg1-master) {
+            if (($current-time) >($rg0-last-failover + 300)) {
+                call request-rg-failover($node = $rg0-primary-node) {
+                    with $redundancy-group = {
+                        expr "0";
+                     }
+                }
+            }
+        }
+    }
+}
+
+
+/* Check to to see the manual failover flag needs to be reset, if it does then reset it for all of the rgs
+
+ */
+template check-and-reset-manual-failover-flag () {
+    if (boolean($chassis-cluster-config/chassis/cluster/apply-macro[name == "monitoring-options"]/data[name == "clear-failover"])) {
+        var $rpc-check-manual-failover-flag = <rpc> {
+            <command> "show chassis cluster status";
+        }
+        var $result-check-manual-failover-flag = jcs:execute($connection, $rpc-check-manual-failover-flag);
+        var $result-check-manual-failover-flag-node-set = ext:node-set($result-check-manual-failover-flag);
+        
+        for-each ($result-check-manual-failover-flag//redundancy-group) {
+            if (./device-stats/failover-mode[1] == "yes") {
+                call reset-failover-flag($redundancy-group = ./redundancy-group-id[1]);
+            }
+        }
+    }
+}
+
+/* Determine the minute in the configuration */
+template get-rg0-last-failover () {
+    var $results-get-rg0-last-failover = jcs:execute($connection, $chassis-cluster-rg-rpc);
+    var $last-rg0-failover-time = $results-get-rg0-last-failover/chassis/cluster/apply-macro[name == "failover-monitoring"]/data[name == "last-failover"]/value;
+    
+    if (boolean($last-rg0-failover-time)) {
+        <text> $last-rg0-failover-time;
+    
+    } else {
+        <text> "0";
+    }
+}
+
+/* Insert the last minute into the configuration */
+template set-rg0-last-failover () {
+    var $current-time = {
+        call get-current-time();
+    }
+    /* <xsl:value-of select="jcs:output(concat('Setting last failover time for RG0 to ', $current-time))"/> */
+    var $rpc-configure-private = <rpc> {
+        <open-configuration> {
+            <private>;
+        }
+    }
+    
+    expr jcs:execute($connection, $rpc-configure-private);
+    var $rpc-set-rg0-last-failover = <rpc> {
+        <load-configuration> {
+            <configuration> {
+                <chassis> {
+                    <cluster> {
+                        <apply-macro> {
+                            <name> "failover-monitoring";
+                            <data> {
+                                <name> "last-failover";
+                                <value> $current-time;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    expr jcs:execute($connection, $rpc-set-rg0-last-failover);
+    var $commit = <rpc> {
+        <commit-configuration>;
+    }
+    expr jcs:execute($connection, $commit);
+}
+
+/* Insert the last minute into the configuration */
+template set-track-interface-last-weight ($weight = 0, $redundancy-group) {
+    var $current-weight = {
+        call get-monitor-interface-current-weight($redundancy-group);
+    }
+    var $total-weight = $weight + $current-weight;
+    /* <xsl:value-of select="jcs:output(concat('Setting track interface weight to ', $weight, ' for RG ', $redundancy-group))"/> */
+    /* <xsl:value-of select="jcs:output(concat('Setting last failover time for RG0 to ', $current-time))"/> */
+    var $rpc-configure-private = <rpc> {
+        <open-configuration> {
+            <private>;
+        }
+    }
+    
+    expr jcs:execute($connection, $rpc-configure-private);
+    var $rpc-set-track-interface-last-weight = <rpc> {
+        <load-configuration> {
+            <configuration> {
+                <chassis> {
+                    <cluster> {
+                        <apply-macro> {
+                            <name> "failover-interface-monitor";
+                            <data> {
+                                <name> $redundancy-group;
+                                <value> $total-weight;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    expr jcs:execute($connection, $rpc-set-track-interface-last-weight);
+    var $commit = <rpc> {
+        <commit-configuration>;
+    }
+    expr jcs:execute($connection, $commit);
+}
+
+/* abstract the actual failover command outside of request failover */
+template request-rg-failover ($node, $redundancy-group) {
+    
+    if ($redundancy-group != "") {
+        /* rpc command for failover */
+        var $rpc-failover = <rpc> {
+            <command> {
+                expr "request chassis cluster failover node ";
+                expr $node;
+                expr " redundancy-group ";
+                expr $redundancy-group;
+            }
+        }
+        
+        expr jcs:execute($connection, $rpc-failover);
+    }
+    /* added to allow command take effect */
+    expr jcs:sleep(0, 500);
+}
+
+
+/*
+request-failover :: Chassis failover
+This template performs an rg failover of the requested group
+
+@param redundancy-group specifies the redundancy group to failover, defaults to 1
+@param reset-flag specifies the manual failover flag should be cleared, defaults to false
+@param fullfailover-flag specifies if both redundancy groups should be failed over, defaults to faulse
+@param rg0-failover-check specifies if the failover time should be checked, defaults to true
+ */
+template request-failover () {
+    param $redundancy-group = {
+        expr "1";
+    }
+    param $reset-flag = {
+        expr false();
+    }
+    param $fullfailover-flag = {
+        expr "0";
+    }
+    param $rg0-failover-check = {
+        expr "1";
+    }
+    /* Define which RG to failover */
+    /* force the selection of a parameter disable the default */
+    /* Chosing this forces both RGs to failover */
+    /* Verify if its safe to failover RG0 */
+    /* determite the other RG that would need to failover in a full failover */
+    var $other-redundancy-group = {
+        if ($redundancy-group == 0) {
+            <text> "1";
+        
+        } else if ($redundancy-group == 1) {
+            <text> "0";
+        }
+    }
+    /* used to determine if we should fully failover */
+    var $rg0-master = {
+        call get-master() {
+            with $redundancy-group = {
+                expr "0";
+             }
+        }
+    }
+    var $rg1-master = {
+        call get-master() {
+            with $redundancy-group = {
+                expr "1";
+             }
+        }
+    }
+    var $rg0-last-failover = {
+        call get-rg0-last-failover();
+    }
+    var $current-time = {
+        call get-current-time();
+    }
+    
+    /* <xsl:variable name="local-node">
+    <xsl:call-template name="get-local-node"/>
+    </xsl:variable> */
+    var $rg-primary-node = {
+        /* Check who is the primary and whether the cluster has not been failed over already */
+        if ($cluster-status-results/redundancy-group[$redundancy-group + 1]/device-stats/redundancy-group-status[1] == "secondary" && $cluster-status-results/redundancy-group[$redundancy-group + 1]/device-stats/redundancy-group-status[2] == "primary" && $cluster-status-results/redundancy-group[$redundancy-group + 1]/device-stats/failover-mode[2] == "no") {
+            /* failover RG to node0 */
+            <text> "0";
+        
+        } else if ($cluster-status-results/redundancy-group[$redundancy-group + 1]/device-stats/redundancy-group-status[1] == "primary" && $cluster-status-results/redundancy-group[$redundancy-group + 1]/device-stats/redundancy-group-status[2] == "secondary" && $cluster-status-results/redundancy-group[$redundancy-group + 1]/device-stats/failover-mode[1] == "no") {
+            /* failover RG to node1 */
+            <text> "1";
+        }
+    }
+    var $rg0-primary-node = {
+        /* Check who is the primary and whether the cluster has not been failed over already */
+        if ($cluster-status-results/redundancy-group[1]/device-stats/redundancy-group-status[1] == "secondary" && $cluster-status-results/redundancy-group[1]/device-stats/redundancy-group-status[2] == "primary" && $cluster-status-results/redundancy-group[1]/device-stats/failover-mode[2] == "no") {
+            /* failover RG to node0 */
+            <text> "0";
+        
+        } else if ($cluster-status-results/redundancy-group[1]/device-stats/redundancy-group-status[1] == "primary" && $cluster-status-results/redundancy-group[1]/device-stats/redundancy-group-status[2] == "secondary" && $cluster-status-results/redundancy-group[1]/device-stats/failover-mode[1] == "no") {
+            /* failover RG to node1 */
+            <text> "1";
+        }
+    }
+    
+    /*
+    Execute the failover to the other chassis
+     */
+    if (boolean($rg0-failover-check == 1)) {
+        if (boolean($rg-primary-node != "")) {
+            if (boolean($fullfailover-flag &&((($rg0-master == "node0") &&($rg1-master == "node0")) ||(($rg0-master == "node1") &&($rg1-master == "node1"))))) {
+                if (($current-time) >($rg0-last-failover + 300)) {
+                    var $time-diff = $current-time - $rg0-last-failover;
+                    
+                    expr jcs:syslog(146, concat($time-diff, " seconds since last failover of RG0. Failing over RG0 to node", $rg-primary-node));
+                    /* <xsl:value-of select="jcs:output(concat($time-diff, ' seconds since last failover of RG0. Failing over RG0.'))"/> */
+                    /* <xsl:value-of select="jcs:output('Requesting failover for RG1')"/> */
+                    expr jcs:syslog(146, concat("Requesting failover for RG1 to node", $rg-primary-node));
+                    call request-rg-failover($node = $rg-primary-node, $redundancy-group);
+                    /* full failover matched requesting RG0 failover */
+                    call request-rg-failover($node = $rg0-primary-node, $redundancy-group = $other-redundancy-group);
+                    call set-rg0-last-failover();
+                
+                } else {
+                    var $time-diff = $current-time - $rg0-last-failover;
+                    
+                    expr jcs:syslog(146, concat("Not enough time has passed to failover RG0 only ", $time-diff, " seconds have passed on node", $rg0-primary-node));
+                    /* <xsl:value-of select="jcs:output(concat('Not enough time has passed to failover RG0 only ', $time-diff, ' seconds have passed'))"/> */
+                    /* <xsl:value-of select="jcs:output('Requesting failover for RG1')"/> */
+                    expr jcs:syslog(146, concat("Requesting failover for RG1 to node", $rg-primary-node));
+                    call request-rg-failover($node = $rg-primary-node) {
+                        with $redundancy-group = {
+                            expr "1";
+                         }
+                    }
+                }
+            
+            } else if ($redundancy-group == 0) {
+                if ($current-time >($rg0-last-failover + 300)) {
+                    var $time-diff = $current-time - $rg0-last-failover;
+                    /* <xsl:value-of select="jcs:output(concat($time-diff, ' seconds since last failover of RG0. Failing over RG0.'))"/> */
+                    expr jcs:syslog(146, concat($time-diff, " seconds since last failover of RG0. Failing over RG0 to node", $rg-primary-node));
+                    call request-rg-failover($node = $rg-primary-node, $redundancy-group);
+                    call set-rg0-last-failover();
+                
+                } else {
+                    var $time-diff = $current-time - $rg0-last-failover;
+                    /* <xsl:value-of select="jcs:output(concat('Not enough time has passed to failover RG0 over ', $time-diff, ' seconds have passed'))"/> */
+                    expr jcs:syslog(146, concat("Not enough time has passed to failover RG0 only ", $time-diff, " seconds have passed on node", $rg0-primary-node));
+                }
+            
+            } else if ($redundancy-group == 1) {
+                expr jcs:syslog(146, concat("Requesting failover for RG1 to node", $rg-primary-node));
+                call request-rg-failover($node = $rg-primary-node, $redundancy-group);
+            }
+        }
+    
+    } else {
+        if (boolean($rpc-failover != "")) {
+            if (boolean($fullfailover-flag)) {
+                /* <xsl:value-of select="jcs:output('Requesting full failover for both RG0 and RG1')"/> */
+                expr jcs:syslog(146, concat("Requesting failover for RG0 and RG1 to node", $rg-primary-node));
+                call request-rg-failover($node = $rg-primary-node, $redundancy-group);
+                /* full failover matched requesting RG0 failover */
+                call request-rg-failover($node = $rg0-primary-node, $redundancy-group = $other-redundancy-group);
+                call set-rg0-last-failover();
+            
+            } else if ($redundancy-group == 0) {
+                /* <xsl:value-of select="jcs:output('Requesting failover for RG0')"/> */
+                expr jcs:syslog(146, concat("Requesting failover for RG0 to node", $rg0-primary-node));
+                call request-rg-failover($node = $rg-primary-node, $redundancy-group);
+                call set-rg0-last-failover();
+            
+            } else if ($redundancy-group == 1) {
+                /* <xsl:value-of select="jcs:output('Requesting failover for RG1')"/> */
+                expr jcs:syslog(146, concat("Requesting failover for RG1 to node", $rg-primary-node));
+                call request-rg-failover($node = $rg-primary-node, $redundancy-group);
+            }
+        }
+    }
+    
+    /*
+    Clear the failover status if requested
+     */
+    if (boolean($reset-flag)) {
+        if (boolean($fullfailover-flag)) {
+            call reset-failover-flag($redundancy-group);
+            call reset-failover-flag($redundancy-group = $other-redundancy-group);
+        
+        } else {
+            call reset-failover-flag($redundancy-group);
+        }
+    }
+}
+
+
+/*
+reset-failover-flag :: Get Master
+This template is used to reset the failover flag
+
+@param redundancy-group specifies the redundancy group to failover, 1 is the default
+ */
+template reset-failover-flag () {
+    param $redundancy-group = {
+        expr "1";
+    }
+    var $rpc-clear-failover-flag = <rpc> {
+        <command> {
+            expr "request chassis cluster failover reset redundancy-group ";
+            expr $redundancy-group;
+        }
+    }
+    
+    /* <xsl:value-of
+    select="jcs:output(concat('Reseting manual failover for redundancy group ', $redundancy-group))"/> */
+    expr jcs:syslog(146, concat("Reseting manual failover for redundancy group ", $redundancy-group));
+    expr jcs:execute($connection, $rpc-clear-failover-flag);
+    expr jcs:sleep(0, 500);
+}
+
+
+/*
+get-master :: Get Master
+This template is used to determine device is master of a redundancy group (RG0 by default).
+
+@param redundancy-group specifies the redundancy group to check master default is 0
+ */
+template get-master () {
+    param $redundancy-group = {
+        expr "0";
+    }
+    /* Determine the master of the chassis cluster */
+    var $rg-node0-priority = $cluster-status-results/redundancy-group[$redundancy-group + 1]/device-stats/redundancy-group-status[1];
+    var $rg-node1-priority = $cluster-status-results/redundancy-group[$redundancy-group + 1]/device-stats/redundancy-group-status[2];
+    
+    if (not($rg-node0-priority) || not($rg-node1-priority)) {
+        /* One Device is not communicating to the other the test will not run */
+        
+        /* <xsl:value-of
+        select="jcs:output('Only one cluster member has been found. Check connectivity to the other cluster member.')"
+        /> */
+    
+    } else if ($rg-node0-priority == "primary" && $rg-node1-priority != "primary") {
+        /* Node0 is the primary returning Node0 */
+        /* <xsl:value-of select="jcs:output(concat('Node0 is the master for redundancy group: ', $redundancy-group))"/> */
+        <text> "node0";
+    
+    } else if ($rg-node0-priority != "primary" && $rg-node1-priority == "primary") {
+        /* Node1 is the primary returning Node1 */
+        /* <xsl:value-of select="jcs:output(concat('Node1 is the master for redundancy group: ', $redundancy-group))"/> */
+        <text> "node1";
+    
+    } else {
+        /* priorities are the same */
+        /* <xsl:value-of select="jcs:output('An unexpected result has occured while checking the node status.')" /> */
+    }
+}
+
+/* Return the local node value */
+template get-local-node () {
+    var $get-local-RE = <rpc> {
+        <command> "show chassis routing-engine node local";
+    }
+    /* Get the local RE node */
+    var $local-check-results = jcs:execute($connection, $get-local-RE);
+    <text> $local-check-results/multi-routing-engine-item/re-name;
+}
+
+
+/*
+get-manual-failover-flag :: Get manual failover flag
+This template is used to determine if the failover flag is set
+
+@param redundancy-group specifies the redundancy group to check master default is 0
+ */
+template get-manual-failover-flag ($redundancy-group) {
+    var $rpc-check-manual-failover-flag = <rpc> {
+        <command> "show chassis cluster status";
+    }
+    var $result-check-manual-failover-flag = jcs:execute($connection, $rpc-check-manual-failover-flag);
+    <text> $result-check-manual-failover-flag/redundancy-group[$redundancy-group + 1]/device-stats/failover-mode[1];
+}
+
+/* determine and return the current product model */
+template get-product-model () {
+    var $rpc-product-model = <rpc> {
+        <command> "show version";
+    }
+    var $results-product-model = jcs:execute($connection, $rpc-product-model);
+    
+    if ($results-product-model/multi-routing-engine-item) {
+        <text> $results-product-model/multi-routing-engine-item[1]/software-information/product-model;
+    
+    } else {
+        expr $results-product-model/software-information/product-model;
+    }
+}
+
+/* end template section */
+/* srx-ha-lib.xsl file end */
+/* Global variables */
+var $local-node-name = {
+    call get-local-node();
+}
+/* Determine the master for RG0 */
+var $master-node-name = {
+    call get-master() {
+        with $redundancy-group = {
+            expr "0";
+         }
+    }
+}
+var $master-RG1 = {
+    call get-master() {
+        with $redundancy-group = {
+            expr "1";
+         }
+    }
+}
+var $node-regex = "(node)([0-9]+)";
+var $local-node-number = jcs:regex($node-regex, $local-node-name);
+var $rg1-node-number = jcs:regex($node-regex, $master-RG1);
+
+/*
+ping-server :: Ping server
+This template returns the status of the server by using
+the ping rpc provided by JUNOS
+
+@param host: the IP address or hostname of the system
+@param interval: the time between ping attempts 1 second is the default
+@param count: the total number of ping attempts 3 attepmts is the default
+ */
+template ping-server ($host, $interval, $count, $wait, $routing-instance) {
+    /* Optimize template to provide defaults for params */
+    /* This variable is the JUNOScript RPC call to execute the ping */
+    var $rpc-ping = <rpc> {
+        <ping> {
+            <host> $host;
+            if (boolean($interval)) {
+                <interval> $interval;
+            
+            } else {
+                <interval> "0.1";
+            }
+            if (boolean($count)) {
+                <count> $count;
+            
+            } else {
+                <count> "3";
+            }
+            if (boolean($wait)) {
+                <wait> $wait;
+            
+            } else {
+                <wait> "1";
+            }
+            if (boolean($routing-instance)) {
+                <routing-instance> $routing-instance;
+            }
+            <verbose>;
+        }
+    }
+    /* contains the results from the ping test */
+    var $ping-results = jcs:execute($connection, $rpc-ping);
+    /* counts the number of successful pings */
+    var $ping-ok = count($ping-results/probe-result/probe-success);
+    /* <xsl:value-of select="jcs:output(concat('SUCCESS COUNT ', $ping-ok))"/> */
+    if ($ping-ok != 0) {
+        expr "ok";
+    
+    } else {
+        expr "nok";
+    }
+}
+
+
+/*
+main :: The starting point and main template for track ip
+This is the main loop for the test.
+It executes the ping tests and then will failover the cluster if there is an issue.
+
+@param count the specified number of times this loop should run
+ */
+template main ($count) {
+    /* check to see if we need to ruin through the loop again */
+    if ($count > 0) {
+        /* Log the iteration number */
+        /* <xsl:value-of select="jcs:output(concat('checking servers ',$count,' iterations to go'))"/> */
+        /* This variable stores the list of RGs that need to be failed over */
+        var $ping-test-results = <redundancy-groups> {
+            
+            for-each ($chassis-cluster-config//cluster/redundancy-group) {
+                var $rg = ./name;
+                <redundancy-group> {
+                    <name> $rg;
+                    
+                    /* Loop through the apply-macro track-* statements and check each server
+                    adds a server node to the redundancy group for each host tracked */
+                    
+                    for-each (./apply-macro[starts-with(name, "track-")]) {
+                        var $server-status = {
+                            /* Ping with the user specified ping count */
+                            call ping-server($host = ./data[name == "server"]/value, $count = ./data[name == "count"]/value, $wait = ./data[name == "wait"]/value, $interval = ./data[name == "interval"]/value, $routing-instance = ./data[name == "routing-instance"]/value);
+                        }
+                        
+                        if ($server-status == "nok") {
+                            <server> {
+                                <name> name;
+                                <weight> ./data[name == "weight"]/value;
+                            }
+                        
+                        } else if ($server-status == "ok") {
+                            /* Do nothing */
+                        }
+                    }
+                }
+            }
+        }
+        var $rg-ping-results = ext:node-set($ping-test-results);
+        
+        if ($rg-ping-results/redundancy-groups/redundancy-group[sum(server/weight) > 254]) {
+            expr jcs:output($ping-test-results);
+            /* failover each redundancy group that exceeds 254 */
+            
+            for-each ($rg-ping-results/redundancy-groups/redundancy-group[sum(server/weight) > 254]) {
+                /* <xsl:value-of select="jcs:output(concat('RG:', name ,' needs to be failed over'))"/> */
+                call request-failover($redundancy-group = name, $reset-flag = boolean($chassis-cluster-config/chassis/cluster/apply-macro[name == "monitoring-options"]/data[name == "clear-failover"]), $fullfailover-flag = boolean($chassis-cluster-config/chassis/cluster/apply-macro[name == "monitoring-options"]/data[name == "full-failover"]));
+                call set-rg0-last-failover();
+            }
+        
+        } else {
+            /* <xsl:value-of select="jcs:output('Tested servers are ok')"/> */
+            call main($count = $count - 1);
+        }
+    
+    } else {
+        /* No more interations to run */
+        /* determine if RG0 should follow the leader RG1 */
+        call check-RG0-failback();
+    }
+}
+
+match / {
+    <op-script-results> {
+        /* In here we loop through the Track-ip statements and execute pings against them */
+        if (($local-node-name == $master-node-name) && $cluster-status-results/redundancy-group[2]/device-stats[1]/device-priority[$rg1-node-number[3] + 1] != 0) {
+            /* <xsl:value-of select="jcs:output('Node is the master of RG0, cheking tracked objects')"/> */
+            /* Figure out how long it takes to check all the servers */
+            var $runtimes = <exec-time> {
+                
+                for-each ($chassis-cluster-config//cluster/redundancy-group) {
+                    
+                    for-each (./apply-macro[starts-with(name, "track-")]) {
+                        <time> {
+                            var $count = {
+                                if (boolean(./data[name == "count"]/value)) {
+                                    expr ./data[name == "count"]/value;
+                                
+                                } else {
+                                    expr "3";
+                                }
+                            }
+                            var $interval = {
+                                if (boolean(./data[name == "interval"]/value)) {
+                                    expr ./data[name == "interval"]/value;
+                                
+                                } else {
+                                    expr "0.1";
+                                }
+                            }
+                            var $wait = {
+                                if (boolean(./data[name == "wait"]/value)) {
+                                    expr ./data[name == "wait"]/value;
+                                
+                                } else {
+                                    expr "1";
+                                }
+                            }
+                            
+                            expr (($count * $interval) +($wait - 1)) * 0.668;
+                        }
+                    }
+                }
+            }
+            var $total-runtime = sum(ext:node-set($runtimes)//time);
+            
+            /* <xsl:value-of
+            select="jcs:output(concat('It will take at most ',$total-runtime, ' seconds to run each iteration'))"/> */
+            var $execute-iterations = ceiling(60 div $total-runtime);
+            
+            call main($count = $execute-iterations);
+        
+        } else if ($cluster-status-results/redundancy-group[2]/device-stats[1]/device-priority[$rg1-node-number[3] + 1] == 0) {
+            
+            /* <xsl:value-of
+            select="jcs:output('Node is the maser of RG0. RG1 master in priority 0 state. Nothing to do!')"/> */
+        
+        } else {
+            /* This note is not master so it shouldn't ping as it will fail */
+            
+            /* <xsl:value-of
+            select="jcs:output('Node is not the maser of RG0. Nothing to do!')"/> */
+        }
+    }
+}
+
+
