@@ -1,0 +1,184 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+* Version: 1.0
+* Author: Juniper Networks
+*/
+
+/*
+* Script toggles interface up or down based on passed args.
+* It's designed to work with RPM scripts and be called as part
+* of a JUNOS event on RPM failure or sucess. No state is
+* kept between RPM probes on interface state, so script
+* needs to read config for each time a probe passes or failes
+* to check current interface state and new one passed in arg list
+*
+*/
+
+var $arguments = {
+   <argument> {
+      <name> "silent";
+      <description> "Decides where the output will go, 0 -> stdout, 1 -> syslog, 2 -> none";
+   }
+   <argument> {
+      <name> "interface";
+      <description> "Interface to deactivate";
+   }
+   <argument> {
+      <name> "new_intf_state";
+      <description> "New state of the interface disable -> disable interface, 1 -> enable interface";
+   }
+
+}
+
+
+match / {
+
+   /*
+    * Parse interface to get IFD and IFL
+    */
+   var $split = jcs:split("\\.", $interface);
+   var $ifd = $split[1];
+   var $unit = $split[2];
+
+   var $rpc-config-req = <get-configuration database="committed" inherit="inherit">;
+   var $configuration = jcs:invoke($rpc-config-req);
+   if ($new_intf_state == "enable") {
+      /*
+       * If interface is already disabled and new interface state is enable,
+       * populate the $xml var below to enable interface
+       */
+      if ($configuration/interfaces/interface[name=$ifd]/unit[name=$unit]/disable) {
+         var $xml = {
+            <configuration> {
+               <interfaces> {
+                  <interface> {
+                     <name> $ifd;
+                     <unit> {
+                        <name> $unit;
+                        <disable delete="disable">;
+                     } /* end unit */
+                  }  /* end <interface> */
+               } /* end <interfaces> */
+            } /* end <configuration> */
+         } /* end var $xml */
+
+         call doConfigChange($xml);
+      }
+   } else if ($new_intf_state == "disable") {
+      /* 
+       * If interface is enabled and new interface state is disable,
+       * populate the $xml var below to disable interface
+       */
+      if (not($configuration/interfaces/interface[name=$ifd]/unit[name=$unit]/disable)) {
+         var $xml = {
+            <configuration> {
+               <interfaces> {
+                  <interface> {
+                     <name> $ifd;
+                     <unit> {
+                        <name> $unit;
+                        <disable>;
+                     } /* end unit */
+                  }  /* end <interface> */
+               } /* end <interfaces> */
+            } /* end <configuration> */
+         } /* end var $xml */
+
+         call doConfigChange($xml);
+      } 
+   } else {
+      /*
+       * unrecognised new interface state.
+       */
+       call emit-error($message = "unrecognised new intf state");
+   }
+}
+
+template doConfigChange($xml) {
+   /*
+    * Open connection with mgd
+    */
+    var $con = jcs:open();
+
+    if (not($con)) {
+       call emit-error($message = "Not able to connect to local mgd");
+    }
+    var $config-private = <open-configuration> {
+       <private>;
+    }
+    var $private-results = jcs:execute($con, $config-private);
+
+    var $load-configuration = <load-configuration> {
+       copy-of $xml;
+    }
+
+   var $load-results = jcs:execute($con, $load-configuration);
+  /*
+   * Use load-configuration template defined in junos.xsl to load and
+   * commit the configuration
+   */
+
+   var $commit-configuration = <commit-configuration>;
+
+   var $commit-results = jcs:execute($con, $commit-configuration);
+
+   var $close-private = <close-configuration>;
+
+   var $close-configuration-results = jcs:execute($con, $close-private);
+   var $close-results = jcs:close($con);
+
+   /*
+    * Emit warnings
+    */
+   for-each ($commit-results//xnm:warning) {
+      call emit-warn($message = message);
+   }
+
+   if ($commit-results//xnm:error) {
+      for-each ($results//xnm:error) {
+         call emit-error($message = message);
+      }
+   } else {
+      call emit-success($message = "Deactivated interface");
+   }
+
+   if (not($silent)) {
+      <op-script-results> {
+         copy-of $results;
+      }
+   }
+}
+
+template emit-success($message) {
+
+   if ($silent == 0) {
+      expr jcs:output($message);
+   } else if ($silent == 1) {
+      expr jcs:syslog("user.info","toggle-interface.slax[Success]: ", $message);
+   }
+}
+ 
+template emit-error($message) {
+
+   if ($silent == 0) {
+      expr jcs:output($message);
+   } else if ($silent == 1) {
+      expr jcs:syslog("user.error", "disable-interface.slax[Error]: ", $message);
+  }
+}
+
+template emit-warn($message) {
+
+   if ($silent == 0) {
+      expr jcs:output($message);
+   } else if ($silent == 1) {
+      expr jcs:syslog("user.warning", "disable-interface.slax[Warning]: ", $message);
+   }
+}
