@@ -1,0 +1,60 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Version: 1.0   
+* Author: Juniper Networks
+*/
+
+/* This script parses the configuration for any GRE interfaces.
+* It extracts the source and destination  addresses from the tunnels
+* and creates RPM probe interfaces with a test interval of 15s.
+* The owner of all probes is "script" and all test names are the
+* same as the GRE interface. Changing these values should be
+* avoided because they are referenced in other OP scripts
+*/
+
+match configuration {
+   var $top = .;
+   for-each (interfaces/interface[starts-with(name, "gr-")]) {
+      var $ifd = name;
+      for-each (unit) {
+         var $unit = name;
+         var $t_source_ip = tunnel/source;
+         var $t_dest_ip = tunnel/destination;
+         if ($t_source_ip && $t_dest_ip) {
+            <transient-change> {
+               <services> {
+                  <rpm> {
+                     <probe> {
+                        <name> "script";
+                        <test>  {
+                           <name> $ifd _ "." _ $unit;
+                           <probe-type>
+                              "icmp-ping";
+                              <target> {
+                                 <address> $t_dest_ip;
+                               }
+                               <test-interval> 15;
+                               <source-address> $t_source_ip;
+                        } /* end test */
+                     } /* end probe type */
+                  } /* end rpm */
+               } /* end services */
+            }  /* end transient change */
+         } /* ensure SA and DA are present */
+      } /* end for-each unit loop */
+   } /* end for-each IFD loop */
+} /* match configuration */
