@@ -9,12 +9,100 @@
   <type>games</type>
 
   <description>
-Colossal Cave Adventure!
+    <![CDATA[
+jnpr@host1> op adventure | no-more
 
+*************************************************
+*             Welcome to ADVENTURE!             *
+*  Original development by Willie Crowther.     *
+*  Major features added by Don Woods.           *
+*  Conversion to BDS C by J. R. Jaeger          *
+*  Unix standardization by Jerry D. Pohl.       *
+*  Conversion to Junos op script by Curtis Call *
+*************************************************
+     (Type 'instructions' for instructions)
+      (Enter 'restore' to load prior game)
+
+-=|End of road|=-
+You are standing at the end of a road before a small brick
+building.  Around you is a forest.  A small stream flows out
+of the building and down a gully.
+
+--What now?>
+
+
+Description:
+------------
+
+This is a fully functional 350-point version of the classic Colossal Cave Adventure game - written in SLAX as a JUNOS op script.  
+The dwarves are there, the dragon is lounging on a rug, the troll is guarding the bridge (and is still scared by the bear).  It 
+should be pretty much how you remember it.  I say 'pretty much' because there are multiple versions of Adventure floating around, 
+so this version might not have all the rooms or the features that you remember.  But, if you are in the mood to play a game on your 
+JUNOS device then give it a try.
+
+
+Background:
+-----------
+These links explain the history behind the Adventure game:
+A history of 'Adventure': http://www.rickadams.org/adventure/a_history.html
+Wikipedia Entry: http://en.wikipedia.org/wiki/Colossal_Cave
+
+
+Unique Contributions:
+---------------------
+Pay a visit to the "Hill in Road".  There is some poetry being recited you might find amusing.  Also, there is an object in the 
+"Bedquilt" room that you will find educational to read.
+
+
+Game Play Tips:
+---------------
+To play the game, all you have to do is the following:
+
+   1. Copy: adventure.slax file into your /var/db/scripts/op directory
+   2. Configure: set system scripts op file adventure.slax
+   3. At CLI prompt enter: op adventure | no-more
+
+
+General Tips:
+-------------
+    * Each local JUNOS user can play one game at a time.  If two games are played by the same user account then their data 
+      values will corrupt each other.
+    * Games are automatically saved after every turn.  To restore the prior game type 'restore'.
+    * Always append "| no-more" when running the game.
+    * If you want to delete all records of Adventure from the SNMP Utility MIB then type "clear mib" at the game prompt.  
+      It will delete all Adventure MIB instances and close the game.
+
+
+WARNING: Memory Leak
+--------------------
+    * This game is very susceptible to two script-related memory leaks.  As such, keep it off production devices.  The memory 
+      leaks are fixed in the following Junos releases:
+      9.6S2 (EX only)
+      9.6R3
+      10.0R2
+      10.1R1
+    * Due to the memory leaks, the game will have to be restarted when the script memory nears its maximum (~133M).  Type 
+      'quit' to halt the game, restart it, and type 'restore' to return to the halted game.
+ 
+      
+Hints:
+------
+Would you like to see a good map?: http://www.spitenet.com/cave/ 
+Want some hints?: http://www.rickadams.org/adventure/d_hints/index.html
+How about a walkthrough?: http://www.geocities.com/TimesSquare/Castle/2701/ccwalk0.html
+
+
+Version Details:
+----------------
+Minimum JUNOS Version: 9.6
+Current Script Version: 1.41
+MD5 Checksum: 5e730dee9d4dfcdb09f5f7d5051efa05
+SHA-256 Checksum: 75d9b34d9dfa9e38806d67a3dba5e9bc4565130f3a721170beba9aece689c15e
+]]>
   </description>
-
-  <keyword>slax</keyword>
   <keyword>game</keyword>
+  <keyword>slax</keyword>
+  <keyword>adventure</keyword>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
