@@ -3,16 +3,43 @@
   <title>tic-tac-toe.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Want to play a game of tic-tac-toe/
+	How about a game of tic-tac-toe?
   </synopsis>
   <coe>op</coe>
   <type>games</type>
 
   <description>
+    <![CDATA[
+Play a quick game of tic-tac-toe on your Junos device against a human or computer opponent.
 
+Human vs Human Games
+--------------------
+Each player has a separate connection to the Junos device (the same user account can be
+used by both).  The first player starts the game and selects to act as the game server.
+The second player then joins the game.
+
+Human vs Computer Games
+-----------------------
+There are three levels of difficulty with "Unbeatable" being literally unbeatable.  (The
+best you can hope for is to tie).
+
+Play it Remotely
+----------------
+In Junos 10.0 and above the game can be played without installing it first by using the following
+command:
+op url http://junoscriptorium.googlecode.com/svn/trunk/library/juniper/op/games/tic-tac-toe/tic-tac-toe.slax
+
+Version Details:
+----------------
+Minimum JUNOS Version: 9.6
+Current Script Version: 1.0
+MD5 Checksum: e3274e5d451aa4599671243e5a234e54
+SHA-256 Checksum: 7d33db4f9c25f9c08a05eebb3b4f8600a402c8d39e5e37ac59f17696dc5f35f1
+]]>
   </description>
-
-
+  <keyword>game</keyword>
+  <keyword>slax</keyword>
+  
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
 	        type="text/javascript"/>
