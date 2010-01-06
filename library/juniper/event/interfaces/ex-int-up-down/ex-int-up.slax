@@ -1,0 +1,36 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match / {
+    var $ge-rpc = <get-configuration> {
+        <configuration> {
+            <interfaces>;
+        }
+    }
+    var $getConfig = jcs:invoke($ge-rpc);
+    /* Generate the xml formated config delta */
+    var $load-config-rpc = <load-configuration action = "merge" format = "xml"> {
+        <configuration> {
+            <interfaces> {
+                
+                for-each ($getConfig//interfaces/interface[starts-with(name, "ge-")]) {
+                    <interface> {
+                        <name> name;
+                        <junos:comment delete = "delete"> "/* Disabled by Event Script */";
+                        <disable delete = "delete">;
+                    }
+                }
+            }
+        }
+    }
+    var $configChange = jcs:invoke($load-config-rpc);
+    var $commit = jcs:invoke("commit-configuration");
+}
+
+ 

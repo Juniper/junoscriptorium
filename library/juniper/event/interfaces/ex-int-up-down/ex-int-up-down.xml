@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<script>
+<title>ex-int-up.slax</title>
+<title>ex-int-down.slax</title>
+<author>tzou</author>
+<synopsis>
+An event script to disable GE downlinks in EX switch when it detects uplink failure, and enable them once the uplink back online.
+</synopsis>
+<coe>event</coe>
+<type>interfaces</type>
+
+<description>
+To make the EX switch shut down all the GE downlinks (connecting to the servers) once it detects its uplink failure, it also brings up the GE downlink once the uplink back online.
+</description>
+
+ <example>
+ <title>Example</title>
+ <config>ex-int-up-down.conf</config>
+ </example>
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>

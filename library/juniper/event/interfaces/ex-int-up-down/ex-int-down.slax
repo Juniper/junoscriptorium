@@ -1,0 +1,62 @@
+/* Machine Crafted with Care (tm) by slaxWriter */
+version 1.0;
+ 
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ 
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+ <name> "interface";
+ <description> "Uplink Interface to be Tracked";
+    }
+}
+
+param $interface;
+ 
+match / {
+    /*
+     * Open connection with mgd
+     */
+    var $con = jcs:open();
+ 
+    if (not($con)) {
+        call emit-error($message = "Not able to connect to local mgd");
+    }
+ 
+    var $ge-rpc = {
+        <get-configuration> {
+            <configuration> {
+                <interfaces>;
+            }
+        }
+    }
+    var $getConfig = jcs:invoke($ge-rpc);
+    
+    /* Generate the xml formated config delta */
+    var $load-config-rpc = <load-configuration action = "merge" format = "xml"> {
+           <configuration> {
+            <interfaces> {       
+       for-each ($getConfig/interfaces/interface[starts-with(name, "ge-")]) {
+                if (not(name == $interface)) {  
+                  <interface> {
+                        <name> name;
+                        <junos:comment> "/* Disabled by Event Script */";
+                        <disable>;
+                    }
+                }
+            }
+          } 
+        }
+    }
+ 
+    expr jcs:output("Loading and Commiting the new configuration");
+    var $configChange = jcs:invoke($load-config-rpc);
+    var $commit = jcs:invoke("commit-configuration");
+        /*
+         * Close the mgd connection
+         */
+      expr jcs:close($con);
+}
