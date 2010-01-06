@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <script>
 <title>ex-int-up.slax</title>
+<alternate>ex-int-down.slax</alternate>
 <author>tzou</author>
 <synopsis>
 An event script to disable GE downlinks in EX switch when it detects uplink failure, and enable them once the uplink back online.
