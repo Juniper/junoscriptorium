@@ -9,9 +9,7 @@ This script implements all of the features that are included on the SRX plus the
 <type>HA</type>
 
 <description>
-Interface monitoring is an included feature on the platform but it may not meet all customer requirements. In some scenarios if the control plane is rapidly failed over it can cause instability. This implementation of interface monitoring accounts for this possibility and limits the user to monitoring only the data plane.
-  
-
+Interface monitoring is an included feature on the platform but it may not meet all customer requirements. This implementation of interface monitoring limits the user to monitoring only the data plane.
 </description>
 
  <example>
