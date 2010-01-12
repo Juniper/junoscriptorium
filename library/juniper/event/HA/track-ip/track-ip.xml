@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
-<title>rcameron</title>
-<author>jpanagos</author>
+<author>rcameron</author>
+<title>track-ip.slax</title>
 <synopsis>
 This event script implements the Track-IP feature on the SRX platforms. 
 </synopsis>
