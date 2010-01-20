@@ -1,0 +1,184 @@
+/* Copyright Juniper Networks 2008
+ * All rights reserved and owned by Juniper Networks 
+ * Script to display hit count per policy, a much more terse display than    
+ * the show security policies detail 
+ * command. Inspired by a customer who wanted a easier way of seeing hit counts when many policies are configured
+ * For use on junos devices with flow based firewalls. Script handles multiple destination and source addresses, 
+ * as well as multiple applications.
+ * Author: Ryan Johnson (rdjohnson@juniper.net)
+ * copy the file to /var/db/scripts/op/policylookups.slax
+ * Junos config: set system scripts op file policylookups.slax
+ * USE: srxj> op policylookups
+ *Example output
+ *root> op policylookups 
+ *Policy name         Source Zone         Destination Zone    Source Address      Destination Address Application    Policy Lookups     
+ *272868              trust               trust               any                 any                 any                         2                   
+ *272868              trust               untrust             any                 any                 any                         3                   
+ *61425               trust               robvpn              nsm                 robsubnet3          any                         0                   
+ *                                                                                robsubnet2                                                          
+ *                                                                                robsubnet1                                                          
+ *737940              untrust             trust               any                 webserver_1         junos-ssh                   0                   
+ *                                                                                                    junos-http                                      
+ *127100              untrust             trust               any                 sslvpn              junos-https                 0                   
+ *567333              untrust             trust               any                 ps3                 ps3ports                    0                   
+ *21272               untrust             trust               any                 any                 any                         51                  
+ *951126              robvpn              trust               robsubnet3          nsm                 any                         0                   
+ *                                                            robsubnet2                                                                              
+ *                                                            robsubnet1                                                                              
+*/
+
+
+version 1.0;
+
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+match / {
+
+	<op-script-results> {
+	
+	var $cmd = <command> "show security policies detail"; /* get policy hit count */
+	var $out = jcs:invoke($cmd);
+	var $totalCharsPerField = 20;
+
+	
+	var $formatFields = "%20-s%20-s%20-s%20-s%20-s%20-s%20-s"; /* format for column headers display */
+	var $formatFieldsData = "%20-s%20-s%20-s%20-s%20-s%28-s%20-s"; /* format for actually data display */
+	
+	<output> jcs:printf($formatFields,"Policy name","Source Zone","Destination Zone","Source Address",									"Destination Address","Application","	Policy Lookups");
+
+
+ for-each($out/security-context/policies/policy-information) { /* get all policy info such as name, source address, destination address, zone, application and 							         	* count
+							       */		
+
+		var $sourceZone = context-information/source-zone-name;  
+		var $destinationZone = context-information/destination-zone-name;  
+
+
+		var $sourceAddress := { for-each( source-addresses/source-address) {
+
+				<output> address-name _ " ";
+
+		}}
+
+		var $destinationAddress := { for-each(destination-addresses/destination-address) {
+
+				<output> address-name _ " ";
+
+
+		}}
+		
+		var $application := { for-each(applications/application) {
+
+                                <output> application-name _ " ";
+
+                }}	
+
+		var $pattern = " ";
+		var $array;
+
+		/* Create arrays out of all data that can have multiple values */
+		var $destinationArray = jcs:split( $pattern , $destinationAddress);			
+		var $sourceArray = jcs:split( $pattern , $sourceAddress);			
+		var $applicationArray = jcs:split( $pattern , $application);		
+
+		/*Get size of each array */	
+		var $destinationCount = {call returnArrayCount($array = $destinationArray);}
+		var $sourceCount = {call returnArrayCount($array = $sourceArray);}
+		var $applicationCount = {call returnArrayCount($array = $applicationArray);}
+		var $allCounts = $applicationCount _ " " _ $sourceCount _ " " _ $destinationCount;
+		var $maxString = $allCounts;
+
+		/*Get the size of the larget array*/
+		var $maxOfCounts = {call  returnMax($maxString);}
+		var $splitOfAllCounts = jcs:split(" ", $allCounts);
+
+		if ( policy-statistics-information/policy-lookups) { /* iterate through all the policies with count enabled */ 
+		
+				<output> jcs:printf ($formatFieldsData,policy-name, $sourceZone,$destinationZone,$sourceArray[1],									$destinationArray[1],$applicationArray[1],policy-statistics-information/policy-lookups);
+
+			var $loopCounter := { call create-loop-counter( $counter = $maxOfCounts ); }
+
+				for-each( $loopCounter/counter ) { /*Loop through each array and print out the data*/ 
+
+				var $index = position();
+
+				if ( $index != 1 ) {
+
+					<output> jcs:printf ($formatFieldsData,policy-name, " "," ",$sourceArray[number($index)],										$destinationArray[number($index)],$applicationArray[number($index) ]," ");
+	
+				}
+		
+			}
+
+
+		}else {
+
+			<output> "Count not enabled for policy: " _ policy-name; 
+
+		}
+
+		
+	} /* end of foreach */
+
+
+  } /*  End of op script results */
+
+} /* End of match / */
+
+
+template returnMax ($maxString="Nothing specified") { /* Return the max number in a string of numbers */
+
+	<op-script-results> {
+
+		var $splitOfAllCounts = jcs:split(" ", $maxString);
+
+		for-each($splitOfAllCounts) {
+
+                        <xsl:sort select = "." data-type = "number" order = "descending">;
+
+                        if (position() == 1) {
+                               <output> .;
+                        }
+
+                }
+	}
+}
+
+template returnArrayCount ($array="Nothing defined") { /*return the size of an array */
+
+
+		if(count($array) > 1) {
+	
+			var $count = count($array) - 1;
+			<output> $count;
+
+		}else if(count($array) == 0){
+
+			<output> 0;
+
+			
+
+		}else{
+
+			<output> 1;
+		
+		}
+
+
+}
+
+template create-loop-counter( $counter ) { 
+
+	if( $counter > 0 ) {
+
+		<counter>; 
+		call create-loop-counter( $counter = $counter - 1 );
+
+	}
+
+}
+
