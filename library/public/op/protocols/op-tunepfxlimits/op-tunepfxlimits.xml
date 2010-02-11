@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<script>
+  <title>op-tunepfxlimits.slax</title>
+  <author>ras</author>
+  <synopsis>
+	Automatically tune EBGP prefix-limits based on the number of prefixes currently being received over the active session.
+  </synopsis>
+  <coe>op</coe>
+  <type>protocols</type>
+
+  <description>
+This script uses a weighted average of the current value and the new value to slowly adjust the configured prefix-limit as a peer announces more or fewer prefixes
+
+  </description>
+
+  <example>
+    <title>Output</title>
+    <description>Displays the output of the script.</description>
+    <output>example-1.output</output>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

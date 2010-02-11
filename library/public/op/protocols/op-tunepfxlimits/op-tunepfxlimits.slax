@@ -1,0 +1,120 @@
+version 1.0;
+
+/* 
+ * This OpScript integrates with the simplified prefix limits commit script
+ * (pfxlimit.slax) to automatically tune EBGP prefix-limits based on the
+ * number of prefixes currently being received over the active session. 
+ * The script uses a weights average of the current value and the new value
+ * (calculated as 130% of the current number of received prefixes + 400,
+ * rounded to the nearest 500) to slowly adjust the configured prefix-limit
+ * as a peer announces more or fewer prefixes.
+ *
+ * Author: Richard Steenbergen
+ * Version 1.0 
+ *
+ * Bugs:
+ * As of JUNOS 8.3 proper configuration locking and committing from an Op
+ * Scriptis still not functional. This script can still be called
+ * from an Event script, but care should be taken in the event that
+ * another user is making configuration changes when such a script runs.
+ * Hopefully this will be resolved in the near future.
+ *
+ * This script currently only works for inet-unicast families. It can 
+ * easily be extended to support all AFI/SAFI's, but until the issues
+ * above are resolved this script is currently recommended only as a proof
+ * of concept or for manual execution.
+ *  
+ * As of JUNOS 9.3, committing from the Op Script should now be possible.
+ */
+
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+
+template tune_pfxlimits() {
+    var $get-config = {
+        <get-config> {
+            <source> {
+                <candidate>;
+            }
+            <filter> {
+                <configuration> {
+                    <protocols> {
+                        <bgp> {
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    var $config = jcs:invoke($get-config)/configuration/protocols/bgp;
+    var $neighbors = jcs:invoke('get-bgp-summary-information');
+
+    for-each ($config/group[type = 'external']/neighbor[peer-as]) {
+        var $address = name;
+        var $neighbor = $neighbors/bgp-peer[peer-address == $address];
+        var $pfxlimit = apply-macro[name == 'inet']/data[name == 'prefix-limit'];
+        var $pfxrecv = $neighbor/bgp-rib[name == 'inet.0']/received-prefix-count;
+        var $rcvlimit = ceiling((($pfxrecv * 1.3) + 400) div 500) * 500;
+
+        var $newlimit = {
+            if (not($pfxlimit)) {
+                expr $rcvlimit;
+            } else if (not($neighbor) || $neighbor[peer-state != 'Established']) {
+                expr $pfxlimit/value;
+            } else {
+                expr (ceiling((($pfxlimit/value * 3) + $rcvlimit) div 4) div 500) * 500;
+            }
+        }
+
+        if ($newlimit && ($newlimit != $pfxlimit/value)) {
+            <output> "Updated Prefix Limit - Neighbor: " _ $address _ " Old: " _ $pfxlimit/value _ " New: " _ $newlimit;
+
+            var $update = {
+                <edit-config> {
+                    <target> {
+                        <candidate>;
+                    }
+                    <config> {
+                        <configuration> {
+                            <protocols> {
+                                <bgp> {
+                                    <group> {
+                                        <name> ../name;
+                                        <neighbor> {
+                                            <name> name;
+                                            <apply-macro> {
+                                                <name> "prefix-limit";
+                                                <data> {
+                                                    <name> "inet-unicast";
+                                                    <value> $newlimit;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            var $test_b = jcs:invoke($update);
+/*
+            var $test_a = jcs:invoke('lock');
+            var $test_c = jcs:invoke('commit');
+            var $test_d = jcs:invoke('unlock');
+            var $test_e = jcs:invoke('discard-changes');
+*/
+        }
+    }
+}
+
+match / {
+    <op-script-results> {
+        call tune_pfxlimits();
+    }
+}
