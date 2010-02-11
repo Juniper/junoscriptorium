@@ -1,0 +1,105 @@
+version 1.0;
+
+/* 
+ * This script provides a simplified interface to creating and managing
+ * prefix-limits * on BGP neighbors by separating the prefix-limit
+ * configuration from the AFI/SAFI * configuration.
+ * 
+ * By providing a separate configuration for prefix-limits, configure
+ * BGP "family" settings can be inherited from higher-lebel groups without
+ * requiring a complete restating of the * family setting for every BGP
+ * neighbor. This fixes an area of common misconfiguration where a user
+ * changing a prefix-limit accidentally causes a BGP session to bounce
+ * because the family configurations have changes. This script also
+ * significantly reduces the size and complexity of the BGP configuration
+ * in the event that you have a standardize teardown time and warning
+ * threshold, since they do not need to be restated every time.
+ *
+ * Author:      Richard Steenbergen
+ * Version:     1.0
+ *
+ * Bugs: 
+ * There is currently no way to configure the teardown threshold and
+ * and restart the timer, the values are hard-coded into the script.
+ * Future versions may want to provide a way to create "configurations"
+ * for those values, and support inheriting them from higher levels.
+ * 
+ * Currently this script only functions with macros configured at the
+ * neighbor level, not the group or top-level bgp level.
+ *
+ * The configured AFI/SAFI may still be manipulated by configuring a
+ * prefix-limit for an AFI/SAFI which does not exist in the family
+ * configuration. No attempt is made in this version to prevent adding
+ * of new family configurations (which may cause BGP session resets),
+ * only to copy the existing values from higher level configurations
+ * and prevent removing family configurations by defining new per-neighbor
+ * prefix-limits. Special care should be paid when mixing "inet" (meaning
+ * inet/any) with "inet-unicast/inet-multicast". This may be a reasonable
+ * area to enhance in the future, but for many networks the existing 
+ * script will be sufficient to simplify their configurations.
+ * 
+ */
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+
+template pfxlimit($neighbor, $afi, $safi, $limit)
+{
+    call jcs:emit-change($tag = 'transient-change', $dot = ../..) {
+        with $content = {
+            <xsl:element name=$afi> {
+                <xsl:element name=$safi> {
+                    <prefix-limit> {
+                        <maximum> $limit;
+                        <teardown> {
+                        <limit-threshold> 90;
+                            <idle-timeout> {
+                                <timeout> 5;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+match configuration {
+    /* Parse BGP neighbors with a prefix-limit macro configured */
+    for-each (protocols/bgp/group/neighbor/apply-macro[name = 'prefix-limit']) {
+        var $family = jcs:first-of(../family, ../../family, ../../../family);
+        var $neighbor = ../name;
+
+        /* Preserve optional higher level AFI/SAFI selections */
+        call jcs:emit-change($tag = 'transient-change', $dot = ..) {
+            with $content = {
+                copy-of $family;
+            }
+        }
+
+        for-each (data) {
+            var $limit = value;
+
+            if (name == 'all') {
+                call pfxlimit($neighbor, $afi = "inet", $safi = "any", $limit);
+                call pfxlimit($neighbor, $afi = "inet6", $safi = "any", $limit);
+            } else if (name == 'inet') {
+                call pfxlimit($neighbor, $afi = "inet", $safi = "any", $limit);
+            } else if (name == 'inet-unicast') {
+                call pfxlimit($neighbor, $afi = "inet", $safi = "unicast", $limit);
+            } else if (name == 'inet-multicast') {
+                call pfxlimit($neighbor, $afi = "inet", $safi = "multicast", $limit);
+            } else if (name == 'inet6') {
+                call pfxlimit($neighbor, $afi = "inet6", $safi = "any", $limit);
+            } else if (name == 'inet6-unicast') {
+                call pfxlimit($neighbor, $afi = "inet6", $safi = "unicast", $limit);
+            } else if (name == 'inet6-multicast') {
+                call pfxlimit($neighbor, $afi = "inet6", $safi = "multicast", $limit);
+            }
+        }
+    }
+}
+
+
