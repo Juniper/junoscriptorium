@@ -1,0 +1,22 @@
+Usage:
+ user@router> op show-lsp-interface
+ t name                          dst             next-hop        if              ifdescr
+ I r9-Tln-TIX->r20-Tln-VS1       212.47.200.14   212.47.201.99   ae0.95          -> r20-ae0-95-Tln-TIX
+ I r9-Tln-TIX->r20-Tln-TIX       212.47.200.20   212.47.201.99   ae0.95          -> r20-ae0-95-Tln-TIX
+ -
+ t name                          src             prev-hop        if              ifdescr
+ E r20-Tln-TIX->r9-Tln-TIX       212.47.200.20   212.47.201.99   ae0.95          -> r20-ae0-95-Tln-TIX
+ E r20-Tln-VS1->r9-Tln-TIX       212.47.200.14   212.47.201.86   xe-5/3/0.1      -> r9-xe-5-3-0-1-Tln-Linx
+ -
+ t name	          src           dst	      prev-hop	     next-hop	   src-if     dst-if  src-ifdesc  st-ifdescr
+ T r9-xe->r20-ae0 217.28.250.9	212.47.200.20 212.47.201.120 212.47.201.99 xe-5/2/0.1 ae0.95  -> r9-xe	  -> r20-ae0
+ T r9-xe->r20-ae0 212.47.200.4  217.28.248.2  212.47.201.86  212.47.201.99 xe-5/3/0.1 ae0.95  -> r9-xe    -> r20-ae0
+
+ or
+
+ user@router> op show-lsp-interface | match ae0.95
+ I r9->r20-Tln-VS1 212.47.200.14  212.47.201.99  ae0.95          -> r20-ae0-95-Tln-TIX
+ I r9->r20-Tln-TIX 212.47.200.20  212.47.201.99  ae0.95          -> r20-ae0-95-Tln-TIX
+ E r20-Tln-TIX->r9 212.47.200.20  212.47.201.99  ae0.95          -> r20-ae0-95-Tln-TIX
+ T r9->r20-Tln-TIX 217.28.250.9   212.47.200.20  212.47.201.120  212.47.201.99   xe-5/2/0.1 ae0.95 -> r9-> r20-ae0-95-Tln-TIX
+ T r9->r2-Vno-Lnrg 212.47.200.4   217.28.248.2   212.47.201.86   212.47.201.99   xe-5/3/0.1 ae0.95 -> r9-> r20-ae0-95-Tln-TIX

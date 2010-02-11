@@ -1,0 +1,130 @@
+/*
+ * Copyright (c) 2007, 2008 Cougar <cougar@random.ee>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * This OpScript lists LSPs like "show mpls lsp" does but also adds ingress
+ * and/or egress interface information (interface name, description and
+ * next-hop IP address). Using this command together with "match" filter makes
+ * it easy to find out all LSPs that go through specific interface for example.
+ *
+ * Author: Cougar
+ * Version 1.1
+ *
+ * Bugs:
+ * This script doesn't list Bypass nor fast-reroute detour LSPs. It is easy 
+ * to add Bypass LSPs (and then they can be excluded with "| exclude Bypass"
+ * filter). It is more complicated to add fast-reroute detour LSPs because
+ * there can be either more than one detour (easy case) or normal LSP with
+ * detour information which is much more complicated to parse.
+ * 
+ * Irrespective of JUNOS documentation which lists jcs:printf() function,
+ * there is no such function and because of that the output of this opscript
+ * is not perfect.
+ 
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+template resolve_ifdescr($ifdescrdb, $if)
+{
+       if ($if) {
+               if ($ifdescrdb/logical-interface[name == $if]/description) {
+                       expr $ifdescrdb/logical-interface[name == $if]/description;
+               } else {
+                       expr "-";       /* no descripion */
+               }
+       } else {
+               expr "?";               /* no next-hop interface (ASSERT ?)*/
+       }
+}
+
+template resolve_nh_ifdescr($ifdescrdb, $nhif)
+{
+  var $if = $nhif;
+       call resolve_ifdescr($ifdescrdb, $if);
+}
+
+template resolve_ph_ifdescr($ifdescrdb, $phif)
+{
+  var $if = $phif;
+       call resolve_ifdescr($ifdescrdb, $if);
+}
+
+template show_lsp_list()
+{
+
+       var $q1 = { <command> 'show mpls lsp detail'; }
+       var $lspdb = jcs:invoke($q1);
+
+       var $q2 = { <command> 'show interface descriptions'; }
+       var $ifdescrdb = jcs:invoke($q2);
+
+       <output> "t name\t\t\t\tdst\t\tnext-hop\tif\t\tifdescr";
+       for-each($lspdb/rsvp-session-data[session-type == 'Ingress']/rsvp-session/mpls-lsp[lsp-state == 'Up']) {
+               var $name = name;
+               var $ip = destination-address;
+               var $nhip = substring-before(substring-after(mpls-lsp-path/explicit-route, "\n"), "\n");
+               var $routequery = { <command> 'show route table inet.0 protocol direct ' _ $nhip; }
+               var $routeresult = jcs:invoke($routequery);
+               var $nhif = $routeresult/route-table/rt/rt-entry/nh/via;
+               var $ndescr = { call resolve_nh_ifdescr($ifdescrdb, $nhif); }
+               <output> "I " _ $name _ " \t" _ $ip _ "\t" _ $nhip _ "\t" _ $nhif _ "   \t" _  $ndescr;
+       }
+
+       <output>"-";
+
+       <output>"t name\t\t\t\tsrc\t\tprev-hop\tif\t\tifdescr";
+       for-each($lspdb/rsvp-session-data[session-type == 'Egress']/rsvp-session[lsp-state == 'Up' and not(starts-with(name, 'Bypass'))]) {
+               var $name = name;
+               var $ip = source-address;
+               var $phip = packet-information/previous-hop;
+               var $routequery = { <command> 'show route table inet.0 protocol direct ' _ $phip; }
+               var $routeresult = jcs:invoke($routequery);
+               var $phif = $routeresult/route-table/rt/rt-entry/nh/via;
+               var $pdescr = { call resolve_ph_ifdescr($ifdescrdb, $phif); }
+               <output> "E " _ $name _ " \t" _ $ip _ "\t" _ $phip _ "\t" _ $phif _ "   \t" _  $pdescr;
+       }
+
+       <output>"-";
+
+       <output>"t name\t\t\t\tsrc\t\tdst\t\tprev-hop\tnext-hop\tsrc-if\t\tdst-if\t\tsrc-ifdescr\t\t\tdst-ifdescr";
+       for-each($lspdb/rsvp-session-data[session-type == 'Transit']/rsvp-session[lsp-state == 'Up' and not(starts-with(name, 'Bypass'))]) {
+               var $name = name;
+               var $src = source-address;
+               var $dst = destination-address;
+               if (packet-information[@heading == "  PATH"]/previous-hop) {
+                       var $phip = packet-information[@heading == "  PATH"]/previous-hop;
+                       var $phif = packet-information[previous-hop == $phip]/interface-name;
+                       var $pdescr = { call resolve_ph_ifdescr($ifdescrdb, $phif); }
+                       var $nhip = packet-information[@heading == "  PATH"]/next-hop;
+                       var $nhif = packet-information[next-hop == $nhip]/interface-name;
+                       var $ndescr = { call resolve_nh_ifdescr($ifdescrdb, $nhif); }
+                       <output> "T " _ $name _ "\t" _ $src _ "\t" _ $dst _ "\t" _ $phip _ "\t" _ $nhip _ "\t" _ $phif _ "   \t" _ $nhif _ "   \t" _ $pdescr _ " \t" _ $ndescr;
+               }
+       }
+}
+
+match / {
+       <op-script-results> {
+               call show_lsp_list();
+       }
+}
+
+
