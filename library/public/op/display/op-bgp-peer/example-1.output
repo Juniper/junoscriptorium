@@ -1,0 +1,6 @@
+Sample output:
+user@cli> op peerdown
+IP		ASN	Description
+213.136.31.6	2859	jun1.kelvin - BIT-1, Ede
+195.69.14.68	3333	RIPE NCC
+80.81.192.157	6695	DE-CIX Route server

@@ -1,0 +1,46 @@
+version 1.0;
+
+/* 
+ * $Id: peerdown.slax 107 2007-03-22 21:53:19Z teun $ 
+ * 
+ * This operation script shows information for all peerings
+ * which are down.
+ *
+ * Author: Teun Vink <teun@bit.nl>
+ * 
+ * Sample output:
+ *    user@cli> op peerdown
+ *    IP             ASN   Description
+ *    213.136.31.6   12859 jun1.kelvin - BIT-1, Ede
+ *    195.69.14.68   3333  RIPE NCC
+ *    80.81.192.157  6695  DE-CIX Route server
+ * 
+ */
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+
+match / 
+{
+    <op-script-results> 
+    {
+        /* execute the 'show bgp summary' command and store the result */
+        var $query = { <command> 'show bgp summary'; }
+        var $result = jcs:invoke($query);              
+
+        /* print a header */
+        <output>"IP\t\tASN\tTime\t\tDescription";
+
+        /* search for the bgp information tag */
+        <bgp-information> {
+                /* print each peer which's state is not Established */
+                for-each($result/bgp-peer[peer-state!='Established']) {
+                        <output> peer-address _ "\t" _ peer-as _ "\t" _ elapsed-time _ "\t" _ description; 
+                }
+        }
+    }
+}
