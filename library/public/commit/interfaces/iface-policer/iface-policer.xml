@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<script>
+  <title>iface-policer.slax</title>
+  <author>Daniel</author>
+  <synopsis>
+	Configure a policer on a logical interface
+  </synopsis>
+  <coe>commit</coe>
+  <type>interfaces</type>
+
+  <description>
+
+  </description>
+
+  <keyword>interface</keyword>
+  <example>
+    <title>Configuration</title>
+    <description>Configuration required for this commit script.</description>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
