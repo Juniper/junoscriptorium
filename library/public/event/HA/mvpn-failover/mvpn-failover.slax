@@ -1,0 +1,19 @@
+version 1.1;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match / {
+    <op-script-results> {
+        var $restart = {
+            <command> 'restart routing soft';
+        }
+        expr jcs:sleep(5);
+        var $result_rpd = jcs:invoke($restart);
+        expr jcs:sleep(50);
+        var $result_rpd2 = jcs:invoke($restart);
+    }
+}
