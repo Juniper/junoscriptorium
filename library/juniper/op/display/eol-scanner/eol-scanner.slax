@@ -1,10 +1,9 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.0
- * Last Modified : October 6, 2009
+ * Version       : 1.01
+ * Last Modified : February 16, 2010
  * Platform      : all
  * Release       : JUNOS 8.2 and above
- * License       : Public Domain
  *
  * Description   : This script scans the installed hardware components and reports
  * if they are on the EOL list.  It also checks the current JUNOS version against
@@ -25,10 +24,30 @@
  *
  * Oct  6 06:52:07  host cscript: JUNOS version 9.6 support status: Active engineering support
  *
- *
  * Caveats:
  * - Integrated FPC + PIC cards may not display correctly.
  * - Not all FRUs will be checked by the event script
+ *
+ * License       : BSD-Style
+ *  Copyright (c) 2010 Curtis Call. All Rights Reserved.
+ *  Redistribution and use in source and binary forms, with or without modification, 
+ *  are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice, this 
+ *  list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  this list of conditions and the following disclaimer in the documentation and/or
+ *  other materials provided with the distribution.
+ *  3. The name of the author may not be used to endorse or promote products derived 
+ *  from this software without specific prior written permission.
+ *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED 
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+ *  AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE 
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN 
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */ 
 version 1.0;
 
@@ -41,8 +60,8 @@ ns ext = "http://xmlsoft.org/XSLT/namespace";
 import "../import/junos.xsl";
 
 /* Update everytime the parts list is changed */
-var $last-eol-parts-list-update = "10/06/2009";
-var $version = "1.0";
+var $last-eol-parts-list-update = "02/16/2010";
+var $version = "1.01";
 
 /* These are used within the program to minimize mistypes */
 var $eol-announcement-date = "EOL Announcement Date";
@@ -668,6 +687,676 @@ template build-line( $length ) {
  * <description> - Description to use (for quad-pics because their description isn't reliable
  */
 var $eol-parts-rtf = {
+    /* M40e EOL Announcement */
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "BRTRAY-M160-M40e-S";
+        <part-number> "760-012914";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "CBBOX-DC-S";
+        <part-number> "760-001814";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "CHAS-BP-M40e-S";
+        <part-number> "710-008502";
+        <part-number> "710-005071";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "CIP-M40e-S";
+        <part-number> "710-002649";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "CRAFT-M40e-S";
+        <part-number> "710-001647";
+        <part-number> "760-005154";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "FAN-M160-M40e-S";
+        <part-number> "760-005456";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "FLTR-M160-M40e-S";
+        <part-number> "760-001816";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "M40e-FPC1-EP";
+        <model-number> "M40e-FPC1-EP-U";
+        <part-number> "710-011725";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "M40e-FPC2-EP";
+        <model-number> "M40e-FPC2-EP-U";
+        <part-number> "710-013171";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "M40e-FPC-S";
+        <part-number> "710-005196";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "MCS-R";
+        <model-number> "MCS-S";
+        <part-number> "710-001226";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "PCG-S";
+        <part-number> "710-003066";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "PWR-M160-M40e-DC-S";
+        <part-number> "740-003787";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "PWR-M40e-AC-S";
+        <part-number> "740-005165";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "SFM-16-S";
+        <model-number> "SFM-16-R";
+        <model-number> "SFM-16-BB";
+        <part-number> "710-007707";
+        <part-number> "710-011130";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "TRTRAY-M160-M40e-S";
+        <part-number> "760-012916";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-650";
+        <model-number> "TTRAY-M160-M40e-S";
+        <part-number> "760-001358";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "01/31/2011";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "01/31/2012";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "01/31/2013";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "01/31/2015";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "04/30/2015";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "01/31/2016";
+        }
+    }
+    /* M40e EOL Announcement end */
+    <part> {
+        <psn-number> "2010-02-648";
+        <model-number> "PE-4DS3";
+        <part-number> "750-002963";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "07/31/2010";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "07/31/2011";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "07/31/2012";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "07/31/2014";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "10/31/2014";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "07/31/2015";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-648";
+        <model-number> "PE-2DS3";
+        <part-number> "750-003743";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "07/31/2010";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "07/31/2011";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "07/31/2012";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "07/31/2014";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "10/31/2014";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "07/31/2015";
+        }
+    }
+    <part> {
+        <psn-number> "2010-02-648";
+        <model-number> "PE-2E3";
+        <part-number> "750-003745";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "01/31/2010";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "07/31/2010";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "07/31/2011";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "07/31/2012";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "07/31/2014";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "10/31/2014";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "07/31/2015";
+        }
+    }
     <part> {
         <psn-number> "PSN-2009-07-430";
         <model-number> "PB-PM2";
@@ -8796,105 +9485,105 @@ var $eol-parts-rtf = {
         }
     }
     <part> {
-        <psn-number> "PSN-2008-11-091";
+        <psn-number> "PSN-2009-12-596";
         <model-number> "JXE-1GE-SFP-S";
         <part-number> "750-013599";
         <pim-fpc>;
         <date> {
             <type> "EOL Announcement Date";
-            <date> "11/10/2008";
+            <date> "11/30/2009";
         }
         <date> {
             <type> "Last Order Date";
-            <date> "12/31/2009";
+            <date> "05/31/2010";
         }
         <date> {
             <type> "Last Date to Convert Warranty";
-            <date> "12/31/2010";
+            <date> "05/31/2011";
         }
         <date> {
             <type> "Same-day Support Discontinued";
-            <date> "12/31/2011";
+            <date> "05/31/2012";
         }
         <date> {
             <type> "Next-day Support Discontinued";
-            <date> "12/31/2013";
+            <date> "05/31/2014";
         }
         <date> {
             <type> "End of New JUNOS Release Support";
-            <date> "03/31/2012";
+            <date> "08/31/2012";
         }
         <date> {
             <type> "End of Support";
-            <date> "12/31/2014";
+            <date> "05/31/2015";
         }
     }
     <part> {
-        <psn-number> "PSN-2008-11-091";
+        <psn-number> "PSN-2009-12-596";
         <model-number> "JXE-1GE-TX-S";
         <part-number> "750-013493";
         <pim-fpc>;
         <date> {
             <type> "EOL Announcement Date";
-            <date> "11/10/2008";
+            <date> "11/30/2009";
         }
         <date> {
             <type> "Last Order Date";
-            <date> "12/31/2009";
+            <date> "05/31/2010";
         }
         <date> {
             <type> "Last Date to Convert Warranty";
-            <date> "12/31/2010";
+            <date> "05/31/2011";
         }
         <date> {
             <type> "Same-day Support Discontinued";
-            <date> "12/31/2011";
+            <date> "05/31/2012";
         }
         <date> {
             <type> "Next-day Support Discontinued";
-            <date> "12/31/2013";
+            <date> "05/31/2014";
         }
         <date> {
             <type> "End of New JUNOS Release Support";
-            <date> "03/31/2012";
+            <date> "08/31/2012";
         }
         <date> {
             <type> "End of Support";
-            <date> "12/31/2014";
+            <date> "05/31/2015";
         }
     }
     <part> {
-        <psn-number> "PSN-2008-11-091";
+        <psn-number> "PSN-2009-12-596";
         <model-number> "JXE-4FE-TX-S";
         <part-number> "750-013492";
         <pim-fpc>;
         <date> {
             <type> "EOL Announcement Date";
-            <date> "11/10/2008";
+            <date> "11/30/2009";
         }
         <date> {
             <type> "Last Order Date";
-            <date> "12/31/2009";
+            <date> "05/31/2010";
         }
         <date> {
             <type> "Last Date to Convert Warranty";
-            <date> "12/31/2010";
+            <date> "05/31/2011";
         }
         <date> {
             <type> "Same-day Support Discontinued";
-            <date> "12/31/2011";
+            <date> "05/31/2012";
         }
         <date> {
             <type> "Next-day Support Discontinued";
-            <date> "12/31/2013";
+            <date> "05/31/2014";
         }
         <date> {
             <type> "End of New JUNOS Release Support";
-            <date> "03/31/2012";
+            <date> "08/31/2012";
         }
         <date> {
             <type> "End of Support";
-            <date> "12/31/2014";
+            <date> "05/31/2015";
         }
     }
     <part> {
@@ -9201,6 +9890,36 @@ var $eol-parts = ext:node-set( $eol-parts-rtf );
 
 
 var $junos-version-rtf = {
+    <version> {
+        <number> "10.1";
+        <date> {
+            <type> "FRS";
+            <date> "02/15/2009";
+        }
+        <date> {
+            <type> "EOE";
+            <date> "Unannounced";
+        }
+        <date> {
+            <type> "EOL";
+            <date> "Unannounced";
+        }
+    }
+    <version> {
+        <number> "10.0";
+        <date> {
+            <type> "FRS";
+            <date> "11/15/2009";
+        }
+        <date> {
+            <type> "EOE";
+            <date> "11/15/2012";
+        }
+        <date> {
+            <type> "EOL";
+            <date> "05/15/2013";
+        }
+    }
     <version> {
         <number> "9.6";
         <date> {
