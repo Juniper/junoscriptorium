@@ -1,0 +1,748 @@
+/*
+ * This is a provisioning script - currently it only builds L2Circuits.  The
+ * assumption is that the setup is:
+ * EX - MX -------- MX - EX
+ *
+ * Notes:
+ * Do NOT use 9.6B1 due to PR 441511.
+ * Execute it as op provision.slax | no-more to work around PR 435042
+ */
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Provisioning Structure Element Names */
+var $element-field = "field";
+var $element-name = "name";
+var $element-description = "description";
+
+/* L2Circuit Data Structure Element Names */
+var $element-local-mx-address = "local-mx-address";
+var $element-remote-mx-address = "remote-mx-address";
+var $element-local-ex-address = "local-ex-address";
+var $element-remote-ex-address = "remote-ex-address";
+var $element-local-ex-interface = "local-ex-interface";
+var $element-remote-ex-interface = "remote-ex-interface";
+var $element-vlan-id = "vlan-id";
+var $element-circuit-id = "circuit-id";
+var $element-password = "password";
+
+/* Local Information element names */
+var $element-type = "type";
+var $element-local-loopback = "loopback-address";
+var $element-type-hostname = "hostname";
+
+var $ex = "ex";
+var $mx = "mx";
+var $ex-tag = 1;
+var $mx-tag = 2;
+
+/* The descriptions of the EX-MX links must match this format followed by the loopback of their peer */
+var $mx-link = "Link to EX: "; 
+var $ex-link = "Link to MX: ";
+
+/* EX VLANs start with this */
+var $vlan-start = "L2Circuit-VLAN-";
+
+/* MX Apply-Groups start with this */
+var $mx-link-group = "l2circuits-for-ex-";
+
+/* Commit and Op Script version must match */
+var $op-script-version = "1.0";
+
+match / {
+
+    /* Get the ISIS information */
+    var $get-isis-rpc = <get-isis-database-information> {
+                            <extensive>;
+                        }
+    var $isis-database = jcs:invoke($get-isis-rpc );
+    var $ex-isis-nodes = $isis-database/isis-database/isis-database-entry[isis-tlv/ip-prefix-tlv/isis-prefix-subtlv/isis-prefix-tag/isis-prefix-tag-value == $ex-tag ];
+    var $mx-isis-nodes = $isis-database/isis-database/isis-database-entry[isis-tlv/ip-prefix-tlv/isis-prefix-subtlv/isis-prefix-tag/isis-prefix-tag-value == $mx-tag ];
+    
+    /* Go through and open connections to everyone... */
+    
+
+    /* Build the local-information variable */
+    var $type = {
+        var $upper-product = { call to-upper-case( $string = $product ); }
+        if( starts-with( $upper-product, "MX" ) ) {
+            expr $mx;
+        }
+        else if( starts-with( $upper-product, "EX" ) ) {
+            expr $ex;
+        }
+        else {
+            /* Unknown - quit */
+            <xsl:message terminate="yes"> "Unknown product type: " _ $product;
+        }
+    }
+    var $config-request =   <get-configuration database="committed" inherit="inherit"> {
+                                <configuration> {
+                                    <interfaces> {
+                                        <interface> {
+                                            <name> "lo0";
+                                            <unit> {
+                                                <name> "0";
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+    var $mini-config = jcs:invoke($config-request );
+    
+    var $loopback-node = $mini-config/interfaces/interface[name=="lo0"]/unit[name=="0"]/family/inet/address/name;
+    /* Complain and quit if missing address */
+    if( jcs:empty( $loopback-node ) ) {
+        <xsl:message terminate="yes"> "Local loopback address is missing.";
+    }
+    var $loopback-address = substring( $loopback-node, 1, string-length( $loopback-node ) - 3);
+    var $local-information :=   {
+                                    <xsl:element name=$element-type> $type;
+                                    <xsl:element name=$element-local-loopback> $loopback-address;
+                                }
+    /* Display the initial information */
+    var $description = {
+        if( $type == $ex ) {
+            expr "Juniper EX Access Switch";
+        }
+        else {
+            expr "Juniper MX PE Router";
+        }
+    }
+    var $initial-message = "- Provisioning script running on:\n" _
+                           "--- " _ $description _ ": " _ $hostname _ " with loopback address " _ $loopback-address;
+
+    expr jcs:output( $initial-message );
+    /* Display menu */
+    call menu-loop( $local-information, $ex-isis-nodes, $mx-isis-nodes );
+}
+
+/* 
+ * Display the provisioning menu options
+ */
+template menu-loop( $local-information, $ex-isis-nodes, $mx-isis-nodes ) {
+    var $menu-string = "\n###################################\n" _
+                         "# 1. Build new (L)ayer 2 Circuit  #\n" _
+                         "# 2. View (E)X Access Switches    #\n" _
+                         "# 3. View (M)X PE Routers         #\n" _
+                         "# 4. (Q)uit                       #\n" _
+                         "###################################\n" _
+                         "Enter Selection: ";
+    var $raw-selection = jcs:input( $menu-string );
+    var $selection = { call to-upper-case($string = $raw-selection); }
+    
+    var $type = $local-information/*[name() == $element-type ];
+    
+    /* Provision */
+    if( $selection == "1" or $selection == "L" ) {
+        /* Get the L2circuit question structure */
+        var $l2circuit-questions := { call get-l2circuit-structure(); }
+        
+        /* Get the answers and confirm them */
+        var $l2circuit-answers := { call confirmation-loop( $question-structure=$l2circuit-questions, $local-information, $ex-isis-nodes, $mx-isis-nodes );  }
+
+        /* Now provision */
+        call build-l2circuit( $l2circuit-answers, $local-information );
+        
+        /* Go back through the menu... */
+        call menu-loop( $local-information, $ex-isis-nodes, $mx-isis-nodes );
+    }
+    /* View EX */
+    else if( $selection == "2" or $selection == "E" ) {
+        /* Display EX switches */
+        expr jcs:output("\nAuto-discovered EX Access Switches:");
+        var $header-string = jcs:printf("%-20s %-15s", "Hostname:", "Loopback:");
+        expr jcs:output($header-string);
+        for-each( $ex-isis-nodes ) {
+            /* These are at the isis-database-entry node */
+            var $node-hostname = isis-tlv/hostname-tlv/hostname;
+            var $loopback-address-full = isis-tlv/ip-prefix-tlv[isis-prefix-subtlv/isis-prefix-tag/isis-prefix-tag-value == $ex-tag]/address-prefix;
+            var $node-loopback-address = substring( $loopback-address-full, 1, string-length( $loopback-address-full ) - 3 );
+            /* Is it the local node? */
+            var $node-string = {
+                if( $type == $ex and $node-hostname == $hostname ) {
+                    expr jcs:printf( "%-20s %-15s %-7s", $node-hostname, $node-loopback-address, "(Local)");
+                }
+                else {
+                    expr jcs:printf( "%-20s %-15s", $node-hostname, $node-loopback-address );
+                }
+            }
+            expr jcs:output( $node-string );
+        }
+        expr jcs:output("--\n\n");
+        
+        /* Go back through the menu */
+        call menu-loop( $local-information, $ex-isis-nodes, $mx-isis-nodes );
+    }
+    /* View MX */
+    else if( $selection == "3" or $selection == "M" ) {
+        /* Display MX routers */
+        expr jcs:output("\nAuto-discovered MX PE Routers:");
+        var $header-string = jcs:printf("%-20s %-15s", "Hostname:", "Loopback:");
+        expr jcs:output($header-string);
+        for-each( $mx-isis-nodes ) {
+            /* These are at the isis-database-entry node */
+            var $node-hostname = isis-tlv/hostname-tlv/hostname;
+            var $loopback-address-full = isis-tlv/ip-prefix-tlv[isis-prefix-subtlv/isis-prefix-tag/isis-prefix-tag-value == $mx-tag]/address-prefix;
+            var $node-loopback-address = substring( $loopback-address-full, 1, string-length( $loopback-address-full ) - 3 );
+            /* Is it the local node? */
+            var $node-string = {
+                if( $type == $mx and $node-hostname == $hostname ) {
+                    expr jcs:printf( "%-20s %-15s %-7s", $node-hostname, $node-loopback-address, "(Local)");
+                }
+                else {
+                    expr jcs:printf( "%-20s %-15s", $node-hostname, $node-loopback-address );
+                }
+            }
+            expr jcs:output( $node-string );
+        }
+        expr jcs:output("--\n\n");
+        
+        /* Go back through the menu */
+        call menu-loop( $local-information, $ex-isis-nodes, $mx-isis-nodes );
+    }
+    /* Unknown (if not Q) - Loop through provision loop again */
+    else if( $selection != "Q" and $selection != "4" ) {
+        expr jcs:output("Unknown selection...please try again...");
+        call menu-loop( $local-information, $ex-isis-nodes, $mx-isis-nodes );
+    }
+    /* If they chose to quit then let it fall out of the loop... */
+    
+}
+
+/*
+ * Does all the configuration necessary for a L2Circuit
+ */
+template build-l2circuit( $l2circuit-answers, $local-information ) {
+
+    expr jcs:output("###\n###\nBuilding Layer 2 Circuit");
+    var $loopback-address = $local-information/*[name() == $element-local-loopback];
+    var $type = $local-information/*[name() == $element-type];
+    
+    /* Pull out all the answers */
+    var $local-ex-interface = $l2circuit-answers/*[name() == $element-local-ex-interface];
+    var $local-ex-address = $l2circuit-answers/*[name() == $element-local-ex-address];
+    var $remote-ex-interface = $l2circuit-answers/*[name() == $element-remote-ex-interface];
+    var $remote-ex-address = $l2circuit-answers/*[name() == $element-remote-ex-address];
+    var $local-mx-address = $l2circuit-answers/*[name() == $element-local-mx-address];
+    var $remote-mx-address = $l2circuit-answers/*[name() == $element-remote-mx-address];
+    var $vlan-id = $l2circuit-answers/*[name() == $element-vlan-id];
+    var $circuit-id = $l2circuit-answers/*[name() == $element-circuit-id];
+    var $password = $l2circuit-answers/*[name() == $element-password];
+
+    /* Local EX config */
+    expr jcs:output( "Loading changes on local EX" );
+    
+    /* First figure out the EX to MX link */
+    var $local-ex-connection = {
+        if( $type == $ex and $loopback-address == $local-ex-address ) {
+            expr jcs:open();
+        }
+        else {
+            expr jcs:open( $local-ex-address, $user, $password );
+        }
+    }
+
+    var $interface-rpc =    <get-configuration database="committed" inherit="inherit"> {
+                                <configuration> {
+                                    <interfaces>;
+                                }
+                            }
+    var $local-ex-interfaces = jcs:execute( $local-ex-connection, $interface-rpc );
+    var $ex-link-to-mx = $local-ex-interfaces/interfaces/interface[starts-with(description, $ex-link )][contains(description, $local-mx-address) and substring-after(description, $local-mx-address) == ""];
+        
+    /* If there isn't a link then error out */
+    if( jcs:empty( $ex-link-to-mx ) ) {
+        <xsl:message terminate="yes"> "Local EX does not have a link to the local MX!  Terminating.";
+    }
+
+    /* Create the interface names */
+    var $local-ex-trunk = $ex-link-to-mx/name;
+    
+    var $local-ex-configuration = <configuration> {
+                        <interfaces> {
+                            <interface> {
+                                <name> $local-ex-interface;
+                                <unit> {
+                                    <name> "0";
+                                    <family> {
+                                        <ethernet-switching> {
+                                            <port-mode> "access";
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        <vlans> {
+                            <vlan> {
+                                <name> $vlan-start _ $vlan-id;
+                                <vlan-id> $vlan-id;
+                                <interface> {
+                                    <name> $local-ex-interface; /* The access interface */
+                                }
+                                <interface> {
+                                    <name> $local-ex-trunk; /* The trunk interface */
+                                }
+                            }
+                        }
+                    }
+    
+    /* Apply Local EX config */
+    var $local-ex-results := { call jcs:load-configuration( $connection=$local-ex-connection, $configuration=$local-ex-configuration ); }
+    expr jcs:close( $local-ex-connection );
+
+    /* Look for any errors */
+    if( $local-ex-results//xnm:error ) {
+        expr jcs:output( "!!!L2Circuit build failed on local EX:" );
+        for-each( $local-ex-results//xnm:error ) {
+            if( edit-path ) {
+                expr jcs:output( edit-path );
+            }
+            if( statement ) {
+                expr jcs:output( statement );
+            }
+            var $message = normalize-space( message );
+            expr jcs:output( $message );
+        }
+        expr jcs:output("###\n###");
+    }
+    else {
+        expr jcs:output("Success!");
+
+        /* Local MX config */
+        expr jcs:output( "Loading changes on local MX" );
+
+        /* First, we need to pull the configuration so we can determine what the interface to the EX is */
+        var $local-mx-connection = {
+            if( $type == $mx and $loopback-address == $local-mx-address ) {
+                expr jcs:open();
+            }
+            else {
+                expr jcs:open( $local-mx-address, $user, $password );
+            }
+        }
+
+        var $local-mx-interfaces = jcs:execute( $local-mx-connection, $interface-rpc );
+        var $mx-link-to-ex = $local-mx-interfaces/interfaces/interface[starts-with(description, $mx-link )][contains(description, $local-ex-address) and substring-after(description, $local-ex-address) == ""];
+        
+        /* If there isn't a link then error out */
+        if( jcs:empty( $mx-link-to-ex ) ) {
+            <xsl:message terminate="yes"> "Local MX does not have a link to the local EX!  Terminating.";
+        }
+
+        /* Create the interface names */
+        var $local-mx-interface-name = $mx-link-to-ex/name;
+        var $local-mx-unit-name = $vlan-id;
+        var $local-mx-full-interface-name = $local-mx-interface-name _ "." _ $local-mx-unit-name;
+        
+        /* Now add the necessary interface and l2circuit configuration */
+        var $local-mx-configuration =   <configuration> {
+                                            <interfaces> {
+                                                <interface> {
+                                                    <name> $local-mx-interface-name;
+                                                    <unit> {
+                                                        <name> $local-mx-unit-name;
+                                                        <encapsulation> "vlan-ccc";
+                                                        <vlan-id> $vlan-id;
+                                                    }
+                                                }
+                                            }
+                                            <protocols> {
+                                                <l2circuit> {
+                                                    <neighbor> {
+                                                        <name> $remote-mx-address;
+                                                        <interface> {
+                                                            <name> $local-mx-full-interface-name;
+                                                            <virtual-circuit-id> $circuit-id;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+        /* Apply Local MX config */
+        var $local-mx-results := { call jcs:load-configuration( $connection=$local-mx-connection, $configuration=$local-mx-configuration ); }
+        expr jcs:close( $local-mx-connection );
+
+        /* Look for any errors */
+        if( $local-mx-results//xnm:error ) {
+            expr jcs:output( "!!!L2Circuit build failed on local MX:" );
+            for-each( $local-mx-results//xnm:error ) {
+                if( edit-path ) {
+                    expr jcs:output( edit-path );
+                }
+                if( statement ) {
+                    expr jcs:output( statement );
+                }
+                var $message = normalize-space( message );
+                expr jcs:output( $message );
+            }
+            expr jcs:output("###\n###");
+        }
+        else {
+            expr jcs:output("Success!");
+
+            /* Remote MX config */
+            expr jcs:output( "Loading changes on remote MX" );
+
+            /* First, we need to pull the configuration so we can determine what the interface to the EX is */
+            var $remote-mx-connection = jcs:open( $remote-mx-address, $user, $password );
+
+            var $remote-mx-interfaces = jcs:execute( $remote-mx-connection, $interface-rpc );
+            var $remote-mx-link-to-ex = $remote-mx-interfaces/interfaces/interface[starts-with(description, $mx-link )][contains(description, $remote-ex-address) and substring-after(description, $remote-ex-address) == ""];
+        
+            /* If there isn't a link then error out */
+            if( jcs:empty( $remote-mx-link-to-ex ) ) {
+                <xsl:message terminate="yes"> "Remote MX does not have a link to the remote EX!  Terminating.";
+            }
+
+            /* Create the interface names */
+            var $remote-mx-interface-name = $remote-mx-link-to-ex/name;
+            var $remote-mx-unit-name = $vlan-id;
+            var $remote-mx-full-interface-name = $remote-mx-interface-name _ "." _ $remote-mx-unit-name;
+        
+            /* Now add the necessary interface and l2circuit configuration */
+            var $remote-mx-configuration =   <configuration> {
+                                                 <interfaces> {
+                                                    <interface> {
+                                                        <name> $remote-mx-interface-name;
+                                                        <unit> {
+                                                            <name> $remote-mx-unit-name;
+                                                            <encapsulation> "vlan-ccc";
+                                                            <vlan-id> $vlan-id;
+                                                        }
+                                                    }
+                                                }
+                                                <protocols> {
+                                                    <l2circuit> {
+                                                        <neighbor> {
+                                                            <name> $local-mx-address;
+                                                            <interface> {
+                                                                <name> $remote-mx-full-interface-name;
+                                                                <virtual-circuit-id> $circuit-id;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+            /* Apply Remote MX config */
+            var $remote-mx-results := { call jcs:load-configuration( $connection=$remote-mx-connection, $configuration=$remote-mx-configuration ); }
+            expr jcs:close( $remote-mx-connection );
+
+            /* Look for any errors */
+            if( $remote-mx-results//xnm:error ) {
+                expr jcs:output( "!!!L2Circuit build failed on remote MX:" );
+                for-each( $remote-mx-results//xnm:error ) {
+                    if( edit-path ) {
+                        expr jcs:output( edit-path );
+                    }
+                    if( statement ) {
+                        expr jcs:output( statement );
+                    }
+                    var $message = normalize-space( message );
+                    expr jcs:output( $message );
+                }
+                expr jcs:output("###\n###");
+            }
+            else {
+                expr jcs:output("Success!");
+
+                /* Remote EX config */
+                expr jcs:output( "Loading changes on remote EX" );
+    
+                /* First figure out the EX to MX link */
+                var $remote-ex-connection = jcs:open( $remote-ex-address, $user, $password );
+
+                var $remote-ex-interfaces = jcs:execute( $remote-ex-connection, $interface-rpc );
+                var $remote-ex-link-to-mx = $remote-ex-interfaces/interfaces/interface[starts-with(description, $ex-link )][contains(description, $remote-mx-address) and substring-after(description, $remote-mx-address) == ""];
+        
+                /* If there isn't a link then error out */
+                if( jcs:empty( $remote-ex-link-to-mx ) ) {
+                    <xsl:message terminate="yes"> "Remote EX does not have a link to the remote MX!  Terminating.";
+                }
+
+                /* Create the interface names */
+                var $remote-ex-trunk = $remote-ex-link-to-mx/name;
+    
+                var $remote-ex-configuration =  <configuration> {
+                                                    <interfaces> {
+                                                        <interface> {
+                                                            <name> $remote-ex-interface;
+                                                            <unit> {
+                                                                <name> "0";
+                                                                <family> {
+                                                                    <ethernet-switching> {
+                                                                        <port-mode> "access";
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    <vlans> {
+                                                        <vlan> {
+                                                            <name> $vlan-start _ $vlan-id;
+                                                            <vlan-id> $vlan-id;
+                                                            <interface> {
+                                                                <name> $remote-ex-interface; /* The access interface */
+                                                            }
+                                                            <interface> {
+                                                                <name> $remote-ex-trunk; /* The trunk interface */
+                                                            }
+                                                        }
+                                                    }
+                                                }
+    
+                /* Apply Remote EX config */
+                var $remote-ex-results := { call jcs:load-configuration( $connection=$remote-ex-connection, $configuration=$remote-ex-configuration ); }
+                expr jcs:close( $remote-ex-connection );
+
+                /* Look for any errors */
+                if( $remote-ex-results//xnm:error ) {
+                    expr jcs:output( "!!!L2Circuit build failed on remote EX:" );
+                    for-each( $remote-ex-results//xnm:error ) {
+                        if( edit-path ) {
+                            expr jcs:output( edit-path );
+                        }
+                        if( statement ) {
+                            expr jcs:output( statement );
+                        }
+                        var $message = normalize-space( message );
+                        expr jcs:output( $message );
+                    }
+                    expr jcs:output("###\n###");
+                }
+                else {
+                    expr jcs:output( "Success!" );
+                    expr jcs:output( "L2Circuit was built successfully\n" );
+                    expr jcs:output("###\n###");
+                }
+            }
+        }
+    }
+}
+
+/*
+ * Calls the question template and answers all the questions, then asks for 
+ * confirmation.  If they want to redo it then the prior answers are used as
+ * the defaults for the second round.
+ */
+template confirmation-loop( $question-structure, $default-structure, $local-information, $ex-isis-nodes, $mx-isis-nodes ) {
+    /* get the answers */
+    var $answers := { call answer-questions( $question-structure, $default-structure, $local-information, $ex-isis-nodes, $mx-isis-nodes ); }
+    
+    /* Ask for confirmation */
+    expr jcs:output("\nHere are the values which will be provisioned:");
+    
+    for-each( $answers/* ) {
+        var $description = $question-structure/field[ name == name( current()) ]/description;
+        var $message = $description _ ": " _ .;
+        /* Don't show the password */
+        if( name() != $element-password ) {
+            expr jcs:output( $message );
+        }
+    }
+    var $answer = jcs:input("\nAre these values correct? [yes]/no: ");
+    
+    /* If yes then write the answers to result tree */
+    if( $answer != "no" ) {
+        copy-of $answers;
+    }
+    /* If no then redo it */
+    else {
+        call confirmation-loop( $question-structure, $default-structure = $answers, $local-information );
+    }
+}
+
+/* 
+ * Get answers to all the questions
+ */
+template answer-questions($question-structure, $default-structure, $local-information, $ex-isis-nodes, $mx-isis-nodes) {
+    var $type = $local-information/*[name() == $element-type ];
+
+    /* Go through each question and ask it */
+    for-each( $question-structure/* ) {
+        var $default-value = {
+            /* If it has no length then we can't pull data from it */
+            if( string-length( $default-structure ) > 0 ) {
+                expr $default-structure/*[name() == current()/name];
+            }
+        }
+        var $answer = {
+            /* If it is asking for the local address of the current router then auto-fill */
+            if( name == $element-local-ex-address and $type == $ex ) {
+                expr $local-information/*[name() == $element-local-loopback];
+            }
+            else if( name == $element-local-mx-address and $type == $mx ) {
+                expr $local-information/*[name() == $element-local-loopback];
+            }
+            else {
+                /* Do a special prompt for addresses... */
+                var $prompt = {
+                    if( name == $element-local-ex-address or name == $element-remote-ex-address ) {
+                        /* Build the EX List */
+                        expr "Available EX Access Switches:\n";
+                        for-each( $ex-isis-nodes ) {
+                            /* These are at the isis-database-entry node */
+                            var $node-hostname = isis-tlv/hostname-tlv/hostname;
+                            var $loopback-address-full = isis-tlv/ip-prefix-tlv[isis-prefix-subtlv/isis-prefix-tag/isis-prefix-tag-value == $ex-tag]/address-prefix;
+                            var $node-loopback-address = substring( $loopback-address-full, 1, string-length( $loopback-address-full ) - 3 );
+                            /* Is it the local node? */
+                            if( $type == $ex and $node-hostname == $hostname ) {
+                                expr $node-hostname _ ": " _ $node-loopback-address _ " (Local)\n";
+                            }
+                            else {
+                                expr $node-hostname _ ": " _ $node-loopback-address _ "\n";
+                            }
+                        }
+                        expr "Enter the " _ description;
+                    }
+                    else if( name == $element-local-mx-address or name == $element-remote-mx-address ) {
+                        /* Build the MX List */
+                        expr "Available MX PE Routers:\n";
+                        for-each( $mx-isis-nodes ) {
+                            /* These are at the isis-database-entry node */
+                            var $node-hostname = isis-tlv/hostname-tlv/hostname;
+                            var $loopback-address-full = isis-tlv/ip-prefix-tlv[isis-prefix-subtlv/isis-prefix-tag/isis-prefix-tag-value == $mx-tag]/address-prefix;
+                            var $node-loopback-address = substring( $loopback-address-full, 1, string-length( $loopback-address-full ) - 3 );
+                            /* Is it the local node? */
+                            if( $type == $mx and $node-hostname == $hostname ) {
+                                expr $node-hostname _ ": " _ $node-loopback-address _ " (Local)\n";
+                            }
+                            else {
+                                expr $node-hostname _ ": " _ $node-loopback-address _ "\n";
+                            }
+                        }
+                        expr "Enter the " _ description;
+                    }
+                    else {
+                        expr "Enter the " _ description;
+                    }
+                }
+                call get-input( $prompt, $default-value );
+            }
+        }
+        /* Write it to result tree...*/
+        <xsl:element name=name> $answer;
+    }
+}
+
+/* 
+ * Builds the description structure which is used to drive what questions to ask
+ * and how to store the information
+ */
+template get-l2circuit-structure() {
+    /* Password */
+    <xsl:element name=$element-field> {
+        <xsl:element name=$element-name> $element-password;
+        <xsl:element name=$element-description> "Provisioning password";
+    }
+    /* Local MX Address */
+    <xsl:element name=$element-field> {
+        <xsl:element name=$element-name> $element-local-mx-address;
+        <xsl:element name=$element-description> "Local MX address";
+    }
+    /* Remote MX Address */
+    <xsl:element name=$element-field> {
+        <xsl:element name=$element-name> $element-remote-mx-address;
+        <xsl:element name=$element-description> "Remote MX address";
+    }
+    /* Local EX Address */
+    <xsl:element name=$element-field> {
+        <xsl:element name=$element-name> $element-local-ex-address;
+        <xsl:element name=$element-description> "Local EX address";
+    }
+    /* Local EX Interface */
+    <xsl:element name=$element-field> {
+        <xsl:element name=$element-name> $element-local-ex-interface;
+        <xsl:element name=$element-description> "Local EX access interface";
+    }
+    /* Remote EX Address */
+    <xsl:element name=$element-field> {
+        <xsl:element name=$element-name> $element-remote-ex-address;
+        <xsl:element name=$element-description> "Remote EX address";
+    }
+    /* Remote EX Interface */
+    <xsl:element name=$element-field> {
+        <xsl:element name=$element-name> $element-remote-ex-interface;
+        <xsl:element name=$element-description> "Remote EX access interface";
+    }
+    /* VLAN ID */
+    <xsl:element name=$element-field> {
+        <xsl:element name=$element-name> $element-vlan-id;
+        <xsl:element name=$element-description> "VLAN ID";
+    }
+    /* Circuit ID */
+    <xsl:element name=$element-field> {
+        <xsl:element name=$element-name> $element-circuit-id;
+        <xsl:element name=$element-description> "Circuit ID";
+    }
+}
+
+/* 
+ * Recursive template that seeks input from the user.  A prompt is needed to
+ * provide details on what information is desired.  The prompt should not
+ * include the trailing : as that will be added by the template.  A default-value
+ * can be provided to allow the user to press enter only, otherwise an answer
+ * must be provided or else the template will continue to recurse.
+ * The answer is written to the result-tree as a text and should be redirected to
+ * a variable.
+ */
+template get-input( $prompt, $default-value ) {
+    var $full-string = {
+        if( string-length( $default-value ) > 0 and not( contains( $prompt, "password" ) ) ) {
+            expr $prompt _ "[" _ $default-value _ "]: ";
+        }
+        else if( string-length( $default-value ) > 0 and contains( $prompt, "password" ) ) {
+            expr $prompt _ "[" _ "--SECRET--" _ "]: ";
+        }
+        else {
+            expr $prompt _ ": ";
+        }
+    }
+    /* Add some white space */
+    expr jcs:output("#\n#\n");
+    var $answer = {
+        /* Use secret mode for passwords...*/
+        if( contains( $full-string, "password" ) ) {
+            expr jcs:getsecret( $full-string );
+        }
+        else {
+            expr jcs:input( $full-string );
+        }
+    }
+    
+    /* Do we like the answer? */
+    if( string-length( $answer ) == 0 and string-length( $default-value ) == 0 ) {
+        /* We need an answer, try again */
+        expr jcs:output("This information is required - please enter the answer or type quit to exit.");
+        call get-input( $prompt, $default-value );
+    }
+    else if( string-length( $answer ) == 0 and string-length( $default-value ) != 0 ) {
+        /* Use the default */
+        expr $default-value;
+    }
+    else if( $answer == "quit" ) {
+        /* Terminate the script... */
+        <xsl:message terminate="yes"> "Exiting provisioning script...";
+    }
+    else {
+        /* Use the answer */
+        expr $answer;
+    }
+}
+
+/*
+ * Converts the provided string into upper case and returns the upper case
+ * string to the starting template for variable assignment.
+ */ 
+template to-upper-case( $string = "" ) {
+    expr translate( $string, "abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ" );
+}
+
+

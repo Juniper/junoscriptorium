@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<script>
+  <title>provision.slax</title>
+  <author>curtisstephencall</author>
+  <synopsis>
+	Sample remote provisioning script
+  </synopsis>
+  <coe>op</coe>
+  <type>provisioning</type>
+
+  <description>
+This is an example script that demonstrates how to perform both local and remote provisioning.  It is designed to work in a specific topology and as such is not expected to be executed in other networks; however, the code can be referenced if you wish to learn how to execute RPCs remotely as well as how to create a menu-based op script.
+
+  </description>
+
+  <keyword>provisioning</keyword>
+  <keyword>menu</keyword>
+  <keyword>remote-rpc</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
