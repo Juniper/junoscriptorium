@@ -9,7 +9,10 @@
   <type>provisioning</type>
 
   <description>
-This is an example script that demonstrates how to perform both local and remote provisioning.  It is designed to work in a specific topology and as such is not expected to be executed in other networks; however, the code can be referenced if you wish to learn how to execute RPCs remotely as well as how to create a menu-based op script.
+This is an example script that demonstrates how to perform both local and remote provisioning.
+It is designed to work in a specific topology and as such is not expected to be executed in other
+networks; however, the code can be referenced if you wish to learn how to execute RPCs remotely 
+as well as how to create a menu-based op script.
 
   </description>
 
