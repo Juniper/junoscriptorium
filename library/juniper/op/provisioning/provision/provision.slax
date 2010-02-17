@@ -3,9 +3,7 @@
  * assumption is that the setup is:
  * EX - MX -------- MX - EX
  *
- * Notes:
- * Do NOT use 9.6B1 due to PR 441511.
- * Execute it as op provision.slax | no-more to work around PR 435042
+ * Minimum Version: 9.6R1
  */
 version 1.0;
 
