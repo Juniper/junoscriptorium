@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<info xmlns="http://www.w3.org/1999/xhtml">
+  <directory id="library/juniper">
+    <description>
+      Scripts developed by the script community in public
+    </description>
+  </directory>
+  <directory id="library/public/commit">
+    <description>
+      Commit scripts
+    </description>
+  </directory>
+  <directory id="library/public/commit/filters">
+    <description>
+      Filter-related
+    </description>
+  </directory>
+  <directory id="library/public/commit/interfaces">
+    <description>
+      Interface-oriented scripts
+    </description>
+  </directory>
+  <directory id="library/public/commit/protocols">
+    <description>
+      Scripts for routing protocols
+    </description>
+  </directory>
+  <directory id="library/public/commit/system">
+    <description>
+      Scripts for simple setup and maintenance
+    </description>
+  </directory>
+  <directory id="library/public/op">
+    <description>
+      Op scripts
+    </description>
+  </directory>
+  <directory id="library/public/op/display">
+    <description>
+      Display ("show") oriented scripts
+    </description>
+  </directory>
+</info>
