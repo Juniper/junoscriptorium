@@ -1,0 +1,65 @@
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+
+/**
+ *   $Id: iface_policer.slax 331 2007-08-30 13:42:24Z daniel $
+ */
+
+match configuration {
+  /* Scan the interfaces for policer macros */
+  for-each (interfaces/interface/unit/apply-macro[name = 'policer']) {
+    var $if_phys = ../../name;
+    var $if_unit = ../name;
+    var $iface = concat($if_phys, ".", $if_unit);
+    var $bandwidth = data[name='bandwidth']/value;
+    var $burst = data[name='burst']/value;
+    var $policer = "po-" _ $iface;
+
+    <transient-change> {
+
+      /* Generate the policer */
+      <firewall> {
+        <policer> {
+          <junos:comment replace="replace"> {
+            expr "Macro (policer) generated interface: " _ $iface;
+          }
+          <name> $policer;
+          <if-exceeding> {
+            <bandwidth-limit> $bandwidth;
+            <burst-size-limit> $burst;
+          }
+          <logical-interface-policer>;
+          <then> {
+            <discard>;
+          }
+        }
+      }
+
+      /* Now apply this policer to each address family on this interface */
+      for-each (../family/*) {
+        <interfaces> {
+          <interface> {
+            <name> $if_phys;
+            <unit> {
+              <name> $if_unit;
+              <family> {
+                 <xsl:element name=name(.)> {
+                   <policer> {
+                     <input> $policer;
+                     <output> $policer;
+                   }
+                 }
+              }
+            }
+          }
+        } 
+      }
+
+      /* done for this interface */
+    }
+  }
+}
+

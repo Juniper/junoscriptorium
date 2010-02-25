@@ -3,7 +3,7 @@
   <title>iface-policer.slax</title>
   <author>Daniel</author>
   <synopsis>
-	Configure a policer on a logical interface
+	Configure a policer on a logical interface.
   </synopsis>
   <coe>commit</coe>
   <type>interfaces</type>
@@ -13,9 +13,10 @@
   </description>
 
   <keyword>interface</keyword>
+  <keyword>.</keyword>
   <example>
     <title>Configuration</title>
-    <description>Configuration required for this commit script.</description>
+    <description>Configuration related to this commit script.</description>
     <config>example-1.conf</config>
   </example>
 
