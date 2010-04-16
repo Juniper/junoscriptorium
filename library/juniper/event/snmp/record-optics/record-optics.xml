@@ -43,10 +43,10 @@
          To enable, copy the script into the /var/run/scripts/event directory and enable with the configuration statement:
          set event-options event-scripts file record-optics.slax         
          
-         Minimum JUNOS Version: 9.2
-         Latest Script Version: 1.0
-         MD5 Checksum: e3c98aa1feee0f3db44ec169a9a1e44c
-         SHA-256 Checksum: 56516d4340377551d700c6d1e07df898ad11d6f6e5055884efed78189cae1ab3
+         Minimum JUNOS Version: 9.3
+         Latest Script Version: 1.1
+         MD5 Checksum: 9fc77e0a6a02716d5a73a1a3516bad7a
+         SHA-256 Checksum: ea28bf6f5bd85ab4d4926c4a4907c7b2a2b38360e77176752576fa517bee382d
 ]]>
   </description>
   <keyword>utility</keyword>
