@@ -1,9 +1,9 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.0
- * Last Modified : November 18, 2009
+ * Version       : 1.1
+ * Last Modified : April 16, 2010
  * Platform      : all
- * Release       : 9.2 and above
+ * Release       : 9.3 and above
  *
  * Description   : This event script automatically writes the receive optic laser
  * levels into the Utility MIB every thirty seconds.
@@ -33,7 +33,7 @@
  * jnxUtilStringValue.111.112.116.105.99.115.80.49.53.51 = 0.3015
  * 
  * License       : BSD-Style
- *  Copyright (c) 2009 Curtis Call. All Rights Reserved.
+ *  Copyright (c) 2010 Curtis Call. All Rights Reserved.
  *  Redistribution and use in source and binary forms, with or without modification, 
  *  are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice, this 
@@ -159,7 +159,7 @@ template record-optics( $count = 1 ) {
         
         /* If it doesn't exist in the used instances then clear it because it has been removed */
         if( jcs:empty( $used-instance-set[instance == $instance] ) ) {
-            call clear-instance( $instance = substring-after( $instance, "." ), $type = "string" );
+            call clear-instance($connection, $instance = substring-after( $instance, "." ), $type = "string" );
             expr jcs:syslog( "daemon.info", "Clearing instance ", $instance, " from Utility MIB because interface is not present." );
         }
     }
