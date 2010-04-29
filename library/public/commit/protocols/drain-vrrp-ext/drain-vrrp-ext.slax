@@ -1,0 +1,62 @@
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+
+/* Set the priority value you want to override to.  If you don't use 
+any tracking with priorty-cost config, this should be 1.  If you do 
+have priority-cost configured, JUNOS requires that this be greater than 
+the worst case. ie - if you track two interfaces with a priority cost 
+of 20, this value should be 41. */ var $minpriority = "1";
+
+/* You can customize the name of the apply-group to search for.  Some 
+folks might have standards that require different group names. */ var 
+$draingroup = "DRAIN-ME";
+
+var $get-configuration = {
+    <get-configuration>{
+        <configuration> {
+	    <apply-groups>;
+        }
+    }
+}
+var $config = jcs:invoke($get-configuration);
+
+match configuration/interfaces/interface/unit/family {
+    if (contains($config, $draingroup)) {
+	for-each (inet/address/vrrp-group) {
+	    if (not(vrrp-inherit-from)) {
+		var $ifname = ../../../../../name;
+	        var $unitname = ../../../../name;
+	        var $addressname = ../name;
+		var $vrrpgroupname = name;
+		call jcs:emit-change($tag = 'transient-change') {
+		    with $content = {
+			<priority> $minpriority;
+		    }
+		}
+		<xnm:warning> {
+		    <message> "Dropping VRRP priority on inet interface " _ $ifname  _ "." _ $unitname _ " - " _ " vrrp-group " _ $vrrpgroupname _ " to " _ $minpriority;
+		}
+	    }
+	}
+	for-each (inet6/address/vrrp-inet6-group) {
+	    if (not(vrrp-inherit-from)) {
+		var $ifname = ../../../../../name;
+	        var $unitname = ../../../../name;
+	        var $addressname = ../name;
+		var $vrrpgroupname = name;
+		call jcs:emit-change($tag = 'transient-change') {
+		    with $content = {
+			<priority> $minpriority;
+		    }
+		}
+		<xnm:warning> {
+		    <message> "Dropping VRRP priority on inet6 interface " _ $ifname  _ "." _ $unitname _ " - " _ " vrrp-group " _ $vrrpgroupname _ " to " _ $minpriority;
+		}
+	    }
+	}
+    }
+}
+
