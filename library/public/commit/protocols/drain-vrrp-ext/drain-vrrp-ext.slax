@@ -8,11 +8,12 @@ import "../import/junos.xsl";
 any tracking with priorty-cost config, this should be 1.  If you do 
 have priority-cost configured, JUNOS requires that this be greater than 
 the worst case. ie - if you track two interfaces with a priority cost 
-of 20, this value should be 41. */ var $minpriority = "1";
+of 20, this value should be 41. */ 
+var $minpriority = "1";
 
 /* You can customize the name of the apply-group to search for.  Some 
-folks might have standards that require different group names. */ var 
-$draingroup = "DRAIN-ME";
+folks might have standards that require different group names. */ 
+var $draingroup = "DRAIN-ME";
 
 var $get-configuration = {
     <get-configuration>{
