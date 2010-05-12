@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>iface-policer.slax</title>
-  <author>Daniel</author>
+  <author>daniel</author>
   <synopsis>
 	Configure a policer on a logical interface.
   </synopsis>
@@ -9,7 +9,7 @@
   <type>interfaces</type>
 
   <description>
-
+  This script is commonly used for configuring a policer with a specified bandwidth and burst.
   </description>
 
   <keyword>interface</keyword>
