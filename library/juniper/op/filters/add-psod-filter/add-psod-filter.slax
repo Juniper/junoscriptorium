@@ -1,0 +1,426 @@
+/*
+ * File:  add-psod-filter.slax 
+ *
+ * Descripion: script to automate addition of 'anti-ping-sweep-of-death' filter to IPv6 interfaces with a /64 prefix length
+ *
+ * Edit History:
+ * 05/27/10 - initial creation (single interface at a time ("interface <ifname> unit <unitid>"
+ * 06/02/10 - add support for multiple interfaces ("interface ALL")
+ * 06/03/10 - add support for 'all-except', 'all-matching' filtering (applicable only to "interface ALL")
+ *            add cursory sanity checks for command paramters.
+ * 06/07/10 - massive code cleanup.
+ * 
+ */
+
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "interface";
+        <description> "Interface to create anti-psod filter for (or ALL).";
+    }
+    <argument> {
+        <name> "unit";
+        <description> "Unit number for specific interface.";
+    }
+    <argument> {
+        <name> "all-except";
+        <description> "Create/apply to all interfaces EXCEPT those starting with this string.";
+    }
+    <argument> {
+        <name> "all-matching";
+        <description> "Create/apply ONLY to interfaces starting with this string.";
+    }
+}
+
+param $interface;       /* name of a single interface to use */
+param $unit;            /* unit number on an interface */
+param $all-matching;    /* select ONLY interface types that match this regex (e.g. "so-", "ge-", "ge-0/0/0") */
+param $all-except;      /* exclude any interface types that match this regex. */ 
+param $debug;
+
+var $silent = 0;                /* 0=msgs to stdout+syslog; 1=msgs to syslog only */
+var $filter-pfx = "anti-psod-"; /* standard identifier to use for filter check/creation */
+var $comment = "Added by script " _ $script _ " " _ $localtime;
+
+/* not yet implemented:   */
+/* param $include-desc;  */
+/*      (select ONLY interfaces with description text that match this regex) */
+/* param $exclude-desc;  */
+/*      (exclude any interfaces with description text matching this regex) */
+
+
+
+/* 
+ * General approach:
+ * For the specified interface(s), extract the IP address (prefix/len).
+ * That information is used to construct the correct firewall filter.
+ * (along with $interface, $unit info).
+ */
+
+match / {
+    <op-script-results> {
+        /* 
+         * First, some cursory sanity checks. 
+         */
+
+        /* Disallow use of 'all-matching' and 'all-except' on same command. */
+        if ( ($all-matching) && ($all-except) ) {
+            expr jcs:output("\n*** Error: all-except and all-matching are mutually exclusive.");
+            call usage;
+        }
+
+        /* When 'all-matching', disallow specifying 'interface' or 'unit' */
+        else if ( ($all-matching) && ( ($interface) or ($unit) ) ) {
+            expr jcs:output("\n*** Error: all-matching and interface\|unit are mutually exclusive.");
+            call usage;
+        }
+
+        /* When 'all-except, disallow specifiying 'interface or 'unit' */
+        else if ( ($all-except) && ( ($interface) or ($unit) ) ) {
+            expr jcs:output("\n*** Error: all-except and interface\|unit are mutually exclusive.");
+            call usage;
+        }
+
+        /* Ensure user also specifies unit ID, if interface is specified. */
+        else if ( ($interface) && ($interface != "ALL") && (not($unit)) ) {
+            expr jcs:output("\n*** Error: Need to specify unit number for interface ",$interface);
+            call usage;
+        }
+    
+        /* If *nothing* specified, show command options. */
+        else if ( not($interface) && not($all-matching) && not($all-except) ) {
+            call usage;
+        }
+
+        /* End sanity checks */
+
+
+        else {
+
+            var $rpc = <get-configuration inherit="inherit" database="candidate"> {
+                <configuration> {
+                    <interfaces>; 
+                    }
+            }
+
+            /* Open for exclusive access with jcs:open() and grab config */
+            var $connection = jcs:open();
+            var $cfg = jcs:execute($connection, $rpc); 
+
+
+
+            /* 
+             * Case 1a: process ALL interfaces, all units OR a specific interface/unit
+             */
+            if ($interface) {
+                if ($interface == "ALL") {
+                expr jcs:output ("Processing ALL interfaces."); 
+                    var $filter-cfg = {
+                        <configuration> { 
+                            /*
+                             * Iterate thru all IPv6 interface/units, creating fw filter and applying to each
+                             */
+                            for-each ($cfg/interfaces//family/inet6/address) {
+                                var $addr = name;
+                                var $unit = ../../../name;
+                                var $interface = ../../../../name;
+                                var $pfx-and-len = jcs:split("/",$addr,2);
+                                var $prefix = $pfx-and-len[1];
+                                var $length = $pfx-and-len[2];
+                                var $if-u = $interface _ "." _ $unit;
+                                var $filter-name = $filter-pfx _ $if-u;
+                                
+                                expr jcs:output("Adding anti-psod filter for interface ", $if-u);
+
+                                /* Construct the fw filter */
+                                call add-filter($filter-name,$comment,$prefix,$length); 
+
+                                /* Apply fw filter to interface */
+                                call apply-filter($filter-name,$comment,$interface,$unit);
+                            }
+                        }
+                    }
+
+                    /* Load the config */
+                    call load-cfg($connection,$configuration=$filter-cfg);
+                }
+                else {
+                /*
+                 * Case 1b: process only a specific inteface/unit
+                 */
+                    var $addr = $cfg/interfaces/interface[name == $interface]/unit[name=$unit]/family/inet6/address/name;
+                    var $pfx-and-len = jcs:split("/",$addr,2);
+                    var $prefix = $pfx-and-len[1];
+                    var $length = $pfx-and-len[2];
+                    var $if-u = $interface _ "." _ $unit;
+                    var $filter-name = $filter-pfx _ $if-u; 
+                    
+                    /*
+                     * Construct the named firewall filter and apply it to the interface.
+                     */ 
+                    
+                    expr jcs:output("Adding anti-psod filter for interface ", $if-u);
+                    var $filter-cfg = {
+                        <configuration> { 
+                                
+                            /* Construct the fw filter */
+                            call add-filter($filter-name,$comment,$prefix,$length); 
+                            
+                            /* Apply fw filter to interface */
+                            call apply-filter($filter-name,$comment,$interface,$unit);
+                        }
+                    } 
+                    /* Load the config */
+                    call load-cfg($connection,$configuration=$filter-cfg);
+                }
+            }
+
+
+            /* 
+             * Case 2: process only interfaces that start with $all-matching string
+             */
+            else if ($all-matching) {
+                expr jcs:output ("Processing only interfaces starting with ", $all-matching); 
+                var $filter-cfg = {
+                    <configuration> { 
+                        /*
+                         * Iterate thru all IPv6 interface/units, creating fw filter and applying to each
+                         */
+                        for-each ($cfg/interfaces//family/inet6/address) {
+                            var $addr = name;
+                            var $unit = ../../../name;
+                            var $interface = ../../../../name;
+                            var $pfx-and-len = jcs:split("/",$addr,2);
+                            var $prefix = $pfx-and-len[1];
+                            var $length = $pfx-and-len[2];
+                            var $if-u = $interface _ "." _ $unit;
+                            var $filter-name = $filter-pfx _ $if-u;
+
+                            if (starts-with($interface,$all-matching)) { 
+                                expr jcs:output("Adding anti-psod filter for interface ", $if-u);
+                                /* Construct the fw filter */
+                                call add-filter($filter-name,$comment,$prefix,$length); 
+
+                                /* Apply fw filter to interface */
+                                call apply-filter($filter-name,$comment,$interface,$unit);
+                            }
+                        }
+                    }
+                }
+                /* Load the config */
+                call load-cfg($connection,$configuration=$filter-cfg);
+            }
+
+
+
+
+            /*
+             * Case 3: process all interfaces EXCEPT those that start with $all-except string
+             */
+            else if ($all-except) {
+                expr jcs:output ("Processing all interfaces EXCEPT any starting with ", $all-except);
+                var $filter-cfg = {
+                    <configuration> { 
+                        /*
+                         * Iterate thru all IPv6 interface/units, creating fw filter and applying to each
+                         */
+                        for-each ($cfg/interfaces//family/inet6/address) {
+                            var $addr = name;
+                            var $unit = ../../../name;
+                            var $interface = ../../../../name;
+                            var $pfx-and-len = jcs:split("/",$addr,2);
+                            var $prefix = $pfx-and-len[1];
+                            var $length = $pfx-and-len[2];
+                            var $if-u = $interface _ "." _ $unit;
+                            var $filter-name = $filter-pfx _ $if-u;
+
+                            if (not(starts-with($interface,$all-except))) { 
+                                expr jcs:output("Adding anti-psod filter for interface ", $if-u);
+                                /* Construct the fw filter */
+                                call add-filter($filter-name,$comment,$prefix,$length); 
+
+                                /* Apply fw filter to interface */
+                                call apply-filter($filter-name,$comment,$interface,$unit);
+                            }
+                        }
+                    }
+                }
+                /* Load the config */
+                call load-cfg($connection,$configuration=$filter-cfg);
+            }
+
+        } /* end else */
+
+    }
+}
+
+
+/****************************************************************************/
+template add-filter($filter-name,$comment,$prefix,$length)
+{ 
+    <firewall> {
+        <family> { 
+            <inet6> {
+                <filter> {
+                    <junos:comment> $comment;
+                    <name> $filter-name;
+                    <term> {
+                        <name> "permit-/127";
+                        <from> {
+                            <destination-address> {
+                                <name> $prefix _ "/127";
+                                }
+                        }
+                        <then> {
+                            <accept>; 
+                        }
+                    }
+                    <term> {
+                        <name> "reject-psod";
+                        <from> {
+                            <destination-address> {
+                                <name> $prefix _ "/" _ $length; 
+                            }
+                        }
+                        <then> {
+                            <reject>;
+                        }
+                    }
+                    <term> {
+                        <name> "allow-all";
+                        <then> {
+                            <accept>;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+/****************************************************************************/
+
+/****************************************************************************/
+template load-cfg($connection,$configuration)
+{
+    var $res := {
+        call jcs:load-configuration($connection,$configuration);
+    }
+    
+    /* 
+     * Emit warnings, if needed 
+     */
+
+    for-each ($res//xnm:warning) {
+        call emit-warning($interface, $unit, $message = message);
+    }
+    
+    if ($res//xnm:error) {
+        for-each ($res//xnm:error) {
+            call emit-error($interface, $unit, $message = message);
+        }
+    }
+    else {
+        call emit-success($message = "filter update committed"); 
+    }
+}
+
+/****************************************************************************/
+
+
+
+
+/****************************************************************************/
+template apply-filter($filter-name,$comment,$interface,$unit)
+{ 
+    <interfaces> {
+        <interface> {
+            <name> $interface;
+            <unit> {
+                <name> $unit;
+                <family> {
+                    <inet6> {
+                        <junos:comment> $comment;
+                        <filter> {
+                            <input> {
+                                <filter-name> $filter-name;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+/****************************************************************************/
+            
+
+/****************************************************************************/
+template emit-success($message)
+{
+    var $msg = $script _ ":" _ "[Success] ";
+    
+    expr jcs:syslog("user.info", $msg, $message);
+    if (not($silent)) {
+        expr jcs:output($msg,$message);
+    }
+}
+/****************************************************************************/
+
+
+
+/****************************************************************************/
+template emit-error($interface, $unit, $message)
+{
+    var $msg = $script _ ":" _ "[Error] interface=" _ $interface _ ", unit=" _ $unit _ ": ";
+
+    expr jcs:syslog("user.error", $msg, $message);
+    if (not($silent)) {
+        expr jcs:output($msg, $message);
+    }
+}
+/****************************************************************************/
+
+
+
+/****************************************************************************/
+template emit-warning($interface, $unit, $message)
+{
+    var $msg = $script _ ":" _ "[Warning] interface=" _ $interface _ ", unit=" _ $unit _ ": ";
+
+    expr jcs:syslog("user.warning", $msg, $message);
+    if (not($silent)) {
+        expr jcs:output($msg, $message);
+    }
+}
+/****************************************************************************/
+
+
+
+/****************************************************************************/
+template usage()
+{
+    var $cmd = substring-before($script,".slax");
+    expr jcs:output("\nUsage:  ");
+   
+    expr jcs:output("op ", $cmd, " interface <ifname> unit <unit-id>\n");
+    expr jcs:output("\t\(apply anti-psod filter to a specific interface/unit\)");
+
+    expr jcs:output("\nop ", $cmd, " interface ALL\n");
+    expr jcs:output("\t\(apply anti-psod filter to ALL v6 interfaces. note: will process ALL units on ALL IPv6 interfaces\)");
+    
+    expr jcs:output("\nop ", $cmd, " all-except ge-0/0/0");
+    expr jcs:output("\t\(apply anti-psod filter to ALL v6 interfaces EXCEPT ge-0/0/0\)");
+
+    expr jcs:output("\nop ", $cmd, " all-matching so-\n");
+    expr jcs:output("\t\(apply anti-psod filter to ONLY v6 sonet interfaces\)");
+
+}
+/****************************************************************************/

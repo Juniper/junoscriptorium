@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<script>
+  <title>add-psod-filter.slax</title>
+  <author>mcdoug62</author>
+  <synopsis>
+	create and apply "anti-ping-sweep-of-death" filters to IPv6 interfaces having prefix len of /64 or shorter
+  </synopsis>
+  <coe>op</coe>
+  <type>filters</type>
+
+  <description>
+Script allows user to specify one or more interfaces to create and
+apply 'anti-psod' firewall filters to. User must only speciy one of
+the following:
+    1. a single interface and unit,
+    2. ALL interfaces (and all units),
+    3. ONLY interfaces matching a certain string or
+    4. all interfaces EXCEPT those matching a certain string.
+
+  </description>
+
+  <keyword>filter</keyword>
+  <keyword>interface</keyword>
+  <keyword>firewall</keyword>
+  <example>
+    <title>Example</title>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
