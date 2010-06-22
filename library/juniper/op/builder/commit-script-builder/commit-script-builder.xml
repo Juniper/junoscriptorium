@@ -9,9 +9,259 @@
   <type>builder</type>
 
   <description>
+    <![CDATA[
+Overview
 
+Commit Script Builder is an op script that allows users to create their own customized commit scripts 
+without requiring any scripting knowledge.  There is a large percentage of Junos users that will never 
+learn how to write their own scripts.  Providing tools such as this gives them the next best thing 
+because it allows them to still take advantage of Junos automation without requiring that they master 
+scripting.
+
+Commit Script Builder works by allowing the user to select among various pre-defined configuration 
+violations.  They select which violations they want to monitor and then select what action should be 
+performed if the violation occurs.  After the desired logic has been assembled Commit Script Builder 
+can generate a commit script - customized according to their settings - and enable it on their local 
+Junos device.
+
+Example
+
+The following outputs provide an example of how Commit Script Builder can be used to create a 
+customized commit script.  The script can be run in two ways:
+
+    * Loaded and enabled as an op script
+    * Executed remotely via op url
+
+Utilizing the op url to advantageous because it means you can install your customized commit script 
+without even loading/enabling a single script on your device.
+ 
+Main Menu
+
+jnpr@esLab-j4350-siteA> op url http://www-in.juniper.net/~ccall/scripts/commit-script-builder.slax
+
+Welcome to Commit Script Builder 1.0!
+---------------------------------
+This script gives you easy control over the commit process of your Junos
+device.  Select what configuration violations should be checked, and what
+actions should be performed if they occur.  Then allow the Commit Script
+Builder op script to generate the customized commit script, save it within
+the local commit script directory, and enable it automatically.
+
+Checking for existing commit script: custom-commit-script.slax...
+Existing commit script was not found
+
+[Commit Script Builder - Main Menu]
+-----------------------------------
+1. Edit Configuration Violations
+2. View Automation Instructions
+3. View Customized Commit Script
+4. Build and Apply Commit Script
+5. Clear All Instructions
+...
+Q. Quit and Discard Changes
+-----------------------------------
+(0 selected violations)
+Enter Selection:> 1
+
+The main menu provides a number of different options, the one we are interested in now is 'Edit 
+Configuration Violations' because we want to select violations to monitor.
+
+[Configuration Violation Categories]
+------------------------------------
+1. Access            11. RADIUS
+2. Authentication    12. RSVP
+3. BGP               13. Routing
+4. Firewalls         14. Scripts
+5. Hierarchies       15. Security
+6. IS-IS             16. System
+7. Interfaces        17. TACACS+
+8. LDP               18. fxp0.0
+9. MPLS              19. lo0.0
+10. OSPF
+20. <All Categories>
+21. <Current Selections>
+...
+0. Return to Main Menu
+------------------------------------
+(0 selected violations)
+Select Category:> 6
+
+Next, we can select from the different violation categories that have been created.  Categories 
+are similar to tags in that each violation falls within more than one.  We'll select IS-IS and 
+continue on.
+
+[IS-IS - Configuration Violations]
+----------------------------------
+1. Interface enabled for IS-IS protocol lacks family iso
+2. lo0.0 interface doesn't have an ISO address
+3. lo0.0 interface is not included in IS-IS
+...
+0. Return to Category Menu
+----------------------------------
+[#] = Action is selected
+Select Violation to Edit:> 1
+
+As you can see, there are currently three IS-IS violations that can be selected.  We'll choose 
+#1.
+
+[Edit Configuration Violation Response]
++----------------------------------------------------------------------------+
+|Synopsis: Interface enabled for IS-IS protocol lacks family iso             |
+|............................................................................|
+|The interface has been specifically configured under [edit protocols isis]  |
+|but it lacks family iso in its interface configuration.  (Interfaces that   |
+|are enabled through 'interface all' are not considered, also fxp0.0 and     |
+|lo0.0 are ignored).  If Auto-Correct is selected then family iso is added   |
+|automatically to the interface.                                             |
++----------------------------------------------------------------------------+
+1. Error - Fail commit with an error message
+2. Warning - Display warning message on console
+3. Syslog - Write warning message to syslog
+4. Warning & Syslog - Report warning to both console and syslog
+5. Auto-Correct - Add family iso to interface
+[6] Do nothing - Do not monitor this violation
+...
+V. View violation script code
+0. Return to Violations Menu
+-----------------------
+[#] = Current Selection
+Select Response:> 5
+
+
+This next menu provides more details on the violation and provides a number of options.  The
+selected option is shown by enclosing it within [ ], and as you can see we are currently 
+ignoring this configuration violation.  We'll select option 5 so that the commit script will 
+automatically add family iso to the interface for us.
+
+Following this selection we return back to the violation menu.  We'll skip that output and 
+press '0' until we return to the main menu.
+
+[Commit Script Builder - Main Menu]
+-----------------------------------
+1. Edit Configuration Violations
+2. View Automation Instructions
+3. View Customized Commit Script
+4. Build and Apply Commit Script
+5. Clear All Instructions
+...
+Q. Quit and Discard Changes
+-----------------------------------
+(1 selected violations)
+Enter Selection:> 2
+
+Configuration Violation Responses:
+----
+If: Interface enabled for IS-IS protocol lacks family iso
+Then: Auto-Correct - Resolve violation through configuration change
+----
+
+--Press Enter to Continue--
+
+This time we selected option 2, which shows us the if/then logic of our commit script.  The 
+final step is to build and apply the commit script by selecting option 4.  Here are the 
+results:
+
+[Commit Script Builder - Main Menu]
+-----------------------------------
+1. Edit Configuration Violations
+2. View Automation Instructions
+3. View Customized Commit Script
+4. Build and Apply Commit Script
+5. Clear All Instructions
+...
+Q. Quit and Discard Changes
+-----------------------------------
+(1 selected violations)
+Enter Selection:> 4
+
+***********************************************
+* Step 1 of 4: Building commit script...      *
+***********************************************
+[Success]
+
+***********************************************
+* Step 2 of 4: Locking the configuration...   *
+***********************************************
+[Success]
+
+***********************************************
+* Step 3 of 4: Writing commit script...       *
+***********************************************
+[Success]
+
+***********************************************
+* Step 4 of 4: Enabling script and committing *
+***********************************************
+[Success]
+
+custom-commit-script.slax was applied successfully.
+Exiting to Junos prompt.
+
+jnpr@esLab-j4350-siteA> show configuration system scripts commit
+file custom-commit-script.slax;
+
+The process was successfuly, and as you can see the J4350 is now the proud owner of a customized 
+commit script.  Should we decide to modify our current selections then we can rerun the Commit 
+Script Builder op script and it will automatically read our past selections from the 
+custom-commit-script.slax file:
+
+jnpr@esLab-j4350-siteA> op url http://www-in.juniper.net/~ccall/scripts/commit-script-builder.slax
+
+Welcome to Commit Script Builder 1.0!
+---------------------------------
+This script gives you easy control over the commit process of your Junos
+device.  Select what configuration violations should be checked, and what
+actions should be performed if they occur.  Then allow the Commit Script
+Builder op script to generate the customized commit script, save it within
+the local commit script directory, and enable it automatically.
+
+Checking for existing commit script: custom-commit-script.slax...
+Found custom-commit-script.slax - retrieving current settings...
+---Retrieved 1 configuration violation response selection(s)
+
+[Commit Script Builder - Main Menu]
+-----------------------------------
+1. Edit Configuration Violations
+2. View Automation Instructions
+3. View Customized Commit Script
+4. Build and Apply Commit Script
+5. Clear All Instructions
+...
+Q. Quit and Discard Changes
+-----------------------------------
+(1 selected violations)
+Enter Selection:> 2
+
+Configuration Violation Responses:
+----
+If: Interface enabled for IS-IS protocol lacks family iso
+Then: Auto-Correct - Resolve violation through configuration change
+----
+
+--Press Enter to Continue--
+
+Q&A
+
+    * What is the minimum Junos version?
+          o Junos 10.0
+    * Does it support multiple routing-engines?
+          o Yes
+    * Does it support all platform/configurations?
+          o No, the following platforms/configurations are not currently supported:
+                + TX Matrix
+                + J/SRX Chassis Clusters
+
+
+Version Details:
+----------------
+Minimum JUNOS Version: 10.0
+Current Script Version: 1.13
+MD5 Checksum: 49b6627b2e6d49d90d4d8529193e0806 
+SHA-256 Checksum: 7d166de4f2a2d13c19987f6ed08f37580dc536d4c7b0eabeee8d0aafc11228b2
+]]>
   </description>
-
+  <keyword>builder</keyword>
+  <keyword>slax</keyword>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
