@@ -251,6 +251,53 @@ Q&A
                 + TX Matrix
                 + J/SRX Chassis Clusters
 
+Current Configuration Violations:
+
+1. AS number does not match specific value
+2. BGP VPN path-selection mode is being turned on or off
+3. BGP peer lacks authentication
+4. Configuration includes hidden configuration statements
+5. Event script is not enabled
+6. FTP is enabled
+7. Filter term matches ICMP field without matching the protocol
+8. Filter term matches UDP/TCP port without matching the protocol
+9. Firewall filter does not end with a final 'accept' term
+10. Host-name is not set within re0 or re1 configuration group
+11. IPv4 firewall filter is not defined within family inet hierarchy
+12. Interface enabled for IS-IS protocol lacks family iso
+13. Interface enabled for LDP protocol lacks family mpls
+14. Interface enabled for MPLS protocol lacks family mpls
+15. Interface enabled for RSVP protocol lacks family mpls
+16. Interface is enabled for MPLS protocol but not RSVP protocol
+17. Interface is enabled for RSVP protocol but not MPLS protocol
+18. Interfaces configuration hierarchy is missing
+19. Login announcement does not match specific value
+20. Login message does not match specific value
+21. Missing fxp0.0 IPv4 input firewall filter
+22. Missing lo0.0 IPv4 input firewall filter
+23. No Syslog destinations are configured
+24. No user accounts have been configured
+25. Protocols configuration hierarchy is missing
+26. RADIUS authentication is enabled but no servers exist
+27. RADIUS server configured but RADIUS authentication not enabled
+28. Router-id is not configured
+29. SSH is not enabled
+30. SSH version 2 is not enabled/required
+31. TACACS+ authentication is enabled but no servers exist
+32. TACACS+ server configured but TACACS+ authentication not enabled
+33. Telnet is enabled
+34. Undefined routing-instance used as firewall filter action
+35. Vlan-id 0 assigned via vlan-id-list to different unit than native-vlan-id
+36. fxp0 address is not set within re0 or re1 configuration group
+37. fxp0.0 interface is included in OSPF
+38. fxp0.0 interface is included in OSPFv3
+39. lo0.0 interface doesn't have an IPv4 address
+40. lo0.0 interface doesn't have an IPv6 address
+41. lo0.0 interface doesn't have an ISO address
+42. lo0.0 interface is not configured
+43. lo0.0 interface is not included in IS-IS
+44. lo0.0 interface is not included in OSPF
+45. lo0.0 interface is not included in OSPFv3                
 
 Version Details:
 ----------------
