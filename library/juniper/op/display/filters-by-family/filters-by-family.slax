@@ -1,0 +1,78 @@
+/*
+ * Author        : Curtis Call
+ * Version       : 1.0
+ * Last Modified : July 13, 2010
+ * Platform      : all
+ *
+ * Description   : This op script displays only logical interfaces that have filters
+ * assigned of the desired address family.
+ *
+ * License       : BSD-Style
+ *  Copyright (c) 2010 Curtis Call. All Rights Reserved.
+ *  Redistribution and use in source and binary forms, with or without modification, 
+ *  are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice, this 
+ *  list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  this list of conditions and the following disclaimer in the documentation and/or
+ *  other materials provided with the distribution.
+ *  3. The name of the author may not be used to endorse or promote products derived 
+ *  from this software without specific prior written permission.
+ *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED 
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+ *  AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE 
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN 
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */ 
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "family";
+        <description> "Address family to display: inet, inet6, mpls, etc";
+    }
+}
+
+param $family;
+
+match / {
+    <op-script-results> {
+    
+        var $results = jcs:invoke( "get-interface-filter-information" );
+        
+        /* Embed top-level element into result tree */
+        <interface-filter-information junos:style="filter"> {
+        
+            /* Only include the logical-interface nodes that have an assigned 
+             * filter from the desired family.
+             */
+            for-each( $results/physical-interface/logical-interface ) {
+            
+                /* Filter family must match, and an input or output filter must be present */
+                if(filter-information[filter-family == $family][filter-input | filter-output]){
+                    <physical-interface> {
+                        <logical-interface> {
+                            /* Copy all child elements except other family filters */
+                            copy-of *[name() != "filter-information" || filter-family==$family]; 
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+    
