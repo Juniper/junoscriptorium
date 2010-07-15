@@ -3,15 +3,81 @@
   <title>record-mbufs.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Records mbufs
+	Periodically record information from "show system buffers" into the Utility MIB
   </synopsis>
   <coe>event</coe>
   <type>snmp</type>
 
   <description>
-
+    <![CDATA[
+        This event script periodically records the mbufs allocation as well as the number of bytes allocated
+        to the network. 
+        
+        Values are stored at the following OIDS:
+        
+        * current mbuf number:
+        * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.109.99.117
+        *
+        * cached mbuf number:
+        * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.109.99.97
+        *
+        * total mbuf number:
+        * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.109.116
+        *
+        * current network bytes (in bytes)
+        * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.110.99.117
+        *
+        * cached network bytes (in bytes)
+        * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.110.99.97
+        *
+        * total network bytes (in bytes)
+        * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.110.116  
+        
+        The script runs every 15 minutes.
+        
+        Setup in Junos 9.0+:
+        1. Copy script file into /var/db/scripts/event
+        2. Enable it with the following configuration:
+        event-options {
+            event-script {
+                file record-mbufs.slax;
+            }
+        }
+        
+        Setup in Junos 8.5:
+        1. Copy script file into /var/db/scripts/op
+        2. Enable it with the following configuration:
+        system {
+            scripts {
+                op {
+                    file record-mbufs.slax;
+                }
+            }
+        }
+        event-options {
+            generate-event {
+                15-minutes time-interval 900;
+            }
+            policy record-mbufs {
+                events 15-minutes;
+                then {
+                    event-script record-mbufs.slax;
+                }
+            }
+        }
+         
+        Minimum JUNOS Version: 8.5
+        Latest Script Version: 1.0
+        MD5 Checksum: 5c7f226e33b63b16d4e99cb0024f5a56
+        SHA-256 Checksum: 6c1dfb39a48a4756cce431f98583b184fb76f000b10e430473c553796ccf2418
+]]>
   </description>
-
+  <keyword>utility</keyword>
+  <keyword>snmp</keyword>
+  <keyword>slax</keyword>
+  <keyword>mib</keyword>
+  <keyword>mbufs</keyword>
+  <keyword>buffers</keyword>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
