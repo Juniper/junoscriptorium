@@ -1,0 +1,194 @@
+/*
+ * Author        : Curtis Call
+ * Version       : 1.0
+ * Last Modified : July 15, 2010
+ * Platform      : all
+ * Release       : 8.5 and above
+ *
+ * Description   : This event script automatically writes the following values from
+ * "show system buffers" into the Utility MIB event fifteen minutes:
+ *
+ * 4/896/900 mbufs in use (current/cache/total)
+ * 9K/836K/845K bytes allocated to network (current/cache/total)
+ *
+ * All values are recorded under the following OID:
+ *
+ * enterprises.juniperMIB.jnxMibs.jnxUtilMibRoot.jnxUtil.jnxUtilData.jnxUtilUintTable.jnxUtilUintEntry.jnxUtilUintValue.98.117.102.102.101.114.115
+ * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115
+ *
+ * OID Values:
+ *
+ * current mbuf number:
+ * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.109.99.117
+ *
+ * cached mbuf number:
+ * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.109.99.97
+ *
+ * total mbuf number:
+ * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.109.116
+ *
+ * current network bytes (in bytes)
+ * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.110.99.117
+ *
+ * cached network bytes (in bytes)
+ * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.110.99.97
+ *
+ * total network bytes (in bytes)
+ * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.98.117.102.102.101.114.115.110.116
+ *
+ * License       : BSD-Style
+ *  Copyright (c) 2010 Curtis Call. All Rights Reserved.
+ *  Redistribution and use in source and binary forms, with or without modification, 
+ *  are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice, this 
+ *  list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  this list of conditions and the following disclaimer in the documentation and/or
+ *  other materials provided with the distribution.
+ *  3. The name of the author may not be used to endorse or promote products derived 
+ *  from this software without specific prior written permission.
+ *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED 
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+ *  AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE 
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN 
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */ 
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+/* Embedded event policy - works in Junos 9.0+  */
+var $event-definition = {
+    <event-options> {
+        <generate-event> {
+            <name> "15-minutes";
+            <time-interval> "900";
+        }
+        <policy> {
+            <name> "record-mbufs";
+            <events> "15-minutes";
+            <then> {
+                <event-script> {
+                    <name> "record-mbufs.slax";
+                }
+            }
+        }
+    }
+}
+
+/* Main instance prefix */
+var $instance-prefix = "buffers";
+
+/* Instance name suffixes */
+var $mbufs-current-suffix = "mcu";
+var $mbufs-cached-suffix = "mca";
+var $mbufs-total-suffix = "mt";
+var $network-current-suffix = "ncu";
+var $network-cached-suffix = "nca";
+var $network-total-suffix = "nt";
+
+
+match / {
+    
+    /* Read the system mbufs */
+    var $mbufs-rpc = <command> "show system buffers";
+    var $buffers = jcs:invoke( $mbufs-rpc );
+    
+    /* Break up the output */
+    var $lines = jcs:break-lines( $buffers );
+    
+    /* Retrieve the current mbufs */
+    var $mbufs-line = $lines[ contains( ., "mbufs in use" ) ];
+    
+    /* Retrieve the network byte allocations */
+    var $network-line = $lines[ contains( ., "bytes allocated to network" ) ];
+    
+    /* Write the current mbufs */
+    var $current-mbufs-instance = { call build-instance-name( $suffix = $mbufs-current-suffix ); }
+    var $current-mbufs = substring-before( $mbufs-line, "/" );
+    call set-instance( $instance = $current-mbufs-instance, $type = "unsigned-integer", $value = $current-mbufs );
+
+    /* Write the cached mbufs */
+    var $cached-mbufs-instance = { call build-instance-name( $suffix = $mbufs-cached-suffix ); }
+    var $cached-mbufs = substring-before( substring-after( $mbufs-line, "/" ), "/" );
+    call set-instance( $instance = $cached-mbufs-instance, $type = "unsigned-integer", $value = $cached-mbufs );
+    
+    /* Write the total mbufs */
+    var $total-mbufs-instance = { call build-instance-name( $suffix = $mbufs-total-suffix ); }
+    var $total-mbufs = substring-after( substring-after( substring-before( $mbufs-line, " mbufs in use" ), "/" ), "/" );
+    call set-instance( $instance = $total-mbufs-instance, $type = "unsigned-integer", $value = $total-mbufs );
+
+    /* Write the current network bytes */
+    var $current-network-instance = { call build-instance-name( $suffix = $network-current-suffix ); }
+    var $current-network = substring-before( $network-line, "/" );
+    var $current-network-bytes = { call translate-to-bytes( $value = $current-network ); }
+    call set-instance( $instance = $current-network-instance, $type = "unsigned-integer", $value = $current-network-bytes );
+    
+    /* Write the cached network bytes */
+    var $cached-network-instance = { call build-instance-name( $suffix = $network-cached-suffix ); }
+    var $cached-network = substring-before( substring-after( $network-line, "/" ), "/" );
+    var $cached-network-bytes = { call translate-to-bytes( $value = $cached-network ); }
+    call set-instance( $instance = $cached-network-instance, $type = "unsigned-integer", $value = $cached-network-bytes );
+    
+    /* Write the total network bytes */
+    var $total-network-instance = { call build-instance-name( $suffix = $network-total-suffix ); }
+    var $total-network = substring-after( substring-after( substring-before( $network-line, " bytes allocated to network" ), "/" ), "/" );
+    var $total-network-bytes = { call translate-to-bytes( $value = $total-network ); }
+    call set-instance( $instance = $total-network-instance, $type = "unsigned-integer", $value = $total-network-bytes );
+}
+
+/*
+ * Determine byte amount
+ */
+template translate-to-bytes( $value ) {
+
+    /* K = times by 1024 */
+    if( contains( $value, "K" ) ) {
+        expr number( substring-before( $value, "K" ) ) * 1024;
+    }
+    /* M = times by 1048576 */
+    else if( contains( $value, "M" ) ) {
+        expr number( substring-before( $value, "M" ) ) * 1048576;
+    }
+    /* G = times by 1073741824 */
+    else if( contains( $value, "G" ) ) {
+        expr number( substring-before( $value, "G" ) ) * 1073741824;
+    }
+    else {
+        expr $value;
+    }
+}
+
+/*
+ * Assembles an instance name.
+ */
+template build-instance-name( $suffix ) {
+    expr $instance-prefix _ $suffix;
+}
+
+
+/*
+ * set-instance - Sets the instance in the MIB
+ */
+template set-instance($instance, $type, $value) {
+
+    /* Build RPC and invoke it */ 
+    var $rpc = {
+        <request-snmp-utility-mib-set> {
+            <instance> $instance;
+            <object-type> $type;
+            <object-value> $value;
+        }
+    }
+    var $results = jcs:invoke( $rpc );
+}
+
