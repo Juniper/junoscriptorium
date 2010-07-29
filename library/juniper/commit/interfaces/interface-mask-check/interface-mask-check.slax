@@ -1,0 +1,32 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* this commit script verifies that the ipv4 address on each interface has a network mask		*/ 
+/* of 24 or greater.  If the mask is less than /24 then a warning is issued						*/
+
+match configuration {
+    for-each (interfaces/interface/unit/family/inet/address) {
+        var $prefix = substring-after(name, "/");
+        var $address = substring-before(name, "/");
+        var $if-name = ../../../../name;
+        var $unit-name = ../../../name;
+        if ($prefix < 24) {
+             <xnm:warning> {
+             <message> {
+	           expr "The address of " _ $address _ " has a mask of \/"; 
+	           expr $prefix _ "\non interface " _ $if-name;
+           expr " unit " _ $unit-name _ "\n";
+		}
+            }
+        }	
+    }
+}
+
+
+
+

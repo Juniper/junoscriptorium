@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<script>
+  <title>interface-mask-check.slax</title>
+  <author>timothy.fiola</author>
+  <synopsis>
+	verifies that ipv4 mask of each int is /24 or greater
+  </synopsis>
+  <coe>commit</coe>
+  <type>interfaces</type>
+
+  <description>
+This script checks each ipv4 address on the device and verifies that the mask is /24 or greater. If the mask is less than /24 the script issues a warning on commit.
+
+  </description>
+
+  <keyword>ipv4</keyword>
+  <keyword>mask</keyword>
+  <keyword>interface</keyword>
+  <example>
+    <title>Sample configuration</title>
+    <description>Configuration for the script interface-mask-check.slax</description>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
