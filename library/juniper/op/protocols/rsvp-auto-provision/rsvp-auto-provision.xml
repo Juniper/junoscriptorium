@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<script>
+  <title>rsvp-auto-provision.slax</title>
+  <author>timothy.fiola</author>
+  <synopsis>
+	auto provisions RSVP LSPs to each /32 in ospf
+  </synopsis>
+  <coe>op</coe>
+  <type>protocols</type>
+
+  <description>
+this script examines OSPF routes and provisions basic RSVP LSPs to each /32, excluding 224.0.0 addresses. It verifies that the LSP name does not already exist. this script does NOT configure all of mpls, ospf, or rsvp. This script only configures the mpls lsp name and dest.  the lsp name will be <local host-name>-to-<remote lo0>. the script may take a few moments to run, especially with a large number of /32 routes in OSPF.  If the LSP name already exists, the script will notify the user that the LSP name already exists and will not overwrite the LSP.			
+
+  </description>
+
+  <keyword>rsvp</keyword>
+  <keyword>mpls</keyword>
+  <keyword>lsp</keyword>
+  <keyword>ospf</keyword>
+  <example>
+    <title>Sample configuration</title>
+    <description>Configuration for the script rsvp-auto-provision.slax</description>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

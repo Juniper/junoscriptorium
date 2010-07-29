@@ -1,0 +1,79 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match / {
+
+    <op-script-results> {
+	
+		/* this script examines OSPF routes and provisions basic RSVP LSPs to each /32, excluding	*/
+		/* 224.0.0 addresses. It verifies that the LSP name does not already exist. This script does*/
+		/* NOT configure mpls, ospf, or rsvp. This script only configures the mpls lsp name and dest*/
+		/* the lsp name will be <local host-name>-to-<remote lo0>. the script may take a few 		*/
+		/* moments to run, especially with a large number of /32 routes in OSPF						*/
+
+	
+		var $rpc-get-config = <get-configuration database="committed">;
+		var $config = jcs:invoke($rpc-get-config);
+		
+		var $host-name = $config/system/host-name;
+		
+		
+		var $con = jcs:open();
+		if (not($con)) {
+			<output> "Unable to connect to local mgd";
+		}
+		
+		var $rpc-sh-ospf-route = {<command> "show route protocol ospf terse";}
+		var $ospf-route = jcs:invoke($rpc-sh-ospf-route);
+		
+		for-each($ospf-route/route-table/rt[contains(rt-destination, "/32") && not(starts-with(rt-destination, "224.0.0"))]) {
+			var $dest = substring-before(rt-destination, "/32");
+			var $lsp-name = $host-name _ "-to-" _ $dest;
+			
+			if (not($config/protocols/mpls//label-switched-path[name == $lsp-name])) {
+			
+				<output> "building LSP " _ $lsp-name;
+				
+				var $change = {
+					<configuration> {
+						<protocols> {
+							<mpls> {
+								<label-switched-path> {
+									<name> $lsp-name;
+									<to> $dest;
+								}
+							}
+						}
+					}
+				}
+				
+				var $results := {
+					call jcs:load-configuration($connection = $con, $configuration = $change);
+				}
+				
+				if ($results//self::xnm:error) {
+					<xnm:warning> {
+						<message> "unable to config lsp " _ $lsp-name;
+						copy-of $results;
+					}
+				} else {
+					<xnm:warning> {
+						<message> $lsp-name _ " configured successfully";
+					}
+				}
+			} else {
+				<xnm:warning> {
+					<message> $lsp-name _ " already exists";
+				}
+			}
+		}
+	
+		<output> "script ends";
+	
+	}
+}	
