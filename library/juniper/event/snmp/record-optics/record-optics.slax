@@ -1,7 +1,7 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.1
- * Last Modified : April 16, 2010
+ * Version       : 1.3
+ * Last Modified : August 25, 2010
  * Platform      : all
  * Release       : 9.3 and above
  *
@@ -32,6 +32,14 @@
  * jnxUtilStringValue.111.112.116.105.99.115.78.49.53.51 = ge-1/0/0
  * jnxUtilStringValue.111.112.116.105.99.115.80.49.53.51 = 0.3015
  * 
+ * Revisions:
+ * 1.2 - Switched from recursive template design to for-each design in order to conserve memory usage.
+ *     - Added new "opowner" instance to track the current script owner. When an older instance detects
+ *       that a new one has started then the old instance will exit.
+ *     - Added new daemon.info messages to describe the starting and stopping of the script.
+ * 1.3 - Changed from "show interfaces" to "show interfaces media" because of a bug in 10.2R2 that caused
+ *       the script to hang.
+ *
  * License       : BSD-Style
  *  Copyright (c) 2010 Curtis Call. All Rights Reserved.
  *  Redistribution and use in source and binary forms, with or without modification, 
@@ -80,95 +88,109 @@ var $event-definition = {
     }
 }
 
+var $owner-instance = "opowner";
+var $owner-oid = "jnxUtilStringValue.o.p.o.w.n.e.r";
+
+
 var $connection = jcs:open();
 
 match / {
-    /* Call recursive template */
-    call record-optics();
+    expr jcs:syslog( "daemon.info", "Starting new record optics instance" );
     
-    expr jcs:close( $connection );
-}
+    /* Loop through ten times */
+    var $loop := { call build-loop(); }
 
-
-/*
- * The primary template, recalls itself 10 times, once every thirty seconds
- */
-template record-optics( $count = 1 ) {
+    /* Record self as new mcast owner */
+    call write-owner();    
     
-    /* Read the current optic output */
-    var $interface-optics = jcs:execute( $connection, "get-interface-optics-diagnostics-information" );    
-    /* Read the current interfaces - for their ifIndexes */
-    var $interfaces = jcs:execute( $connection, "get-interface-information" );
-    
-    /* Populate the Utility MIB - and build set of used instances while we are at it */
-    var $used-instance-set := {
-        for-each( $interface-optics/physical-interface ) {
-            var $name = name;
-            var $interface = $interfaces/physical-interface[name == $name];
-            var $ifIndex = $interface/snmp-index; 
-            
-            /* Only go on if there is an ifIndex */
-            if( string-length( $ifIndex ) > 0 ) {
-                /* Write interface name */
-                var $name-instance = { call build-instance-name( $instance-type = "N", $ifIndex ); }
-                <instance> "jnxUtilStringValue." _ $name-instance;
-                call set-instance( $connection, $instance = $name-instance, $type = "string", $value = $name );
-                /* Write receive power */
-                var $receive-instance = { call build-instance-name( $instance-type = "P", $ifIndex ); }
-                <instance> "jnxUtilStringValue." _ $receive-instance;
-                var $power = {
-                    if( optics-diagnostics/rx-signal-avg-optical-power ) {
-                        expr optics-diagnostics/rx-signal-avg-optical-power;
-                    }
-                    else if( optics-diagnostics/laser-rx-optical-power ){
-                        expr optics-diagnostics/laser-rx-optical-power;
-                    }
-                    else {
-                        expr "0.0000";
-                    }
-                }
-                call set-instance( $connection, $instance = $receive-instance, $type = "string", $value = $power );
-                /* Write receive dbm */
-                var $dbm-instance = { call build-instance-name( $instance-type = "D", $ifIndex ); }
-                <instance> "jnxUtilStringValue." _ $dbm-instance;
-                var $dbm = {
-                    if( optics-diagnostics/rx-signal-avg-optical-power-dbm ) {
-                        expr optics-diagnostics/rx-signal-avg-optical-power-dbm;
-                    }
-                    else if( optics-diagnostics/laser-rx-optical-power-dbm ){
-                        expr optics-diagnostics/laser-rx-optical-power-dbm;
-                    }
-                    else {
-                        expr "0";
-                    }
-                }
-                call set-instance( $connection, $instance = $dbm-instance, $type = "string", $value = $dbm );
-             }
-             else {
-                expr jcs:syslog( "daemon.error", "Interface ", $name, " does not have ifIndex." );
-             }
+    for-each( $loop/loop ) {
+        /* Verify that we are still optics owner */
+        var $current-owner = { call read-owner(); }
+        if( $current-owner != $localtime-iso ) {
+            expr jcs:syslog( "daemon.info", "New optics instance has assumed ownership, exiting" );
+            <xsl:message terminate="yes"> "New instance has take over";
         }
-    }
-    expr jcs:syslog( "daemon.info", "Updated ", ( count( $used-instance-set/instance ) div 3 ), " interface optic values in the Utility MIB. (", $count, " of 10)" );
     
-    /* Remove old interfaces from Utility MIB */
-    var $oids := { call walk-mib(); }
-    
-    for-each( $oids/instance ) {
-        var $instance = .;
+        /* Read the current optic output */
+        var $interface-optics = jcs:execute( $connection, "get-interface-optics-diagnostics-information" );    
+        /* Read the current interfaces - for their ifIndexes */
+        var $interface-rpc = {
+            <get-interface-information> {
+                <media>;
+            }
+        }
+        var $interfaces = jcs:execute( $connection, $interface-rpc );
+
+        /* Populate the Utility MIB - and build set of used instances while we are at it */
+        var $used-instance-set := {
+            for-each( $interface-optics/physical-interface ) {
+                var $name = name;
+                var $interface = $interfaces/physical-interface[name == $name];
+                var $ifIndex = $interface/snmp-index; 
+                /* Only go on if there is an ifIndex */
+                if( string-length( $ifIndex ) > 0 ) {
+                    /* Write interface name */
+                    var $name-instance = { call build-instance-name( $instance-type = "N", $ifIndex ); }
+                    <instance> "jnxUtilStringValue." _ $name-instance;
+                    call set-instance( $connection, $instance = $name-instance, $type = "string", $value = $name );
+                    /* Write receive power */
+                    var $receive-instance = { call build-instance-name( $instance-type = "P", $ifIndex ); }
+                    <instance> "jnxUtilStringValue." _ $receive-instance;
+                    var $power = {
+                        if( optics-diagnostics/rx-signal-avg-optical-power ) {
+                            expr optics-diagnostics/rx-signal-avg-optical-power;
+                        }
+                        else if( optics-diagnostics/laser-rx-optical-power ){
+                            expr optics-diagnostics/laser-rx-optical-power;
+                        }
+                        else {
+                            expr "0.0000";
+                        }
+                    }
+                    call set-instance( $connection, $instance = $receive-instance, $type = "string", $value = $power );
+                    /* Write receive dbm */
+                    var $dbm-instance = { call build-instance-name( $instance-type = "D", $ifIndex ); }
+                    <instance> "jnxUtilStringValue." _ $dbm-instance;
+                    var $dbm = {
+                        if( optics-diagnostics/rx-signal-avg-optical-power-dbm ) {
+                            expr optics-diagnostics/rx-signal-avg-optical-power-dbm;
+                        }
+                        else if( optics-diagnostics/laser-rx-optical-power-dbm ){
+                            expr optics-diagnostics/laser-rx-optical-power-dbm;
+                        }
+                        else {
+                            expr "0";
+                        }
+                    }
+                    call set-instance( $connection, $instance = $dbm-instance, $type = "string", $value = $dbm );
+                 }
+                 else {
+                    expr jcs:syslog( "daemon.error", "Interface ", $name, " does not have ifIndex." );
+                 }
+            }
+        }
+        expr jcs:syslog( "daemon.info", "Updated ", ( count( $used-instance-set/instance ) div 3 ), " interface optic values in the Utility MIB. (", position(), " of 10)" );
         
-        /* If it doesn't exist in the used instances then clear it because it has been removed */
-        if( jcs:empty( $used-instance-set[instance == $instance] ) ) {
-            call clear-instance($connection, $instance = substring-after( $instance, "." ), $type = "string" );
-            expr jcs:syslog( "daemon.info", "Clearing instance ", $instance, " from Utility MIB because interface is not present." );
+        /* Remove old interfaces from Utility MIB */
+        var $oids := { call walk-mib(); }
+        
+        for-each( $oids/instance ) {
+            var $instance = .;
+            
+            /* If it doesn't exist in the used instances then clear it because it has been removed */
+            if( jcs:empty( $used-instance-set[instance == $instance] ) ) {
+                call clear-instance($connection, $instance = substring-after( $instance, "." ), $type = "string" );
+                expr jcs:syslog( "daemon.info", "Clearing instance ", $instance, " from Utility MIB because interface is not present." );
+            }
+        }
+        
+        /* Pause 30 seconds, Repeat ten times */
+        if( position() < 10 ) {
+            expr jcs:sleep(30);
         }
     }
-    
-    /* Pause 30 seconds, Repeat ten times */
-    expr jcs:sleep(30);
-    if( $count < 10 ) {
-        call record-optics( $count = $count + 1 );
-    }
+    expr jcs:syslog( "daemon.info", "Current instance has finished cycle, exiting" );
+    expr jcs:close( $connection );
 }
 
 
@@ -288,5 +310,39 @@ var $ascii-set := {
 <char> { <num> 112; <sym> "p"; }<char> { <num> 113; <sym> "q"; }<char> { <num> 114; <sym> "r"; }<char> { <num> 115; <sym> "s"; }<char> { <num> 116; <sym> "t"; }
 <char> { <num> 117; <sym> "u"; }<char> { <num> 118; <sym> "v"; }<char> { <num> 119; <sym> "w"; }<char> { <num> 120; <sym> "x"; }<char> { <num> 121; <sym> "y"; }
 <char> { <num> 122; <sym> "z"; }<char> { <num> 123; <sym> "{"; }<char> { <num> 124; <sym> "|"; }<char> { <num> 125; <sym> "}"; }<char> { <num> 126; <sym> "~"; }
+}
+
+template build-loop( $index = 1 ) {
+    <loop>;
+    if( $index < 10 ) {
+        call build-loop( $index = $index + 1 );
+    }
+}
+
+template read-owner() {
+    var $rpc = {
+        <get-snmp-object> {
+            <snmp-object-name> $owner-oid;
+        }
+    }
+    var $result = jcs:execute( $connection, $rpc );
+    for-each( $result//self::xnm:error ) {
+        expr jcs:syslog( "daemon.error", "Error writing owner to Utility MIB: ", message );
+    }
+    expr $result/snmp-object/object-value;
+}
+
+template write-owner() {
+    var $rpc = {
+        <request-snmp-utility-mib-set> {
+            <instance> $owner-instance;
+            <object-type> "string";
+            <object-value> $localtime-iso;
+        }
+    }        
+    var $result = jcs:execute( $connection, $rpc );
+    for-each( $result//self::xnm:error ) {
+        expr jcs:syslog( "daemon.error", "Error writing owner to Utility MIB: ", message );
+    }
 }
 
