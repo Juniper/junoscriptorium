@@ -44,9 +44,9 @@
          set event-options event-scripts file record-optics.slax         
          
          Minimum JUNOS Version: 9.3
-         Latest Script Version: 1.1
-         MD5 Checksum: 9fc77e0a6a02716d5a73a1a3516bad7a
-         SHA-256 Checksum: ea28bf6f5bd85ab4d4926c4a4907c7b2a2b38360e77176752576fa517bee382d
+         Latest Script Version: 1.3
+         MD5 Checksum: a6f394d98a4cec09852125d53363dc75
+         SHA-256 Checksum: c1897b332d7b06b6427913a155c2d4b1c356344374240cb8d830b2a38dbcfb34 
 ]]>
   </description>
   <keyword>utility</keyword>
