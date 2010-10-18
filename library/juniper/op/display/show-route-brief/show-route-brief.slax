@@ -1,0 +1,249 @@
+/*
+ * Author        : Curtis Call
+ * Version       : 1.0
+ * Last Modified : October 18, 2010
+ * Platform      : all
+ * Release       : JUNOS 8.x amd abpve
+ *
+ * This script mimics the show route brief command except it adds a BGP Next Hop
+ * field when appropriate.
+ *
+ * License       : BSD-Style
+ *  Copyright (c) 2010 Curtis Call. All Rights Reserved.
+ *  Redistribution and use in source and binary forms, with or without modification, 
+ *  are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice, this 
+ *  list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  this list of conditions and the following disclaimer in the documentation and/or
+ *  other materials provided with the distribution.
+ *  3. The name of the author may not be used to endorse or promote products derived 
+ *  from this software without specific prior written permission.
+ *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED 
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+ *  AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE 
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN 
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */ 
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "prefix";
+        <description> "Destination prefix";
+    }
+}
+
+param $prefix;
+
+match / {
+	<op-script-results> {
+
+        /* Show warning if no prefix is specified */
+        if( jcs:empty( $prefix ) ) {
+            expr jcs:output("Generating Output... (Use prefix argument for faster output)");
+        }
+        
+        /* Pull in route extensive information */
+        var $route-extensive-command =  <get-route-information> {
+                                            <extensive>;
+                                            if( not( jcs:empty( $prefix ) ) ) {
+                                                <destination> $prefix;
+                                            }
+                                        }
+        var $route-extensive = jcs:invoke( $route-extensive-command );
+        
+        /* Check for errors, bail if we have to */
+        if( not( jcs:empty( $route-extensive/..//xnm:error ) ) ) {
+            <xsl:message terminate="yes"> "Error retrieving extensive routing information " _ $route-extensive/..//xnm:error/message;
+        }
+
+        /* Process each routing table */
+        for-each( $route-extensive/route-table ) {
+            call show-route-table-header( $table=. );
+            call show-route-table-routes( $table=. );
+        }
+    }
+}
+
+/* Shows similar header as seen in show route brief */
+template show-route-table-header( $table ) {
+    var $first-line = $table/table-name _ ": " _ $table/destination-count _ 
+        " destinations, " _ $table/total-route-count _ " routes (" _ $table/active-route-count _
+        " active, " _ $table/holddown-route-count _ " holddown, " _ $table/hidden-route-count _
+        " hidden)";
+    var $second-line = "+ = Active Route, - = Last Active, * = Both";
+    expr jcs:output( "\n", $first-line );
+    expr jcs:output( $second-line, "\n_\r " );
+}
+
+template show-route-table-routes( $table ) {
+    /* Each route has multiple route entries */
+    for-each( $table/rt ) {
+        var $destination = {
+            if( string-length( ./rt-prefix-length ) ) {
+                expr ./rt-destination _ "/" _ ./rt-prefix-length; 
+            }
+            else {
+                expr ./rt-destination;
+            }
+        
+        }
+        for-each( ./rt-entry ) { 
+            /* Grab the protocol specific lines */
+            var $lines-rtf = {
+                if( ./protocol-name == "BGP" ) {
+                    call build-bgp-lines( $route = . );
+                }
+                else if( ./protocol-name == "Local" ) {
+                    call build-local-lines( $route = . );
+                }
+                else if( ./protocol-name == "Direct" ) {
+                    call build-direct-lines( $route = . );
+                }
+                else {
+                    call build-other-lines( $route = . );
+                }
+            }
+            var $lines = ext:node-set( $lines-rtf );
+            /* First line */
+            /* Only show destination for first entry */
+            if( position() == 1 ) {
+                var $first-line = jcs:printf( "%-20s %s", $destination, $lines/first );
+                expr jcs:output( $first-line );
+            }
+            else {
+                var $first-line = jcs:printf( "%-20s %s", "", $lines/first ); 
+                expr jcs:output( $first-line );
+            }
+            /* Second line */
+            var $second-line = jcs:printf( "%-20s %s", "", $lines/second ); 
+            expr jcs:output( $second-line );
+            if( string-length( $lines/third ) > 0 ) {
+                var $third-line = jcs:printf( "%-20s %s", "", $lines/third ); 
+                expr jcs:output( $third-line );
+            }
+            if( string-length( $lines/fourth ) > 0 ) {
+                var $fourth-line = jcs:printf( "%-20s %s", "", $lines/fourth ); 
+                expr jcs:output( $fourth-line );
+            }
+        }
+    }
+}
+
+/* Returns a route entry XML hierarchy with <first>, <second>, <third>, and <fourth> elements */
+template build-bgp-lines( $route ) {
+    var $age = {
+        if( string-length( $route/age ) == 5 ) {
+            /* prepend hour field to it */
+            expr "00:" _ $route/age;
+        }
+        else {
+            expr $route/age;
+        }
+    }
+    <first> $route/active-tag _ "[" _ $route/protocol-name _ "/" _ $route/preference _ "] " _ $age _ ", localpref " _ $route/local-preference _ ", from " _ $route/gateway;
+    <second> "   AS Path: " _ $route/as-path;
+    /* Build next-hop string - watch for discard or rejects */
+    var $next-hop = {
+        if( $route/nh-type == "Discard" ) {
+            expr "   Discard";
+        }
+        else if( $route/nh-type == "Reject" ) {
+            expr "   Reject";
+        }
+        else {
+            expr " > to " _ $route/nh[selected-next-hop]/to _ " via " _ $route/nh[selected-next-hop]/via;
+        }
+    }
+    
+    /* Only show bgp next-hop for active routes */
+    if( $route/current-active and $route/protocol-nh/to ) {
+        <third> "   BGP Next-Hop: " _ $route/protocol-nh/to;
+        <fourth> $next-hop;   
+    }
+    else {
+        <third> $next-hop;  
+    }
+}
+
+/* Returns a route entry XML hierarchy with <first>, <second> elements */
+template build-local-lines( $route ) {
+    var $age = {
+        if( string-length( $route/age ) == 5 ) {
+            /* prepend hour field to it */
+            expr "00:" _ $route/age;
+        }
+        else {
+            expr $route/age;
+        }
+    }
+    <first> $route/active-tag _ "[" _ $route/protocol-name _ "/" _ $route/preference _ "] " _ $age;
+    /* Catch Reject Next-hops */
+    if( $route/nh-type == "Reject" ) {
+        <second> "   Reject";
+    }
+    else {
+        <second> "   Local via " _ $route/nh/nh-local-interface;
+    }
+}
+
+/* Returns a route entry XML hierarchy with <first>, <second> elements */
+template build-direct-lines( $route ) {
+    var $age = {
+        if( string-length( $route/age ) == 5 ) {
+            /* prepend hour field to it */
+            expr "00:" _ $route/age;
+        }
+        else {
+            expr $route/age;
+        }
+    }
+    <first> $route/active-tag _ "[" _ $route/protocol-name _ "/" _ $route/preference _ "] " _ $age;
+    <second> " > via " _ $route/nh[selected-next-hop]/via;
+}
+
+/* Returns a route entry XML hierarchy with <first>, <second> elements */
+template build-other-lines( $route ) {
+    /* Add metric if it exists */
+    var $metric = {
+        if( string-length( $route/metric ) > 0 ) {
+            expr ", metric " _ $route/metric;
+        }
+    }
+    var $age = {
+        if( string-length( $route/age ) == 5 ) {
+            /* prepend hour field to it */
+            expr "00:" _ $route/age;
+        }
+        else {
+            expr $route/age;
+        }
+    }
+    <first> $route/active-tag _ "[" _ $route/protocol-name _ "/" _ $route/preference _ "] " _ $age _ $metric;
+    /* Catch the MultiRecv Type, Discard, and Reject Types */
+    if( $route/nh-type == "MultiRecv" ) {
+        <second> "   MultiRecv";
+    }
+    else if( $route/nh-type == "Discard" ) {
+        <second> "   Discard";
+    }
+    else if( $route/nh-type == "Reject" ) {
+        <second> "   Reject";
+    }
+    else {
+        <second> " > to " _ $route/nh[selected-next-hop]/to _ " via " _ $route/nh[selected-next-hop]/via;
+    }
+}
