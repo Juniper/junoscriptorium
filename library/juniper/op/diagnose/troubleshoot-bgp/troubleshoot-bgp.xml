@@ -3,15 +3,98 @@
   <title>troubleshoot-bgp.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Perform basic troubleshooting of a BGP session that will not establish
+	Perform basic troubleshooting of a BGP peering session that will not establish
   </synopsis>
   <coe>op</coe>
   <type>diagnose</type>
 
   <description>
-
+    <![CDATA[
+ This script performs automatic troubleshooting to help determine why a BGP peering
+ session is not establishing.
+ 
+ It checks for the following local problems:
+ 
+ 1. Local address is not assigned and it isn't possible to determine which interface to
+ assign it from
+ 2. Local interface of BGP peering session does not exist
+ 3. Local interface of BGP peering session is down
+ 4. EBGP peer without multihop is resolved via non-direct route
+ 5. No route exists to the EBGP peer
+ 
+ If the remote device is a Junos router, and it is possible to login, then the above
+ problems can be checked on the remote device and the following agreement checks can
+ be performed:
+ 
+ 1. Local/remote addresses match on both sides
+ 2. Local/remote ASN match on both sides
+ 3. Internal/External setting matches on both sides
+ 4. Multihop setting matches on both sides
+ 
+ Minimum JUNOS Version: 9.6
+ Latest Script Version: 1.0
+ MD5 Checksum: d406753ef64f32ae3125084fda0259d1
+ SHA-256 Checksum: 215c740a05905be95c6200fe8f9ac7ef31dcfbc0fb65bacec812fd1e14546872
+]]>
   </description>
+  <example>
+    <description>
+     <![CDATA[
+jnpr@Jawa-RE0> op troubleshoot-bgp peer 10.100.0.3
 
+--Local Side--
+Peer Address: 10.100.0.3
+Local Address: 10.100.0.2
+Local Interface: lo0.0
+Peer AS: 65501
+Local AS: 65502
+Group: EBGP
+Type: External
+
+Checking for problems with Local side:
+error: There is no route to the BGP peer's address.
+
+jnpr@Jawa-RE0> op troubleshoot-bgp peer 10.0.0.1
+
+--Local Side--
+Peer Address: 10.0.0.1
+Local Address: 10.0.0.2
+Local Interface: so-1/1/0.0
+Peer AS: 65501
+Local AS: 4802
+Group: test
+Type: External
+
+Checking for problems with Local side:
+None found!
+
+Do you want to check the remote side? [yes]/no:
+
+Enter username to login: jnpr
+Enter password:
+
+--Remote Side--
+Peer Address: 10.0.0.2
+Local Address: 10.100.0.1
+Local Interface: lo0.0
+Peer AS: 65502
+Local AS: 65501
+Group: EBGP
+Type: External
+
+Checking for problems with Remote side:
+None found!
+
+Checking for agreement problems between both sides:
+error: Local/Peer addresses do not match on both sides of the connection.
+
+]]>
+    </description>
+  </example>
+  <keyword>diagnose</keyword>
+  <keyword>slax</keyword>
+  <keyword>troubleshoot</keyword>
+  <keyword>bgp</keyword>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
