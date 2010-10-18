@@ -1,0 +1,322 @@
+/*
+ * Author        : Curtis Call
+ * Version       : 1.0
+ * Last Modified : October 18, 2010
+ * Platform      : all
+ * Release       : JUNOS 9.6 and above
+ *
+ * This script performs basic troubleshoot for BGP peer session that will not establish.
+ * It checks for the following potential local problems:
+ *
+ * 1. Local address is not assigned and it isn't possible to determine which interface to
+ * assign it from
+ * 2. Local interface of BGP peering session does not exist
+ * 3. Local interface of BGP peering session is down
+ * 4. EBGP peer without multihop is resolved via non-direct route
+ * 5. No route exists to the EBGP peer
+ *
+ * If the remote device is a Junos router, and it is possible to login, then the above
+ * problems can be checked on the remote device and the following agreement checks can
+ * be performed:
+ *
+ * 1. Local/remote addresses match on both sides
+ * 2. Local/remote ASN match on both sides
+ * 3. Internal/External setting matches on both sides
+ * 4. Multihop setting matches on both sides
+ * 
+ * License       : BSD-Style
+ *  Copyright (c) 2010 Curtis Call. All Rights Reserved.
+ *  Redistribution and use in source and binary forms, with or without modification, 
+ *  are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice, this 
+ *  list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  this list of conditions and the following disclaimer in the documentation and/or
+ *  other materials provided with the distribution.
+ *  3. The name of the author may not be used to endorse or promote products derived 
+ *  from this software without specific prior written permission.
+ *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED 
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+ *  AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE 
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN 
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */ 
+
+
+version 1.0;
+ 
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ 
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "peer";
+        <description> "BGP peer address to troubleshoot";
+    }
+}
+
+param $peer;
+
+/* strings */
+var $unknown = "unknown";
+var $unspecified = "unspecified";
+
+match / {
+
+    /* Require a peer */
+    if( not( $peer ) ) {
+        <xsl:message terminate="yes"> "Please specify the BGP peer to troubleshoot";
+    }
+    
+    /* open connection and pull in the local information */
+    var $local-connection = jcs:open();
+    
+    var $local-side := { call gather-bgp-peer-information( $connection = $local-connection, $peer-address = $peer ); }
+
+    /* If there are any errors, then display them and quit */
+    if( $local-side//xnm:error ) {
+        <xsl:message terminate="yes"> $local-side//xnm:error/message;
+    }    
+    
+    call display-bgp-peer-information( $bgp-peer = $local-side/bgp-peer, $side-string = "Local" );    
+    
+    expr jcs:close( $local-connection  );    
+
+    var $answer = jcs:get-input(" \nDo you want to check the remote side? [yes]/no: " );
+    if( $answer != "no" ) {
+        var $username = jcs:get-input( " \nEnter username to login: " );
+        var $password = jcs:get-secret("Enter password: " );
+    
+        var $remote-connection = jcs:open( $peer, $username, $password );
+
+        if( not( $remote-connection ) ) {
+            <xsl:message terminate="yes"> "Unable to connect, exiting.";
+        }        
+        
+        /* Grab remote side info */
+        var $remote-side := { call gather-bgp-peer-information( $connection = $remote-connection, $peer-address = $local-side/bgp-peer/local-address ); }
+        
+        /* If there are any errors, then display them and quit */
+        if( $remote-side//xnm:error ) {
+            expr jcs:output( "_\r \nCould not retrieve settings from remote side: " );
+            <xsl:message terminate="yes"> $remote-side//xnm:error/message;
+        }    
+    
+        call display-bgp-peer-information( $bgp-peer = $remote-side/bgp-peer, $side-string = "Remote" );    
+    
+        expr jcs:close( $remote-connection  );
+        
+        /* Check for agreement between both sides */
+        expr jcs:output( "_\r \nChecking for agreement problems between both sides: " );
+        
+        /* Addresses */
+        if( $local-side/bgp-peer/local-address != $remote-side/bgp-peer/peer-address ||
+            $remote-side/bgp-peer/local-address != $local-side/bgp-peer/peer-address ) {
+            
+            <xsl:message terminate="yes"> "Local/Peer addresses do not match on both sides of the connection.";
+        }
+        
+        /* ASN */
+        if( $local-side/bgp-peer/local-as != $remote-side/bgp-peer/peer-as ||
+            $remote-side/bgp-peer/local-as != $local-side/bgp-peer/peer-as ) {
+            
+            <xsl:message terminate="yes"> "Local/Peer ASN do not match on both sides of the connection.";
+        }
+        
+        /* Type */
+        if( $local-side/bgp-peer/type != $remote-side/bgp-peer/type ) {
+            <xsl:message terminate="yes"> "Internal/External does not match on both sides of the connection.";
+        }
+        
+        /* Multihop */
+        if( jcs:empty( $local-side/bgp-peer/multihop ) != jcs:empty( $remote-side/bgp-peer/multihop ) ) {
+            <xsl:message terminate="yes"> "Multihop does not match on both sides of the connection.";
+        }
+        
+        expr jcs:output( "None found!" );
+    }
+}
+
+template display-bgp-peer-information( $bgp-peer, $side-string ) {
+    /* Report local peer information */
+    expr jcs:output( "_\r \n--" , $side-string , " Side--" );
+    expr jcs:output( "Peer Address: ", $bgp-peer/peer-address );
+    expr jcs:output( "Local Address: ", $bgp-peer/local-address );
+    expr jcs:output( "Local Interface: ", $bgp-peer/local-interface );
+    expr jcs:output( "Peer AS: ", $bgp-peer/peer-as );
+    expr jcs:output( "Local AS: ", $bgp-peer/local-as );
+    expr jcs:output( "Group: ", $bgp-peer/group );
+    expr jcs:output( "Type: ", $bgp-peer/type );
+    
+    /* Check for local configuration errors */
+    expr jcs:output( "_\r \nChecking for problems with ", $side-string, " side:" );
+    
+    /* If local address is "unspecified" then determine the precise error */
+    if( $bgp-peer/local-address == $unspecified ) {
+        /* There is no route to the destination */
+        if( jcs:empty( $bgp-peer/peer-route/rt ) ) {
+            <xsl:message terminate="yes"> "BGP peer has an unspecified local address because no local address was configured and there is no " _
+                                          "route to the peer's address, so a local address could not be automatically assigned.";
+        }
+        /* There is a route to the destination, but it isn't direct, and multihop is not configured */
+        else if( $bgp-peer/peer-route/rt/rt-entry[protocol-name != "Direct"] && $bgp-peer/type == "External" && jcs:empty( $bgp-peer/multihop ) ) {
+            <xsl:message terminate="yes"> "BGP peer has an unspecified local address because no local address was configured, the route to the " _
+                                          "peer's address is not Direct, and multihop is not configured.";
+        }
+        /* Unknown */
+        else {
+            <xsl:message terminate="yes"> "BGP peer has an unspecified local address because no local address was configured.";
+        }        
+    }
+    
+    /* If local interface is unknown, then report the error */
+    if( $bgp-peer/local-interface == $unknown ) {
+        <xsl:message terminate="yes"> "Peer's local-address is not assigned to a local interface.";
+    }
+    
+    if( jcs:empty( $bgp-peer/local-interface-status/logical-interface[ name == $bgp-peer/local-interface ] ) ) {
+        <xsl:message terminate="yes"> "Local interface " _ $bgp-peer/local-interface _ " does not exist.";
+    }
+    if( $bgp-peer/local-interface-status/logical-interface/admin-status != "up" || $bgp-peer/local-interface-status/logical-interface/oper-status != "up" ) {
+        <xsl:message terminate="yes"> "Local interface " _ $bgp-peer/local-interface _ " is down.";
+    }
+    
+    /* Check if there is a valid route to the destination */
+    if( jcs:empty( $bgp-peer/peer-route/rt/rt-entry ) ) {
+        <xsl:message terminate="yes"> "There is no route to the BGP peer's address.";
+    }
+    
+    /* If we didn't exit then we found nothing */
+    expr jcs:output( "None found!" );
+}
+
+/* 
+ * Gather BGP information from the $connection's device. Return in this structure:
+ * <bgp-peer> {
+ *     <local-address>
+ *     <peer-address>
+ *     <group>
+ *     <local-as>
+ *     <peer-as>
+ *     <local-interface>
+ *     <local-interface-status>
+ *     <type>
+ *     <multihop>
+ *     <peer-route>
+ * }
+ */ 
+template gather-bgp-peer-information( $connection, $peer-address ) {
+    <bgp-peer> {
+        /* Pull BGP and interface configuration */
+        var $config-rpc = {
+            <get-configuration database="committed" inherit="inherit"> {
+                <configuration> {
+                    <interfaces>;
+                    <protocols> {
+                        <bgp>;
+                    }
+                }
+            }
+        }
+        var $configuration = jcs:execute( $connection, $config-rpc );
+        
+        /* Pull BGP neighbor information */
+        var $bgp-rpc = {
+            <get-bgp-neighbor-information> {
+                <neighbor-address> $peer-address;
+            }
+        }
+        var $bgp-peer = jcs:execute( $connection, $bgp-rpc );
+        
+        var $bgp-peer-config = $configuration/protocols/bgp//neighbor[name == $peer-address ];
+        
+        /* If more than one occurance than complain */
+        if( count( $bgp-peer-config ) > 1 ) {
+            <xnm:error> {
+                <message> "More than one peer exists for that address";
+            }
+        }
+        
+        /* If peer cannot be found then give an error */
+        if( jcs:empty( $bgp-peer/bgp-peer[ peer-address == $peer-address || substring-before( peer-address, "+" ) == $peer-address ] ) ||
+            jcs:empty( $bgp-peer-config ) ) {
+            <xnm:error> {
+                <message> "Could not find peer-address " _ $peer-address;
+            }
+        }
+        
+        /* Add known fields */
+        <peer-address> $peer-address;
+        <group> $bgp-peer-config/../name;
+        <type> $bgp-peer/bgp-peer/peer-type;
+        <peer-as> $bgp-peer/bgp-peer/peer-as;
+        <local-as> $bgp-peer/bgp-peer/local-as;
+        
+        /* Pull out the route for that peer */
+        var $route-rpc = {
+            <get-route-information> {
+                <destination> $peer-address;
+                <active-path>;
+                <table> "inet.0";
+                <terse>;
+            }
+        }
+        var $peer-route = jcs:execute( $connection, $route-rpc );
+        <peer-route> {
+            copy-of $peer-route/route-table/rt;
+        }
+
+        if( $bgp-peer-config/multihop || $bgp-peer-config/../multihop || $bgp-peer-config/../../multihop ) {
+            <multihop>;
+        }
+        
+        var $local-address = {
+            if( contains( $bgp-peer/bgp-peer/local-address, "+" ) ) {
+                expr substring-before( $bgp-peer/bgp-peer/local-address, "+" );
+            }
+            else {
+                expr $bgp-peer/bgp-peer/local-address;
+            }
+        }
+
+        <local-address> $local-address;
+
+        /* Try to determine local interface */
+        var $local-interface = {
+            if( $local-address != $unspecified ) {
+                var $interface = $configuration/interfaces/interface/unit[ family/inet/address[substring-before( name, "/" ) == $local-address ] ];
+                if( $interface ) {
+                    expr $interface/../name _ "." _ $interface/name;
+                }
+                else {
+                    expr $unknown;
+                }
+            }
+            else {
+                expr $unknown;
+            }
+        }
+        
+        <local-interface> $local-interface;
+
+        /* Otherwise, check if the local interface exists and is up or not */
+        var $interface-rpc = {
+            <get-interface-information> {
+                <interface-name> $local-interface;
+                <terse>;
+            }
+        }
+        
+        var $local-interface-status = jcs:execute( $connection, $interface-rpc );
+        <local-interface-status> {
+            copy-of $local-interface-status/logical-interface;
+        }
+    }        
+}
