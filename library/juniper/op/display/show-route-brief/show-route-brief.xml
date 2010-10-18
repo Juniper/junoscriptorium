@@ -3,15 +3,43 @@
   <title>show-route-brief.slax</title>
   <author>curtisstephencall</author>
   <synopsis>
-	Add BGP next hop to show route brief
+	Adds BGP next hop to standard show route brief output
   </synopsis>
   <coe>op</coe>
   <type>display</type>
 
   <description>
-
+    <![CDATA[
+ This script mimics the output of the show route brief command except it also adds
+ a BGP next hop field, which is normally only available in show route extensive.
+ 
+ Minimum JUNOS Version: 8.x
+ Latest Script Version: 1.0
+ MD5 Checksum: cc4fc9e77a659bd8d3f796e75ec845a5
+ SHA-256 Checksum: bf4bef8b797eec6a9edc2cdbe742e894b967c60cfdd46178387929e2f62f5bd1
+]]>
   </description>
+  <example>
+    <description>
+     <![CDATA[
+jnpr@Jawa-RE0> op show-route-brief prefix 192.168.0.0/16
 
+ inet.0: 12 destinations, 13 routes (12 active, 0 holddown, 0 hidden)
+ + = Active Route, - = Last Active, * = Both
+
+ 192.168.0.0/16       *[BGP/170] 2d 2:42:58, localpref 100, from 10.100.0.1
+                         AS Path: 65501 I
+                         BGP Next-Hop: 10.100.0.1
+                       > to 10.0.0.1 via so-1/1/0.0
+
+ 
+]]>
+    </description>
+  </example>
+  <keyword>display</keyword>
+  <keyword>slax</keyword>
+  <keyword>route</keyword>
+  <keyword>bgp</keyword>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
