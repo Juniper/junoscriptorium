@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<script>
+  <title>revcheck.slax</title>
+  <author>mwiget</author>
+  <synopsis>
+	Enable/Disable the revocation-check based on reachability of the CRL URL
+  </synopsis>
+  <coe>event</coe>
+  <type>security</type>
+
+  <description>
+This event script runs every five minutes to checks the reachability
+of the CRL URL and disables the CRL command upon unreachability and
+reenables it when the CRL server is reachable again via HTTP.
+
+The event script reads the url to check from the security pki ca-profile,
+as seen in the following example:
+
+set security pki ca-profile insta revocation-check disable
+set security pki ca-profile insta revocation-check crl url "http://10.108.191.86:8080/crl-as-der/currentcrl-31.crl?id=31"
+
+There is usually only one ca-profile configured on a device, so the script
+looks for the first occurance and uses it.
+
+Place this script in /var/db/scripts/event on the device and activate
+it with the following configuration statement:
+
+set event-options event-script file revcheck.slax
+
+If status doesn't change, then an external info message is sent to syslog
+If status changes, an external notice message is written.
+
+To get a message every time the script runs, use the following settings:
+set system syslog file messages external info
+
+If only changes shall be documented, use:
+set system syslog file messages external notice
+
+Example log messages of disabling the profile 'insta' at 07:15:51 and enabling
+it again at 07:40:52:
+
+Oct  6 07:03:16  srx240 cscript: revocation-check remains disabled for ca-profileinsta
+Oct  6 07:15:51  srx240 cscript: disable revocation-check for ca-profile insta
+Oct  6 07:20:51  srx240 cscript: revocation-check remains disabled for ca-profile insta
+Oct  6 07:25:52  srx240 cscript: revocation-check remains disabled for ca-profile insta
+Oct  6 07:30:51  srx240 cscript: revocation-check remains disabled for ca-profile insta
+Oct  6 07:35:52  srx240 cscript: revocation-check remains disabled for ca-profile insta
+Oct  6 07:40:52  srx240 cscript: enable revocation-check for ca-profile insta
+Oct  6 07:45:53  srx240 cscript: revocation-check remains active for ca-profile insta
+
+  </description>
+
+  <keyword>SRX</keyword>
+  <keyword>pki</keyword>
+  <keyword>ca-profile</keyword>
+  <keyword>url</keyword>
+  <example>
+    <title>Example log messages of disabling the profile 'insta' at 07:15:51 and enabling it again at 07:40:52</title>
+    <description>syslog events</description>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

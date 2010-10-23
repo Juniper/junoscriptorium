@@ -1,0 +1,134 @@
+/*
+ * revcheck.slax 
+ *
+ * This event script runs every five minutes to checks the reachability
+ * of the CRL URL and disables the CRL command upon unreachability and 
+ * reenables it when the CRL server is reachable again via HTTP.
+ *
+ * The event script reads the url to check from the security pki ca-profile,
+ * as seen in the following example:
+ * 
+ * set security pki ca-profile insta revocation-check disable
+ * set security pki ca-profile insta revocation-check crl url "http://10.108.191.86:8080/crl-as-der/currentcrl-31.crl?id=31"
+ *
+ * There is usually only one ca-profile configured on a device, so the script
+ * looks for the first occurance and uses it.
+ *
+ * Place this script in /var/db/scripts/event on the device and activate
+ * it with the following configuration statement:
+ *
+ * set event-options event-script file revcheck.slax
+ *
+ * If status doesn't change, then an external info message is sent to syslog
+ * If status changes, an external notice message is written.
+ * 
+ * To get a message every time the script runs, use the following settings:
+ * set system syslog file messages external info
+ *
+ * If only changes shall be documented, use:
+ * set system syslog file messages external notice
+ *
+ * Example log messages of disabling the profile 'insta' at 07:15:51 and enabling
+ * it again at 07:40:52:
+ *
+ * Oct  6 07:03:16  srx240 cscript: revocation-check remains disabled for ca-profileinsta
+ * Oct  6 07:15:51  srx240 cscript: disable revocation-check for ca-profile insta
+ * Oct  6 07:20:51  srx240 cscript: revocation-check remains disabled for ca-profile insta
+ * Oct  6 07:25:52  srx240 cscript: revocation-check remains disabled for ca-profile insta
+ * Oct  6 07:30:51  srx240 cscript: revocation-check remains disabled for ca-profile insta
+ * Oct  6 07:35:52  srx240 cscript: revocation-check remains disabled for ca-profile insta
+ * Oct  6 07:40:52  srx240 cscript: enable revocation-check for ca-profile insta
+ * Oct  6 07:45:53  srx240 cscript: revocation-check remains active for ca-profile insta
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $debug = 0;
+
+/* Embedded event policy to launch every 5 minute */
+var $event-definition = {
+  <event-options> {
+    <generate-event> { 
+      <name> "every-5minutes"; 
+      <time-interval> "300";
+    } 
+    <policy> {
+      <name> "revcheck";
+      <events> "every-5minutes";
+      <then> {
+        <event-script> { 
+          <name> "revcheck.slax";
+          <arguments> {
+            <name> "ca-name";
+            <value> "insta";
+          }
+        }
+      }
+    }
+  }
+}
+
+var $connection = jcs:open();
+
+var $get-ca-config = <get-configuration> { 
+	<configuration> { <security> {
+        <pki>  { }
+}}}
+
+var $got-ca-config = jcs:execute( $connection, $get-ca-config );
+var $ca-name = normalize-space($got-ca-config//name);
+var $url = normalize-space($got-ca-config//revocation-check/crl/url);
+
+match / {
+	
+	<op-script-results> {
+		if(not($url)) {
+			expr jcs:output("no url to check.");
+			<xsl:message terminate="yes">;
+		}
+
+		var $dest = "/dev/null";
+		var $url-rpc = <file-copy> { <source> $url; 	<destination> $dest; }
+		
+		var $url-rc = jcs:execute( $connection, $url-rpc);
+		
+		if($url-rc//self::xnm:error) {
+                        if (not($got-ca-config//revocation-check/disable)) {
+                           expr jcs:syslog("external.notice", "disable revocation-check for ca-profile ", $ca-name);
+			   call sec-pki-ca-revcheck-admin( $admin = 'disable' );
+                        } else {
+                           expr jcs:syslog("external.info", "revocation-check remains disabled for ca-profile ", $ca-name);
+                        }
+		}
+		else {
+                        if ($got-ca-config//revocation-check/disable) {
+                           expr jcs:syslog("external.notice", "enable revocation-check for ca-profile ", $ca-name);
+			   call sec-pki-ca-revcheck-admin( $admin = 'enable' );
+                        } else {
+                           expr jcs:syslog("external.info", "revocation-check remains active for ca-profile ", $ca-name);
+                        }
+
+		}
+	}
+} 
+
+template sec-pki-ca-revcheck-admin( $admin )
+{
+	var $configuration = <configuration> { <security> {
+		<pki> { <ca-profile> { <name> $ca-name; 
+			<revocation-check> {
+				if( $admin == 'enable' ) {
+					<disable delete="delete">;
+				} else { <disable>; }
+		}}}
+	}}
+	
+	var $m := {call jcs:load-configuration( $connection, $configuration ); } 
+}
