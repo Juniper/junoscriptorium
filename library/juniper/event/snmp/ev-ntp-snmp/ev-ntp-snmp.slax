@@ -1,0 +1,136 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace";
+
+import "../import/junos.xsl";
+
+/*
+ * Inspect NTP associations and put values into the Utility MIB
+ *    
+ * user@router> show ntp associations no-resolve
+ *     remote           refid      st t when poll reach   delay   offset  jitter
+ *     ==============================================================================
+ *     +192.168.3.8     130.60.127.148   4 u   53   64    3    0.105   -2.321   1.053
+ *     *217.147.208.1   192.36.143.150   2 u   55   64    3   12.221    3.809   3.652
+ *
+ *   Only the line starting with '*' is used. This indicates the reference NTP server
+ *   in use. If ntp stopped working, we return an offset of 99999999ms (9999sec).
+ *
+ *   From the npdq man page: 
+ *     *(peer) The peer has been declared the system peer and lends its variables 
+ *     to the system variables.
+
+ *
+ *   user@router> show snmp mib walk jnxUtilData
+ *   jnxUtilIntegerValue.110.116.112.79.102.102.115.101.116 = 99999999
+ *
+ *   or with snmpwalk:
+ *   $ snmpwalk -v2c -IR -c public alpha jnxUtil |grep Offset
+ *   JUNIPER-UTIL-MIB::jnxUtilIntegerValue.'ntpOffset' = INTEGER: 99999999
+ *   (indicates ntp isn't running or no suitable server found to sync with yet)
+ *
+ *   $  snmpwalk -v2c -IR -c public j2350 jnxUtil 
+ *   JUNIPER-UTIL-MIB::jnxUtilIntegerValue.'ntpOffset' = INTEGER: -3
+ *   JUNIPER-UTIL-MIB::jnxUtilIntegerTime.'ntpOffset' = STRING: 2009-3-12,15:10:15.0,+1:0
+ *   (indicates ntp is fine and the clock has an offset of -3 msec)
+ *
+ *   Activate in JUNOS Router Configuration  
+ *   ======================================
+ *   
+ *   Place this script in /var/db/scripts/event on the device and activate
+ *   it with the following configuration statement:
+ * 
+ *   set event-options event-script file ev-ntp-snmp.slax
+ *
+ */
+
+/* Embedded event policy to launch every 5 minute */
+var $event-definition = {
+  <event-options> {
+    <generate-event> {
+      <name> "every-minute";
+      <time-interval> "60";
+    }
+    <policy> {
+      <name> "ev-ntp-snmp";
+      <events> "every-minute";
+      <then> {
+        <event-script> {
+          <name> "ev-ntp-snmp.slax";
+        }
+      }
+    }
+  }
+}
+
+match / {
+  <op-script-results> {
+
+    /* set oid to a large value, so in case we don't find a suitable ntp
+     * server, we have this value set to indicate a problem. If there
+     * is a valid server, this instance will be overwritten further down.
+     */
+    var $rpc1 = <request-snmp-utility-mib-set> {
+      <object-type> "integer";
+      <instance> "ntpOffset";
+      <object-value> 99999999;
+    }
+    var $res1 = jcs:invoke($rpc1);
+
+    /*
+     * Execute "show ntp associations no-resolve" RPC
+     * There is no oper command for this and the output isn't 
+     * xml formatted. So its gonna get a bit ugly here...
+     */
+
+    var $re-rpc = <command> "show ntp associations no-resolve";
+    var $re-result = jcs:invoke($re-rpc);
+    var $ntp-lines = jcs:break-lines($re-result);
+
+    var $pattern_ip = "(.?)([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)";
+    var $pattern_values = "[ubl] +([0-9\.]+) +([0-9\.]+) +([0-9\.]+) +([0-9\.]+) +(-?[0-9\.]+) +([0-9\.]+)";
+
+    for-each ($ntp-lines) {
+
+      /* uncomment for debug only
+         expr jcs:output("ntp: ", .); 
+       */
+      var $reg_result_ip = jcs:regex($pattern_ip, .);
+
+      if (not(jcs:empty($reg_result_ip[3]))) {
+
+        var $status = $reg_result_ip[2];	/* *,+,x etc */
+        var $remote = $reg_result_ip[3];
+
+        /* uncomment for debug only
+           expr jcs:output("IP: ", $remote); 
+           expr jcs:output("Status: ", $status); 
+         */
+        var $reg_result_values = jcs:regex($pattern_values, .);
+
+        /* uncomment for debug only
+           expr jcs:output("delay: ", $reg_result_values[5]); 
+           expr jcs:output("offset: ", $reg_result_values[6]); 
+           expr jcs:output("jitter: ", $reg_result_values[7]); 
+         */
+        if ($status == '*') {
+          /* uncomment for debug only
+             expr jcs:output("SET SNMP Status: ", $status); 
+           */
+          var $offset = $reg_result_values[6];  /* in ms */
+
+          var $rpc2 = <request-snmp-utility-mib-set> {
+            <object-type> "integer";
+            <instance> "ntpOffset";
+            <object-value> $offset;
+          }
+          var $res2 = jcs:invoke($rpc2);
+        }
+      }
+    }
+  }
+}
+

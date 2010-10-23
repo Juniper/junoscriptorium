@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<script>
+  <title>ev-ntp-snmp.slax</title>
+  <author>mwiget</author>
+  <synopsis>
+	Inspect NTP associations and put values into the Utility MIB
+  </synopsis>
+  <coe>event</coe>
+  <type>snmp</type>
+
+  <description>
+Inspect NTP associations and put values into the Utility MIB
+
+user@router> show ntp associations no-resolve
+    remote           refid      st t when poll reach   delay   offset  jitter
+    ==============================================================================
+    +192.168.3.8     130.60.127.148   4 u   53   64    3    0.105   -2.321   1.053
+    217.147.208.1   192.36.143.150   2 u   55   64    3   12.221    3.809   3.652
+
+  Only the line starting with '' is used. This indicates the reference NTP server
+  in use. If ntp stopped working, we return an offset of 99999999ms (9999sec).
+
+  From the npdq man page:
+    (peer) The peer has been declared the system peer and lends its variables
+    to the system variables.
+
+
+  user@router> show snmp mib walk jnxUtilData
+  jnxUtilIntegerValue.110.116.112.79.102.102.115.101.116 = 99999999
+
+  or with snmpwalk:
+  $ snmpwalk -v2c -IR -c public alpha jnxUtil |grep Offset
+  JUNIPER-UTIL-MIB::jnxUtilIntegerValue.'ntpOffset' = INTEGER: 99999999
+  (indicates ntp isn't running or no suitable server found to sync with yet)
+
+  $  snmpwalk -v2c -IR -c public j2350 jnxUtil
+  JUNIPER-UTIL-MIB::jnxUtilIntegerValue.'ntpOffset' = INTEGER: -3
+  JUNIPER-UTIL-MIB::jnxUtilIntegerTime.'ntpOffset' = STRING: 2009-3-12,15:10:15.0,+1:0
+  (indicates ntp is fine and the clock has an offset of -3 msec)
+
+  Activate in JUNOS Router Configuration
+  ======================================
+
+  Place this script in /var/db/scripts/event on the device and activate
+  it with the following configuration statement:
+
+  set event-options event-script file ev-ntp-snmp.slax
+
+  </description>
+
+  <keyword>snmp</keyword>
+  <keyword>ntp</keyword>
+  <keyword>utility</keyword>
+  <keyword>mib</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
