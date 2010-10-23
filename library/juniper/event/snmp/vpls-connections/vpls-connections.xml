@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<script>
+  <title>vpls-connections.slax</title>
+  <author>mwiget</author>
+  <synopsis>
+	Update utility MIB with VPLS connection status information
+  </synopsis>
+  <coe>event</coe>
+  <type>snmp</type>
+
+  <description>
+Makes output of CLI command "show vpls connections brief" 
+available via the Junos Utility MIB jnxUtil and can be used
+to track the connection status of VPLS connections via SNMP
+
+For simplicity reason, jnxUtilStringValue
+instance is set to the Neighbor name as shown in the CLI output
+content is set to "connection-status,last-change,up-transitions"
+
+Example:
+$ snmpwalk -v2c -c public -Ir beta jnxUtil
+JUNIPER-UTIL-MIB::jnxUtilStringValue.'172.16.0.31(vpls-id 101)' = STRING: "LD,,"
+JUNIPER-UTIL-MIB::jnxUtilStringValue.'172.16.0.31(vpls-id 102)' = STRING: "Up,Mar 25 11:10:55 2010,1"
+JUNIPER-UTIL-MIB::jnxUtilStringTime.'172.16.0.31(vpls-id 101)' = STRING: 2010-3-25,16:23:21.0,+1:0
+JUNIPER-UTIL-MIB::jnxUtilStringTime.'172.16.0.31(vpls-id 102)' = STRING: 2010-3-25,16:23:21.0,+1:0
+
+  </description>
+
+  <keyword>snmp</keyword>
+  <keyword>utility</keyword>
+  <keyword>mib</keyword>
+  <keyword>vpls</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

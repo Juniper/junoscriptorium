@@ -1,0 +1,113 @@
+/* $Id$
+ *  vpls-connections.slax
+ *
+ *  Version History
+ *  ===============
+ *  v0.2  Process only LDP based VPLS PWEs
+ *  v0.1  Initial release.
+ *
+ *  Makes output of CLI command "show vpls connections brief"
+ *  available via the Junos Utility MIB jnxUtil and can be used
+ *  to track the connection status of VPLS connections via SNMP
+ *
+ *  For simplicity reason, jnxUtilStringValue 
+ *      instance is set to the Neighbor name as shown in the CLI output
+ *      content is set to "connection-status,last-change,up-transitions"
+ *
+ * Example:
+ * $ snmpwalk -v2c -c public -Ir beta jnxUtil
+ * JUNIPER-UTIL-MIB::jnxUtilStringValue.'172.16.0.31(vpls-id 101)' = STRING: "LD,,"
+ * JUNIPER-UTIL-MIB::jnxUtilStringValue.'172.16.0.31(vpls-id 102)' = STRING: "Up,Mar 25 11:10:55 2010,1"
+ * JUNIPER-UTIL-MIB::jnxUtilStringTime.'172.16.0.31(vpls-id 101)' = STRING: 2010-3-25,16:23:21.0,+1:0
+ * JUNIPER-UTIL-MIB::jnxUtilStringTime.'172.16.0.31(vpls-id 102)' = STRING: 2010-3-25,16:23:21.0,+1:0
+ *  
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match / {
+  <op-script-results> {
+    var $get-vpls-conn = <get-vpls-connection-information> {
+      <brief>;
+    }
+    var $conn-list = jcs:invoke($get-vpls-conn);
+    var $used-instance-set := {    
+      for-each ($conn-list/instance/reference-site/connection) {
+        if (contains(connection-id, "vpls-id")) {
+          var $content = connection-status _ "," _ last-change _ "," _ up-transitions;
+          var $rpc = <request-snmp-utility-mib-set> {
+            <object-type> "string";
+            <instance> connection-id;
+            <object-value> $content;
+          }
+          var $res = jcs:invoke($rpc);
+          var $instance = connection-id;
+          <instance> connection-id;
+        }
+      }
+    }
+
+    var $count = count( $used-instance-set/instance );
+
+    expr jcs:syslog( "daemon.info", "Updated ", $count, " vpls connections in the Utility MIB." );
+
+    /* Remove old interfaces from Utility MIB */
+
+    var $oids := { call walk-mib(); }
+
+    for-each( $oids/instance ) {
+      var $instance = .;
+
+      /* If it doesn't exist in the used instances then clear it because it has been removed */
+      if( jcs:empty( $used-instance-set[instance == $instance] ) ) {
+        call clear-instance( $instance, $type = "string" ); 
+        expr jcs:syslog( "daemon.info", "Clearing instance ", $instance, " from Utility MIB because interface is not present." );
+      }
+    }
+  }
+}
+
+/*
+ * clear-instance - Removes the instance from the MIB
+ */
+template clear-instance( $instance, $type) {
+
+  /* Build RPC and invoke it */
+  var $rpc = {
+    <request-snmp-utility-mib-clear> {
+      <instance> $instance;
+      <object-type> $type;
+    }
+  }
+  var $results = jcs:invoke($rpc);
+}
+
+/*
+ * walk-mib - Walks the Utility MIB in ascii mode.
+ * Requires 9.6 or higher Junos though
+ */
+template walk-mib() {
+
+  /* Gather walk output */
+  var $walk-rpc = {
+    <walk-snmp-object> {
+      <snmp-object-name> "jnxUtil";
+      <ascii>;
+    }
+  }
+  var $mib-objects = jcs:invoke( $walk-rpc );
+
+  for-each( $mib-objects/snmp-object[ jcs:regex( "jnxUtil.*Value\..*vpls-id", name ) ] ) { 
+    var $x1 = substring-after( name, ".");
+    /* need to get rid of the quotes around the instance */
+    var $instance = substring($x1, 2, string-length($x1) -2);
+    <instance> $instance;
+  }
+}
+
