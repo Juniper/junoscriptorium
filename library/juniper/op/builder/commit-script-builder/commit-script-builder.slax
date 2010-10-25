@@ -1,7 +1,7 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.13
- * Last Modified : March 9, 2010
+ * Version       : 1.14
+ * Last Modified : October 25, 2010
  * Platform      : all
  * Release       : 10.0 and above
  *
@@ -46,7 +46,7 @@ ns csb extension = "http://xml.juniper.net/commit-script-builder";
 import "../import/junos.xsl";
 
 /* Builder version number */
-var $script-version = "1.13"; 
+var $script-version = "1.14"; 
 
 /* Possible violation actions */
 var $error = "Error";
@@ -3844,7 +3844,7 @@ var $violations := {
     <violation> {
         <category> "System";
         <category> "Redundancy";
-        <category> "fxp0";
+        <category> "fxp0.0";
         <synopsis> "fxp0 address is not set within re0 or re1 configuration group";
                      /*123456789012345678901234567890123456789012345678901234567890123456789012345678*/
         <description> "|The re0 and re1 configuration groups are special groups that only apply to  |\n" _
@@ -4297,6 +4297,391 @@ var $violations := {
             }
             <xnm:warning> {
                 <message> $change-message;
+            }
+        }
+    }";
+    }
+    <violation> {
+        <category> "EX Series";
+        <category> "vme";
+        <category> "Virtual Chassis";
+        <synopsis> "vme interface is not configured";
+                     /*123456789012345678901234567890123456789012345678901234567890123456789012345678*/
+        <description> "|A vme interface serves as a single entry point into any of the members of a |\n" _
+                      "|virtual chassis. It is recommended that one be configured whenever using EX |\n" _
+                      "|VCs.                                                                        |";
+        <action> $all-except-change;
+        <template-name> "check-for-vme";
+        <template-code> "    
+    /* Check for violation */
+    if( jcs:empty( interfaces/interface[name == 'vme'] ) ) {
+            
+        /* Message used for error, warning, or syslog */
+        var $message = 'EX4200 vme interface is not configured';
+        /* Error? */
+        if( $action == $error ) {
+            <xnm:error> {
+                <message> $message;
+            }
+        }
+        /* Warning? */
+        if( contains( $action, $warning ) ) {
+            <xnm:warning> {
+                <message> $message;
+            }
+        }
+        /* Syslog */
+        if( contains( $action, $syslog ) ) {
+            <syslog> {
+                <message> 'Configuration Violation: ' _ $message;
+            }
+        }
+    }";
+    }
+    <violation> {
+        <category> "EX Series";
+        <category> "RTG";
+        <synopsis> "Redundant trunk group primary is configured";
+                     /*123456789012345678901234567890123456789012345678901234567890123456789012345678*/
+        <description> "|When an interface within a redundant trunk group is configured as primary   |\n" _
+                      "|then it will always be the active link whenever it is operational, meaning  |\n" _
+                      "|that when it comes back online after an outage it will preempt the currently|\n" _
+                      "|active link. If no primary is specified then the active will be selected    |\n" _
+                      "|automatically and preemption will not occur.                                |";
+        <change-description> "Delete primary option from interface";
+        <action> $all;
+        <template-name> "check-rtg-has-primary";
+        <template-code> "    
+    /* Check for violation */
+    for-each( ethernet-switching-options/redundant-trunk-group/group ) {
+        /* Check for presence of a primary */
+        var $primary-node = .//primary;
+        
+        if( $primary-node ) {
+            /* Message used for error, warning, or syslog */
+            var $message = 'RTG ' _ name _ ' has a primary interface configured';
+            /* Error? */
+            if( $action == $error ) {
+                <xnm:error> {
+                    <message> $message;
+                }
+            }
+            /* Warning? */
+            if( contains( $action, $warning ) ) {
+                <xnm:warning> {
+                    <message> $message;
+                }
+            }
+            /* Syslog */
+            if( contains( $action, $syslog ) ) {
+                <syslog> {
+                    <message> 'Configuration Violation: ' _ $message;
+                }
+            }
+            /* Configuration Change */
+            if( $action == $change ) {
+                /* Bad node is present, delete it from the configuration */
+                call delete-node( $node = $primary-node );
+                var $change-message = 'Removed primary from RTG ' _ name;
+                <syslog> {
+                    <message> $change-message;
+                }
+                <xnm:warning> {
+                    <message> $change-message;
+                }
+            }
+        }
+    }";
+    }
+    <violation> {
+        <category> "EX Series";
+        <category> "Virtual Chassis";
+        <synopsis> "Virtual Chassis master and backup are not configured";
+                     /*123456789012345678901234567890123456789012345678901234567890123456789012345678*/
+        <description> "|The default mastership-priority is 128. It is recommended that the priority |\n" _
+                      "|be set higher on two of the VC members in order to indicate that they should|\n" _
+                      "|serve as the master and backup of the VC.                                   |";
+        <action> $all-except-change;
+        <template-name> "check-for-vc-master";
+        <template-code> "    
+    /* Check for violation */
+    var $priorities = virtual-chassis/member[mastership-priority > 128];
+    
+    if( count( $priorities ) < 2 ) {
+            
+        /* Message used for error, warning, or syslog */
+        var $message = 'Virtual Chassis master and backup are not configured';
+        /* Error? */
+        if( $action == $error ) {
+            <xnm:error> {
+                <message> $message;
+            }
+        }
+        /* Warning? */
+        if( contains( $action, $warning ) ) {
+            <xnm:warning> {
+                <message> $message;
+            }
+        }
+        /* Syslog */
+        if( contains( $action, $syslog ) ) {
+            <syslog> {
+                <message> 'Configuration Violation: ' _ $message;
+            }
+        }
+    }";
+    }
+    <violation> {
+        <category> "EX Series";
+        <synopsis> "LCD maintenance-menu is not disabled";
+                     /*123456789012345678901234567890123456789012345678901234567890123456789012345678*/
+        <description> "|EX Series switches allow some administrative functions to be performed via  |\n" _
+                      "|the LCD menu. For security purposes, this can be disabled. The configuration|\n" _
+                      "|enforced by the script differs based on the EX product:                     |\n" _
+                      "|EX3200:                                                                     |\n" _
+                      "|set chassis lcd fpc 0 maintenance-menu disable                              |\n" _
+                      "|EX4200:                                                                     |\n" _
+                      "|set chassis lcd fpc 0 maintenance-menu disable                              |\n" _
+                      "|set chassis lcd fpc 1 maintenance-menu disable                              |\n" _
+                      "|set chassis lcd fpc 2 maintenance-menu disable                              |\n" _
+                      "|set chassis lcd fpc 3 maintenance-menu disable                              |\n" _
+                      "|set chassis lcd fpc 4 maintenance-menu disable                              |\n" _
+                      "|set chassis lcd fpc 5 maintenance-menu disable                              |\n" _
+                      "|set chassis lcd fpc 6 maintenance-menu disable                              |\n" _
+                      "|set chassis lcd fpc 7 maintenance-menu disable                              |\n" _
+                      "|set chassis lcd fpc 8 maintenance-menu disable                              |\n" _
+                      "|set chassis lcd fpc 9 maintenance-menu disable                              |\n" _
+                      "|EX4500:                                                                     |\n" _
+                      "|set chassis lcd fpc 0 maintenance-menu disable                              |\n" _
+                      "|EX8200:                                                                     |\n" _
+                      "|set chassis lcd maintenance-menu disable                                    |";
+        <change-description> "Disable LCD menu";
+        <action> $all;
+        <template-name> "check-ex-lcd-is-disabled";
+        <template-code> "    
+    /* Check for violation */
+    /* EX3200 and EX4500 */
+    if( starts-with( $product, 'ex32' ) || starts-with( $product, 'ex45' ) ) {
+        if( jcs:empty( chassis/lcd/fpc[name == '0'][maintenance-menu][disable] ) ) {
+            /* Message used for error, warning, or syslog */
+            var $message = 'LCD menu is not disabled';
+            /* Error? */
+            if( $action == $error ) {
+                <xnm:error> {
+                    <message> $message;
+                }
+            }
+            /* Warning? */
+            if( contains( $action, $warning ) ) {
+                <xnm:warning> {
+                    <message> $message;
+                }
+            }
+            /* Syslog */
+            if( contains( $action, $syslog ) ) {
+                <syslog> {
+                    <message> 'Configuration Violation: ' _ $message;
+                }
+            }
+            /* Configuration Change */
+            if( $action == $change ) {
+                /* Add it */
+                <change> {
+                    <chassis active='active'> {
+                        <lcd active='active'> {
+                            <fpc active='active'> {
+                                <name> '0';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                        }
+                    }
+                }
+                var $change-message = 'Automatically disabled LCD menu';
+                <syslog> {
+                    <message> $change-message;
+                }
+                <xnm:warning> {
+                    <message> $change-message;
+                }
+            }
+        }
+    }
+    else if( starts-with( $product, 'ex42' ) ) {
+        if( count( chassis/lcd/fpc[maintenance-menu][disable] ) != 10 ) {
+            /* Message used for error, warning, or syslog */
+            var $message = 'LCD menu is not disabled on all potential VC FPCs';
+            /* Error? */
+            if( $action == $error ) {
+                <xnm:error> {
+                    <message> $message;
+                }
+            }
+            /* Warning? */
+            if( contains( $action, $warning ) ) {
+                <xnm:warning> {
+                    <message> $message;
+                }
+            }
+            /* Syslog */
+            if( contains( $action, $syslog ) ) {
+                <syslog> {
+                    <message> 'Configuration Violation: ' _ $message;
+                }
+            }
+            /* Configuration Change */
+            if( $action == $change ) {
+                /* Add it */
+                <change> {
+                    <chassis active='active'> {
+                        <lcd active='active'> {
+                            <fpc active='active'> {
+                                <name> '0';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                            <fpc active='active'> {
+                                <name> '1';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                            <fpc active='active'> {
+                                <name> '2';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                            <fpc active='active'> {
+                                <name> '3';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                            <fpc active='active'> {
+                                <name> '4';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                            <fpc active='active'> {
+                                <name> '5';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                            <fpc active='active'> {
+                                <name> '6';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                            <fpc active='active'> {
+                                <name> '7';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                            <fpc active='active'> {
+                                <name> '8';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                            <fpc active='active'> {
+                                <name> '9';
+                                <maintenance-menu active='active'>;
+                                <disable active='active'>;
+                            }
+                        }
+                    }
+                }
+                var $change-message = 'Automatically disabled LCD menu';
+                <syslog> {
+                    <message> $change-message;
+                }
+                <xnm:warning> {
+                    <message> $change-message;
+                }
+            }
+        }
+    }
+    else if( starts-with( $product, 'ex82' ) ) {
+        if( jcs:empty( chassis/lcd[maintenance-menu][disable] ) ) {
+            /* Message used for error, warning, or syslog */
+            var $message = 'LCD menu is not disabled';
+            /* Error? */
+            if( $action == $error ) {
+                <xnm:error> {
+                    <message> $message;
+                }
+            }
+            /* Warning? */
+            if( contains( $action, $warning ) ) {
+                <xnm:warning> {
+                    <message> $message;
+                }
+            }
+            /* Syslog */
+            if( contains( $action, $syslog ) ) {
+                <syslog> {
+                    <message> 'Configuration Violation: ' _ $message;
+                }
+            }
+            /* Configuration Change */
+            if( $action == $change ) {
+                /* Add it */
+                <change> {
+                    <chassis active='active'> {
+                        <lcd active='active'> {
+                            <maintenance-menu active='active'>;
+                            <disable active='active'>;
+                        }
+                    }
+                }
+                var $change-message = 'Automatically disabled LCD menu';
+                <syslog> {
+                    <message> $change-message;
+                }
+                <xnm:warning> {
+                    <message> $change-message;
+                }
+            }
+        }
+    }
+    else {
+        <xnm:warning> {
+            <message> 'LCD menu check is not supported for this product: ' _ $product;
+        }
+    }
+    for-each( ethernet-switching-options/redundant-trunk-group/group ) {
+        /* Check for presence of a primary */
+        var $primary-node = .//primary;
+        
+        if( $primary-node ) {
+            /* Message used for error, warning, or syslog */
+            var $message = 'RTG ' _ name _ ' has a primary interface configured';
+            /* Error? */
+            if( $action == $error ) {
+                <xnm:error> {
+                    <message> $message;
+                }
+            }
+            /* Warning? */
+            if( contains( $action, $warning ) ) {
+                <xnm:warning> {
+                    <message> $message;
+                }
+            }
+            /* Syslog */
+            if( contains( $action, $syslog ) ) {
+                <syslog> {
+                    <message> 'Configuration Violation: ' _ $message;
+                }
+            }
+            /* Configuration Change */
+            if( $action == $change ) {
+                /* Bad node is present, delete it from the configuration */
+                call delete-node( $node = $primary-node );
+                var $change-message = 'Removed primary from RTG ' _ name;
+                <syslog> {
+                    <message> $change-message;
+                }
+                <xnm:warning> {
+                    <message> $change-message;
+                }
             }
         }
     }";

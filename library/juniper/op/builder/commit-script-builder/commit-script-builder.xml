@@ -271,40 +271,44 @@ Current Configuration Violations:
 16. Interface is enabled for MPLS protocol but not RSVP protocol
 17. Interface is enabled for RSVP protocol but not MPLS protocol
 18. Interfaces configuration hierarchy is missing
-19. Login announcement does not match specific value
-20. Login message does not match specific value
-21. Missing fxp0.0 IPv4 input firewall filter
-22. Missing lo0.0 IPv4 input firewall filter
-23. No Syslog destinations are configured
-24. No user accounts have been configured
-25. Protocols configuration hierarchy is missing
-26. RADIUS authentication is enabled but no servers exist
-27. RADIUS server configured but RADIUS authentication not enabled
-28. Router-id is not configured
-29. SSH is not enabled
-30. SSH version 2 is not enabled/required
-31. TACACS+ authentication is enabled but no servers exist
-32. TACACS+ server configured but TACACS+ authentication not enabled
-33. Telnet is enabled
-34. Undefined routing-instance used as firewall filter action
-35. Vlan-id 0 assigned via vlan-id-list to different unit than native-vlan-id
-36. fxp0 address is not set within re0 or re1 configuration group
-37. fxp0.0 interface is included in OSPF
-38. fxp0.0 interface is included in OSPFv3
-39. lo0.0 interface doesn't have an IPv4 address
-40. lo0.0 interface doesn't have an IPv6 address
-41. lo0.0 interface doesn't have an ISO address
-42. lo0.0 interface is not configured
-43. lo0.0 interface is not included in IS-IS
-44. lo0.0 interface is not included in OSPF
-45. lo0.0 interface is not included in OSPFv3                
+19. LCD maintenance-menu is not disabled
+20. Login announcement does not match specific value
+21. Login message does not match specific value
+22. Missing fxp0.0 IPv4 input firewall filter
+23. Missing lo0.0 IPv4 input firewall filter
+24. No Syslog destinations are configured
+25. No user accounts have been configured
+26. Protocols configuration hierarchy is missing
+27. RADIUS authentication is enabled but no servers exist
+28. RADIUS server configured but RADIUS authentication not enabled
+29. Redundant trunk group primary is configured
+30. Router-id is not configured
+31. SSH is not enabled
+32. SSH version 2 is not enabled/required
+33. TACACS+ authentication is enabled but no servers exist
+34. TACACS+ server configured but TACACS+ authentication not enabled
+35. Telnet is enabled
+36. Undefined routing-instance used as firewall filter action
+37. Virtual Chassis master and backup are not configured
+38. Vlan-id 0 assigned via vlan-id-list to different unit than native-vlan-id
+39. fxp0 address is not set within re0 or re1 configuration group
+40. fxp0.0 interface is included in OSPF
+41. fxp0.0 interface is included in OSPFv3
+42. lo0.0 interface doesn't have an IPv4 address
+43. lo0.0 interface doesn't have an IPv6 address
+44. lo0.0 interface doesn't have an ISO address
+45. lo0.0 interface is not configured
+46. lo0.0 interface is not included in IS-IS
+47. lo0.0 interface is not included in OSPF
+48. lo0.0 interface is not included in OSPFv3
+49. vme interface is not configured
 
 Version Details:
 ----------------
 Minimum JUNOS Version: 10.0
-Current Script Version: 1.13
-MD5 Checksum: 49b6627b2e6d49d90d4d8529193e0806 
-SHA-256 Checksum: 7d166de4f2a2d13c19987f6ed08f37580dc536d4c7b0eabeee8d0aafc11228b2
+Current Script Version: 1.14
+MD5 Checksum: 360f127aa6d07ae1607487ab35f3b1a8 
+SHA-256 Checksum: 4a7b8b3cd6921e8a42e90f5fe3ee084507a4a77fc69a547ef5c8e2a04e3502df
 ]]>
   </description>
   <keyword>builder</keyword>
