@@ -16,7 +16,6 @@ Logging of MAC addresses with correlation to the interface (EX) they are attache
  <example>
  <title>Example</title>
  <config>example-1.conf</config>
- <output>example-1.output</output>
  </example>
 
 <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
