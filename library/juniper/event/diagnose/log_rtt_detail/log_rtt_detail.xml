@@ -23,10 +23,6 @@ and will write into file and upload to a configured destination.
     <description>Configuration required for this event script</description>
     <config>example-1.conf</config>
   </example>
-  <example>
-    <title>/homes/roy/public_html/junoscriptorium/library/juniper/event/diagnose/log_rtt_detail/display_rtt_detail.slax</title>
-    <description>Get the rtt details </description>
-  </example>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
                 src="../../../../../web/leaf.js" 
