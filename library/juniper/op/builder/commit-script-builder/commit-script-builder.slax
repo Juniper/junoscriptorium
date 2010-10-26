@@ -1,7 +1,7 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.14
- * Last Modified : October 25, 2010
+ * Version       : 1.15
+ * Last Modified : October 26, 2010
  * Platform      : all
  * Release       : 10.0 and above
  *
@@ -11,6 +11,13 @@
  * device.
  *
  * Junos 10.0 is required due to PR 443586 and PR 452398.
+ *
+ *
+ * Revisions:
+ * 1.15 - Started using jcs:output() to display the large prompts instead of only
+ * using jcs:get-input(). This was required due to changes in Junos 10.2 that limited
+ * the prompt size to 1024 bytes. However, this makes the script susceptible to PR 473816
+ * so | no-more must always be used when running it.
  *
  * License       : BSD-Style
  *  Copyright (c) 2010 Curtis Call. All Rights Reserved.
@@ -165,8 +172,8 @@ match / {
     /* Retrieve the current selections */
     var $selections = csb:get-violation-selections();
 
-    var $prompt = {
-        expr " \n[Commit Script Builder - Main Menu]\n";
+    var $before-prompt = {
+        expr "_\r \n[Commit Script Builder - Main Menu]\n";
         expr    "-----------------------------------\n";
         expr    " 1. Edit Configuration Violations\n";
         expr    " 2. View Automation Instructions\n";
@@ -176,9 +183,12 @@ match / {
         expr    "...\n";
         expr    " Q. Quit and Discard Changes\n";
         expr    "-----------------------------------\n";
-        expr    "(" _ count( $selections/violation ) _ " selected violations)\n";             
+        expr    "(" _ count( $selections/violation ) _ " selected violations)\n";
+    }
+    var $prompt = {
         expr    "Enter Selection:> ";
     }
+    expr jcs:output( $before-prompt );
     var $answer = csb:safe-get-input( $prompt );
     
     /* Edit configuration violations */
@@ -242,8 +252,8 @@ match / {
     /* Retrieve the current selections */
     var $selections = csb:get-violation-selections();
 
-    var $prompt = {
-        expr  " \n[Configuration Violation Categories]\n" _
+    var $before-prompt = {
+        expr  "_\r \n[Configuration Violation Categories]\n" _
                  "------------------------------------\n";
         for-each( $violation-category-set[ position() <= round( count( $violation-category-set ) div 2) ] ) {
             var $first-string = " " _ position() _ ". " _ .;
@@ -263,9 +273,12 @@ match / {
         expr "...\n";
         expr " 0. Return to Main Menu\n" _
              "------------------------------------\n";
-        expr    "(" _ count( $selections/violation ) _ " selected violations)\n";             
+        expr    "(" _ count( $selections/violation ) _ " selected violations)\n";
+    }
+    var $prompt = {
         expr "Select Category:> ";
     }
+    expr jcs:output( $before-prompt );
     var $answer = csb:safe-get-input( $prompt );
     
     /* Valid responses are numbers within the category range */
@@ -334,8 +347,8 @@ match / {
     }
     var $line = { call build-line( $length = string-length( $title ) + 2, $character = "-" ); }
     
-    var $prompt = {
-        expr " \n[" _ $title _ "]\n" _ $line _ "\n";
+    var $before-prompt = {
+        expr "_\r \n[" _ $title _ "]\n" _ $line _ "\n";
         for-each( $display-violations/violation ) {
             var $template-name = template-name;
             /* Display the selected violations with brackets around them */
@@ -349,9 +362,11 @@ match / {
         expr "...\n";
         expr " 0. Return to Category Menu\n" _ $line _ "\n";
         expr "[#] = Action is selected\n";
+    }
+    var $prompt = {
         expr "Select Violation to Edit:> ";
     }
-    
+    expr jcs:output( $before-prompt );
     var $answer = csb:safe-get-input( $prompt );
     
     /* edit the violation */
@@ -418,8 +433,8 @@ match / {
     }
     
     /* Assemble the prompt */
-    var $prompt = {
-        expr " \n[Edit Configuration Violation Response]\n";
+    var $before-prompt = {
+        expr "_\r \n[Edit Configuration Violation Response]\n";
         var $top-line = { call build-line( $length = 76, $character = "-" ); }
         expr "+" _ $top-line _ "+\n";
         expr jcs:printf( "%-76s %s", concat( "|Synopsis: ", $violation/synopsis), "|" ) _ "\n";
@@ -471,8 +486,11 @@ match / {
         var $final-line = { call build-line( $length = string-length( $current-string ), $character = "-" ); }
         expr $final-line _ "\n";
         expr $current-string _ "\n";
+    }
+    var $prompt = {
         expr "Select Response:> ";
     }
+    expr jcs:output( $before-prompt );
     var $answer = csb:safe-get-input( $prompt );
 
     /* Let the edit the specific value */
