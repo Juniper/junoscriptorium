@@ -1,0 +1,235 @@
+/*
+ * Author        : Ebben Aries
+ * Version       : 1.0
+ * Last Modified : November 8, 2010
+ * Platform      : MX w/ IChip DPCs
+ * Release       : 9.3 and above
+ *
+ * Description   : This event script automatically writes IChip IIF discard counters
+ * (which are not currently available in JUNIPER-PFE-MIB) into the Utility MIB
+ * every five minutes.
+ *
+ *    Discard counters:
+ *               Counter Name            Total           Rate      Peak Rate
+ *     ---------------------- ---------------- -------------- --------------
+ *              WAN_DROP_CNTR       5886670897        7629781        7674937
+ *              FAB_DROP_CNTR        741316221              0        1174978
+ *               KA_DROP_CNTR                1              0              0
+ *             HOST_DROP_CNTR                7              0              0
+ *
+ *
+ * All values are recorded under the following OID:
+ * enterprises.juniperMIB.jnxMibs.jnxUtilMibRoot.jnxUtil.jnxUtilData.jnxUtilUintTable.jnxUtilUintEntry.jnxUtilUintValue.105.105.102.46.100.105.115.99.97.114.100
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard'
+ * 1.3.6.1.4.1.2636.3.47.1.1.4.1.2.105.105.102.46.100.105.115.99.97.114.100
+ *
+ * OID Values:
+ *
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.fab'
+ * jnxUtilUintValue.105.105.102.46.100.105.115.99.97.114.100.46.102.97.98
+ *
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.fab.peak'
+ * jnxUtilUintValue.105.105.102.46.100.105.115.99.97.114.100.46.102.97.98.46.112.101.97.107
+ *
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.fab.rate'
+ * jnxUtilUintValue.105.105.102.46.100.105.115.99.97.114.100.46.102.97.98.46.114.97.116.101
+ *
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.fab.total'
+ * jnxUtilUintValue.105.105.102.46.100.105.115.99.97.114.100.46.102.97.98.46.116.111.116.97.108
+ *
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.wan'
+ * jnxUtilUintValue.105.105.102.46.100.105.115.99.97.114.100.46.119.97.110
+ *
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.wan.peak'
+ * jnxUtilUintValue.105.105.102.46.100.105.115.99.97.114.100.46.119.97.110.46.112.101.97.107
+ *
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.wan.rate'
+ * jnxUtilUintValue.105.105.102.46.100.105.115.99.97.114.100.46.119.97.110.46.114.97.116.101
+ *
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.wan.total'
+ * jnxUtilUintValue.105.105.102.46.100.105.115.99.97.114.100.46.119.97.110.46.116.111.116.97.108
+ *
+ *
+ * For example, FPC2 results in the following:
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.fab.peak.fpc2.pfe0' = Gauge32: 0
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.fab.peak.fpc2.pfe1' = Gauge32: 0
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.fab.peak.fpc2.pfe2' = Gauge32: 0
+ * JUNIPER-UTIL-MIB::jnxUtilUintValue.'iif.discard.fab.peak.fpc2.pfe3' = Gauge32: 0
+ *
+ *
+*/
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Embedded event policy */
+var $event-definition = {
+  <event-options> {
+    <generate-event> {
+      <name> "5-minutes";
+      <time-interval> "300";
+    }
+    <policy> {
+      <name> "record-iif-discards";
+      <events> "5-minutes";
+      <then> {
+        <event-script> {
+          <name> "record-iif-discards.slax";
+        }
+      }
+    }
+  }
+}
+
+param $debug = 0;  /* Debug level */
+
+var $instance-prefix = "iif.discard";
+
+var $fpc-prefix = "fpc";
+var $pfe-prefix = "pfe";
+var $wan-suffix = "wan";
+var $fab-suffix = "fab";
+var $stats-total = "total";
+var $stats-rate = "rate";
+var $stats-peak = "peak";
+
+match / {
+  <event-script-results> {
+    <out> {
+      call main;
+    }
+  }
+}
+
+template main {
+  var $conn = jcs:open();
+  if(not($conn)) {
+    call emit-error($message = "Unable to connect to MGD");
+  }
+
+  var $rpc-chassis = <get-chassis-inventory>;
+  var $chassis-out = jcs:execute($conn, $rpc-chassis);
+
+  for-each($chassis-out/chassis/chassis-module[jcs:regex("DPC.*", description)]) {
+    var $fpc = jcs:split(" ", name)[2];
+
+    var $xml := {
+      call get-ichip-count($conn, $fpc);
+    }
+
+    for-each($xml/fpc) {
+      var $loop := {
+        call loop-counter($counter = ichips);
+      }
+
+      for-each($loop/counter) {
+        var $pfe = position() - 1;
+
+        var $rpc-ichip = <request-pfe-execute> {
+          <target> "fpc" _ $fpc;
+          <command> "show ichip " _ $pfe _ " iif statistics";
+        }
+        var $ichip-out = jcs:execute($conn, $rpc-ichip);
+        var $lines = jcs:break_lines($ichip-out);
+        for-each($lines) {
+          var $wan-drop-cntr = jcs:regex("WAN_DROP_CNTR +([0-9]+) +([0-9]+) +([0-9]+)", .);
+          if($wan-drop-cntr[1]) {
+            var $current-wan-total-instance = { 
+              call build-instance-name($suffix = $wan-suffix, $stats = $stats-total, $fpc = $fpc, $pfe = $pfe);
+            }
+            var $wan-drop-total = $wan-drop-cntr[2];
+            call set-instance($conn, $instance = $current-wan-total-instance, $type = "unsigned-integer", $value = $wan-drop-total);
+
+            var $current-wan-rate-instance = {
+              call build-instance-name($suffix = $wan-suffix, $stats = $stats-rate, $fpc = $fpc, $pfe = $pfe);
+            }
+            var $wan-drop-rate = $wan-drop-cntr[3];
+            call set-instance($conn, $instance = $current-wan-rate-instance, $type = "unsigned-integer", $value = $wan-drop-rate);
+       
+            var $current-wan-peak-instance = {
+              call build-instance-name($suffix = $wan-suffix, $stats = $stats-peak, $fpc = $fpc, $pfe = $pfe);
+            }
+            var $wan-drop-peak = $wan-drop-cntr[4];
+            call set-instance($conn, $instance = $current-wan-peak-instance, $type = "unsigned-integer", $value = $wan-drop-peak);
+          }
+
+          var $fab-drop-cntr = jcs:regex("FAB_DROP_CNTR +([0-9]+) +([0-9]+) +([0-9]+)", .);
+          if($fab-drop-cntr[1]) {
+            var $current-fab-total-instance = {
+              call build-instance-name($suffix = $fab-suffix, $stats = $stats-total, $fpc = $fpc, $pfe = $pfe);
+            }
+            var $fab-drop-total = $fab-drop-cntr[2];
+            call set-instance($conn, $instance = $current-fab-total-instance, $type = "unsigned-integer", $value = $fab-drop-total);
+
+            var $current-fab-rate-instance = {
+              call build-instance-name($suffix = $fab-suffix, $stats = $stats-rate, $fpc = $fpc, $pfe = $pfe);
+            }
+            var $fab-drop-rate = $fab-drop-cntr[3];
+            call set-instance($conn, $instance = $current-fab-rate-instance, $type = "unsigned-integer", $value = $fab-drop-rate);
+
+            var $current-fab-peak-instance = {
+              call build-instance-name($suffix = $fab-suffix, $stats = $stats-peak, $fpc = $fpc, $pfe = $pfe);
+            }
+            var $fab-drop-peak = $fab-drop-cntr[4];
+            call set-instance($conn, $instance = $current-fab-peak-instance, $type = "unsigned-integer", $value = $fab-drop-peak);
+          }
+        }
+      }
+    }
+  }
+
+  expr jcs:close($conn);
+}
+
+template loop-counter($counter) {
+  if($counter > 0) {
+    <counter>; 
+    call loop-counter($counter = $counter - 1);
+  }
+}
+
+template get-ichip-count($conn, $fpc = 0) {
+  var $rpc = <request-pfe-execute> {
+    <target> "fpc" _ $fpc;
+    <command> "show ichip ifd";
+  }
+
+  var $ichips = jcs:execute($conn, $rpc);
+  var $lines = jcs:break_lines($ichips);
+
+  var $xml := {
+    for-each($lines) {
+      var $ichip = jcs:regex("ICHIP +([0-9]+):.*", .);
+      if($ichip[1]) {
+        <fpc> {
+          <name> $fpc;
+          <ichip> $ichip[2];
+        }
+      }
+    }
+  }
+
+  <fpc> {
+    <name> $fpc;
+    <ichips> count($xml/fpc/ichip);
+  }
+}
+
+template build-instance-name($suffix, $stats, $fpc, $pfe) {
+    expr $instance-prefix _ "." _ $suffix _ "." _ $stats _ "." _ $fpc-prefix _ $fpc _ "." _ $pfe-prefix _ $pfe;
+}
+
+template set-instance($conn, $instance, $type, $value) {
+  var $rpc = {
+    <request-snmp-utility-mib-set> {
+      <instance> $instance;
+      <object-type> $type;
+      <object-value> $value; 
+    }
+  }
+  var $results = jcs:execute($conn, $rpc);
+}
