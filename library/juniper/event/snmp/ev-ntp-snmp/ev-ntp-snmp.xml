@@ -17,7 +17,7 @@ user@router> show ntp associations no-resolve
     +192.168.3.8     130.60.127.148   4 u   53   64    3    0.105   -2.321   1.053
     *217.147.208.1   192.36.143.150   2 u   55   64    3   12.221    3.809   3.652
 
-  Only the line starting with '' is used. This indicates the reference NTP server
+  Only the line starting with '*' is used. This indicates the reference NTP server
   in use. If ntp stopped working, we return an offset of 99999999ms (9999sec).
 
   From the npdq man page:
