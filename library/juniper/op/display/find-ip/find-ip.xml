@@ -16,7 +16,7 @@ Combine the output of 'show ethernet-switching table' command, the 'show arp' co
   <example>
     <title>Output</title>
     <description>A shortcut command to quickly see what ip address is bound to which interface</description>
-    <config>example-1.conf</config>
+    <output>example-1.conf</output>
   </example>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
