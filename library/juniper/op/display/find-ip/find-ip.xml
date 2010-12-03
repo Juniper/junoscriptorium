@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>find-ip.slax</title>
-  <author>royklee</author>
+  <authorjayw></author>
   <synopsis>
 	See what IP address is bound to which interface
   </synopsis>
