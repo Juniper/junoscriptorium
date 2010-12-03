@@ -1,0 +1,175 @@
+/*
+*
+*    NAME: find-ip.slax
+*    PURPOSE: Created for SouthCentral Team to combine the output of 
+*             the "show ethernet-switching table" command, the "show
+*             arp" command, and the "show vlans" command.
+*
+*    CREATED: 03/22/09
+*    BY: Jay Wilson (Solutions Architect - Western Area)
+*    LAST MOD: 03/23/09
+*    BY: Jay Wilson
+*    VERSION: 3.00
+*
+*    MODIFICATION HISTORY:
+*        V1.00 = Initial release
+*        V2.00 = Added template WRITE-IT
+*                Added the "z" option used for tracing
+*                  script flow.
+*        V2.50 = Added vlan information to the output
+*                Added age information to the output
+*        V3.00 = Created the template mash-vid that
+*                  is used to put the VID (vlan-id) on
+*                  the output.
+*
+*/
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+var $arguments = {
+    <argument> {
+        <name> "ip";
+        <description> "IP address you are searching for";
+    }
+    <argument> {
+        <name> "z";
+    }
+}
+param $ip;
+param $z;
+
+
+match / {
+    <op-script-results> {
+/*
+*
+*  RPC that returns the "show ethernet-switching table" output
+*
+*/
+        var $rpc = <get-ethernet-switching-table-information> {
+        }
+        var $switch-output = jcs:invoke($rpc);
+/*
+*
+*  RPC that returns the "show arp" output
+*
+*/
+    var $rpc2 = <get-arp-table-information> {
+    }
+    var $arp-output = jcs:invoke($rpc2);
+/*
+*
+*  RPC that returns the "show vlans" output
+*
+*/
+    var $rpc3 = <get-vlan-information> {
+    }
+    var $vlans-output = jcs:invoke($rpc3);
+/*
+*
+*   Print out the Header line
+*
+*/
+
+        <output> jcs:printf("%-16s %-18s %-12s %5s  %4s  %-s\n","IP","MAC","Interface","Age","VID","VLAN");
+
+/*
+*
+*   Process the arp table information.  If an specific,
+*   IP was requested, only grab that ip.
+*
+*/
+    if ($ip) {
+       call write-it ($message = "ip specified");
+       for-each ($arp-output/arp-table-entry) {
+           if ($ip == ./ip-address) {
+           call write-it ($message = "ip found");
+           call mash-up ($arp-ip = ./ip-address, $arp-mac = ./mac-address, $yes-ip = $ip, $switch-output = $switch-output, $vlans-output = $vlans-output);
+           }
+       }
+    }
+    else {
+       call write-it ($message = "no ip specified");
+       for-each ($arp-output/arp-table-entry) {
+           call mash-up ($arp-ip = ./ip-address, $arp-mac = ./mac-address, $yes-ip = $ip, $switch-output = $switch-output, $vlans-output = $vlans-output);
+       }
+    }
+    }
+}
+/*
+*   NAME: MASH-UP
+*   PURPOSE: To combine the ethernet-switching-table-information output
+*            with the arp-table-information output.
+*   CALLED: Called for all interfaces that are returned by the RPC
+*           to ethernet-switching-table-information and that match any
+*           additional criteria, such IP
+*
+*   PARMS PASSED:
+*        $arp-ip = the IP address on the current arp table record 
+*        $arp-mac = the MAC address retrieved from the arp table
+*        $yes-ip = the IP address the user is looking for
+*        $switch-output = the structure that goes with the interface
+*                         that was returned with the RPC 
+*                         ethernet-switching-table-information.
+*        $vlans-output = the structure for all vlan information.
+*                        this will be used to get the VID (vlan-id).
+*
+*/
+template mash-up($arp-ip, $arp-mac, $yes-ip, $switch-output, $vlans-output) {
+
+       for-each($switch-output/ethernet-switching-table/mac-table-entry) {
+           if ($arp-mac == ./mac-address) {
+               call write-it($message = "arp-found");
+               call mash-vid($arp-ip = $arp-ip, $arp-mac = $arp-mac, $mac-interface = mac-interfaces-list/mac-interfaces, $mac-age = mac-age, $mac-vlan = mac-vlan, $vlans-output = $vlans-output);
+           }
+       }
+}
+/*
+*   NAME: MASH-VID
+*   PURPOSE: To combine the vlan information needed (vlan-id) with the
+*            information already retrieved from 
+*            ethernet-switching-table-information output and the
+*            arp-table-information output.
+*   CALLED: Called by MASH-UP after a match has been found between
+*           ethernet-switching-table and the arp-table.
+*
+*   PARMS PASSED:
+*        $arp-ip = the IP address on the current arp table record 
+*        $arp-mac = the MAC address retrieved from the arp table
+*        $mac-inteface = the inteface the found MAC address is attached to
+*        $mac-age = the age timer for the MAC address
+*        $mac-vlan = the vlan "name" the MAC address is a member of
+*                    this is used to get the vlan-id
+*        $vlans-output = the structure for all vlan information.
+*                        this will be used to get the VID (vlan-id).
+*
+*/
+template mash-vid($arp-ip, $arp-mac, $mac-interface, $mac-age, $mac-vlan, $vlans-output) {
+    for-each($vlans-output/vlan) {
+        if ($mac-vlan == vlan-name) {
+                   <output> jcs:printf("%-16s %-18s %-12s %5s  %4s  %-s\n",$arp-ip,$arp-mac,$mac-interface,$mac-age,vlan-tag,$mac-vlan);
+        }
+    }
+} 
+/*
+*   NAME: WRITE-IT
+*   PURPOSE: Writes a message to standard output that is passed to it.
+*   CALLED: Can be called at any time from any where; however, the
+*           "z" option must be set to a non-null value when the script
+*           is invoked.
+*
+*   PARMS PASSED:
+*        $message = The string to print out 
+*
+*/
+template write-it($message) {
+    if ($z) {
+        <xnm:warning> {
+            <message> {
+                expr $message;
+            }
+        }
+    }
+}
