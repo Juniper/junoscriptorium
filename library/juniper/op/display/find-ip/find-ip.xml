@@ -14,8 +14,8 @@ Combine the output of 'show ethernet-switching table' command, the 'show arp' co
   </description>
 
   <example>
-    <title>Example</title>
-    <description>A short cut command to quickly see what ip address is bound to which interface</description>
+    <title>Output</title>
+    <description>A shortcut command to quickly see what ip address is bound to which interface</description>
     <config>example-1.conf</config>
   </example>
 
