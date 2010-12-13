@@ -9,7 +9,9 @@
   <type>installation</type>
 
   <description>
-Synchronize scripts across all members withing an EX VC. It uses 'show virtual-chassis' command to find the master member, then copy all of the scripts from master's specified directories to each of the VC membe
+Synchronize scripts across all members withing an EX VC. 
+It uses 'show virtual-chassis' command to find the master member, then 
+copy all of the scripts from master's specified directories to each VC member.
 
   </description>
 
