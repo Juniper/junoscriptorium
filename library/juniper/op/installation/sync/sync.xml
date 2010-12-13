@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>sync.slax</title>
-  <author>royklee</author>
+  <author>jayw</author>
   <synopsis>
 	Ensure that scripts reside on all members of an EX virtual chassis
   </synopsis>
@@ -12,7 +12,6 @@
 Synchronize scripts across all members withing an EX VC. 
 It uses 'show virtual-chassis' command to find the master member, then 
 copy all of the scripts from master's specified directories to each VC member.
-
   </description>
 
   <keyword>installation</keyword>
