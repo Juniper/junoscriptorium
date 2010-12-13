@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<script>
+  <title>sync.slax</title>
+  <author>royklee</author>
+  <synopsis>
+	Ensure that scripts reside on all members of an EX virtual chassis
+  </synopsis>
+  <coe>op</coe>
+  <type>installation</type>
+
+  <description>
+Synchronize scripts across all members withing an EX VC. It uses 'show virtual-chassis' command to find the master member, then copy all of the scripts from master's specified directories to each of the VC membe
+
+  </description>
+
+  <keyword>installation</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

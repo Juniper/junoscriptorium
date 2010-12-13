@@ -1,0 +1,107 @@
+/*
+*
+*    NAME: sync.slax
+*    PURPOSE: Created to ensure that scripts reside on
+*             all members of an EX VC.
+*
+*
+*    CREATED: 08/04/09
+*    BY: Jay Wilson (Solutions Architect - Western Area)
+*    LAST MOD: 08/04/09
+*    BY: Jay Wilson
+*    VERSION: 1.00
+*
+*    MODIFICATION HISTORY:
+*        V1.00 = Initial release
+*
+*/
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+var $arguments = {
+    <argument> {
+        <name> "debug";
+        <description> "Any none blank character turns on debugging";
+    }
+}
+param $debug;
+
+match / {
+    <op-script-results> {
+/*
+*
+*  RPC that returns the "show virtual-chassis" output
+*
+*/
+        var $rpc = {
+            <get-virtual-chassis-information>; 
+        }
+        var $switch-output = jcs:invoke($rpc);
+        var $top-vc = $switch-output;
+/*
+*
+*    Find the master member
+*
+*/
+        var $master = {
+            for-each ($switch-output/member-list/member) {
+                if (member-role == "Master*") {
+                    expr member-id;
+                }
+            }
+        }
+/*
+*
+*    The copy loop
+*
+*/
+       for-each ($top-vc/member-list/member) {
+           if (member-id != $master) {
+              call copy-scripts($directory = "/var/db/scripts/op", $master = $master, $current-mem = member-id, $debug = $debug);
+              call copy-scripts($directory = "/var/db/scripts/commit", $master = $master, $current-mem = member-id, $debug = $debug);
+              call copy-scripts($directory = "/var/db/scripts/event", $master = $master, $current-mem = member-id, $debug = $debug);
+           }
+       }
+     }
+}
+
+/*
+*   NAME: COPY-SCRIPTS
+*   PURPOSE: To copy all of the scripts from in the specified
+*            directory from the master to the member specified.
+*   CALLED: Call for each VC member except the master.
+*
+*   PARMS PASSED:
+*        $directory = The dictory that the scripts reside in
+*        $master = The VC member that this the master
+*        $current-mem = The current VC member to copy the files to
+*
+*/
+template copy-scripts($directory, $master, $current-mem, $debug) {
+    <output> jcs:printf("PROCESSING SCRIPTS IN %s\n",$directory);
+    var $rpc = {
+        <file-list> {
+           <path> $directory;
+        }
+    }
+    var $listing = jcs:invoke($rpc);
+    for-each($listing/directory/file-information) {
+        var $from = "fpc" _ $master _ ":" _ $directory _ "/" _ file-name;
+        var $to = "fpc" _ $current-mem _ ":" _ $directory _ "/" _ file-name;
+        var $rpc2 = {
+            <file-copy> {
+                <source> $from;
+                <destination> $to;
+            }
+        }
+        var $result = jcs:invoke($rpc2);
+        if ($result//xnm:error) {
+            copy-of $result//xnm:error;
+        }
+        else if ($debug) {
+           <output> jcs:printf("   COPIED %s FROM %s TO %s\n",file-name,$master,$current-mem);
+        }
+    }
+}
