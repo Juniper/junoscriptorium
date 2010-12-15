@@ -10,8 +10,9 @@
 
   <description>
   Script to display hit count per policy, a much more terse display than the show security policies detail 
-  command. Inspired by a customer who wanted a easier way of seeing hit counts when many policies are configured. For use on junos devices with flow based firewalls. Script handles multiple destination and source addresses, as well as multiple applications.
-
+  command. Inspired by a customer who wanted a easier way of seeing hit counts when many policies are 
+  configured. For use on junos devices with flow based firewalls. Script handles multiple destination and
+  source addresses, as well as multiple applications.
   </description>
 
   <keyword>op</keyword>
