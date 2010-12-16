@@ -1,0 +1,124 @@
+/*
+ * Author        : Ebben Aries
+ * Version       : 1.0
+ * Last Modified : December 15, 2010
+ * Platform      : all
+ * Release       : 9.0 and above
+ *
+ * Description   : To display IPv6 multicast groups on a given interface similar to
+ * Cisco's "show ipv6 interface" command output.
+ *
+ * License       : BSD-Style
+ *  Copyright (c) 2009 Ebben Aries. All Rights Reserved.
+ *  Redistribution and use in source and binary forms, with or without modification,
+ *  are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice, this
+ *  list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice,
+ *  this list of conditions and the following disclaimer in the documentation and/or
+ *  other materials provided with the distribution.
+ *  3. The name of the author may not be used to endorse or promote products derived
+ *  from this software without specific prior written permission.
+ *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ *  AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
+*/
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl"; 
+
+var $arguments = {
+    <argument> {
+        <name> "interface";
+        <description> "Interface to search bound mcast groups (unit format)";
+    }
+}
+
+param $interface;
+
+match / {
+    <op-script-results> {
+
+        if (not($interface)) {
+            <xsl:message terminate="yes"> "No interface defined";
+        }
+
+        var $conn = jcs:open();
+
+        var $rpc-ifinfo = {
+            <get-interface-information> {
+                <terse>;
+                <interface-name>$interface;
+            }
+        }
+
+        var $output-ifinfo = jcs:execute($conn, $rpc-ifinfo);
+        if (not($output-ifinfo/logical-interface[address-family/address-family-name == "inet6"])) {
+            <xsl:message terminate="yes"> "Interface/Unit does not exist and/or does not have family inet6 enabled";
+        }
+
+
+        var $rpc-mcast-fwdtable = {
+            <get-forwarding-table-information> {
+                <multicast>;
+            }
+        }
+
+        var $output-mcast-fwdtable = jcs:execute($conn, $rpc-mcast-fwdtable);
+
+        <output> "Forwarding Table (RE)\n====================================================================================";
+        <output> jcs:printf("%-16s %-48s %-8s %-s\n", "Interface", "Group", "Type", "Index");
+        for-each($output-mcast-fwdtable/route-table[table-name == "default.inet6"]/rt-entry/nh[via == $interface]) {
+            var $rt-destination = ../rt-destination;
+            var $nh-type = nh-type;
+            var $nh-index = nh-index;
+            var $via = via;
+            <output> jcs:printf("%-16s %-48s %-8s %-s\n", $via, $rt-destination, $nh-type, $nh-index);
+        }
+        for-each($output-mcast-fwdtable/route-table[table-name == "default.inet6"]/rt-entry/nh[nh-type == "mcst"]) {
+            var $rt-destination = ../rt-destination;
+            var $nh-type = nh-type;
+            var $nh-index = nh-index;
+            var $via = "*";
+            <output> jcs:printf("%-16s %-48s %-8s %-s\n", $via, $rt-destination, $nh-type, $nh-index);
+        }
+
+
+        var $rpc-mcast-pfe = {
+            <command> "show pfe route inet6";
+        }
+
+        <output> "\n\nForwarding Table (PFE)\n====================================================================================";
+        <output> jcs:printf("%-16s %-48s %-8s %-s\n", "Interface", "Group", "Type", "Index");
+        var $output-mcast-pfe = jcs:execute($conn, $rpc-mcast-pfe);
+        var $lines = jcs:break_lines($output-mcast-pfe);
+        for-each($lines) {
+            var $output-pfe = jcs:regex("Slot +([0-9]+)", .);
+            if ($output-pfe[1]) {
+                <output> jcs:printf("[Slot: %s]\n", $output-pfe[2]);
+            }
+            var $output-parse = jcs:regex("(ff0[0-9].*) +(Mgroup|Mcast|mdiscard) +([0-9]+)", .);
+            if ($output-parse[1]) {
+                <output> jcs:printf("%-16s %-48s %-8s %-s\n", "*", $output-parse[2], $output-parse[3], $output-parse[4]);
+            }
+            var $interface-parse = jcs:regex("(ff0[0-9].*) +(Recv) +([0-9]+) +(.*)", .);
+            if ($interface-parse[5] == $interface) {
+                <output> jcs:printf("%-16s %-48s %-8s %-s\n", $interface, $interface-parse[2], $interface-parse[3], $interface-parse[4]);
+            }
+        }
+
+        expr jcs:close($conn);
+    }
+}

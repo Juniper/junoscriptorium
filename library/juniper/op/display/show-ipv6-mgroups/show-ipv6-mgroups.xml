@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<script>
+  <title>show-ipv6-mgroups.slax</title>
+  <author>ebben.aries</author>
+  <synopsis>
+	To display IPv6 multicast groups on a given interface similar to Cisco's "show ipv6 interface" command output.
+  </synopsis>
+  <coe>op</coe>
+  <type>display</type>
+
+  <description>
+earies@lab> op show-ipv6-mgroups interface ge-4/0/3.0
+Forwarding Table (RE)
+====================================================================================
+Interface        Group                                            Type     Index
+ge-4/0/3.0       ff02::1:ff00:1/128                               recv     632
+ge-4/0/3.0       ff02::1:ff71:652b/128                            recv     636
+*                ff02::1/128                                      mcst     39
+
+Forwarding Table (PFE)
+====================================================================================
+Interface        Group                                            Type     Index
+[Slot: 2]
+*                ff00::/8                                         mdiscard 43
+*                ff02::1                                          Mcast    39
+*                ff02::2                                          Mgroup   639
+ge-4/0/3.0       ff02::1:ff00:1                                   Recv     632
+ge-4/0/3.0       ff02::1:ff71:652b                                Recv     636
+*                ff00::/8                                         mdiscard 123
+*                ff02::1                                          Mcast    119
+*                ff00::/8                                         mdiscard 589
+*                ff02::1                                          Mcast    586
+[Slot: 4]
+*                ff00::/8                                         mdiscard 43
+*                ff02::1                                          Mcast    39
+*                ff02::2                                          Mgroup   639
+ge-4/0/3.0       ff02::1:ff00:1                                   Recv     632
+ge-4/0/3.0       ff02::1:ff71:652b                                Recv     636
+*                ff00::/8                                         mdiscard 123
+*                ff02::1                                          Mcast    119
+*                ff00::/8                                         mdiscard 589
+*                ff02::1                                          Mcast    586
+
+
+  </description>
+
+  <keyword>slax</keyword>
+  <keyword>ipv6</keyword>
+  <keyword>display</keyword>
+  <keyword>multicast</keyword>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
