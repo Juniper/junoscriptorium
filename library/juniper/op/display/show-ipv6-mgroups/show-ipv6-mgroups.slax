@@ -5,7 +5,7 @@
  * Platform      : all
  * Release       : 9.0 and above
  *
- * Description   : To display IPv6 multicast groups on a given interface similar to
+ * Description   : To display IPv6 link-local multicast groups on a given interface similar to
  * Cisco's "show ipv6 interface" command output.
  *
  * License       : BSD-Style

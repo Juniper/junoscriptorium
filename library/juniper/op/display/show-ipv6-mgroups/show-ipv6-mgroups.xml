@@ -3,7 +3,7 @@
   <title>show-ipv6-mgroups.slax</title>
   <author>ebben.aries</author>
   <synopsis>
-	To display IPv6 multicast groups on a given interface similar to Cisco's "show ipv6 interface" command output.
+	To display IPv6 link-local multicast groups on a given interface similar to Cisco's "show ipv6 interface" command output.
   </synopsis>
   <coe>op</coe>
   <type>display</type>
