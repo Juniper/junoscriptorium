@@ -1,7 +1,7 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.05
- * Last Modified : September 7, 2010
+ * Version       : 1.06
+ * Last Modified : December 21, 2010
  * Platform      : all
  * Release       : JUNOS 8.2 and above
  *
@@ -60,8 +60,8 @@ ns ext = "http://xmlsoft.org/XSLT/namespace";
 import "../import/junos.xsl";
 
 /* Update everytime the parts list is changed */
-var $last-eol-parts-list-update = "09/07/2010";
-var $version = "1.05";
+var $last-eol-parts-list-update = "12/21/2010";
+var $version = "1.06";
 
 /* These are used within the program to minimize mistypes */
 var $eol-announcement-date = "EOL Announcement Date";
@@ -10190,6 +10190,21 @@ var $eol-parts = ext:node-set( $eol-parts-rtf );
 
 
 var $junos-version-rtf = {
+    <version> {
+        <number> "10.4";
+        <date> {
+            <type> "FRS";
+            <date> "12/08/2010";
+        }
+        <date> {
+            <type> "EOE";
+            <date> "12/08/2013";
+        }
+        <date> {
+            <type> "EOL";
+            <date> "12/08/2014";
+        }
+    }
     <version> {
         <number> "10.3";
         <date> {
