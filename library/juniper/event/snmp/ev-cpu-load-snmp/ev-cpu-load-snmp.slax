@@ -1,0 +1,114 @@
+/*
+ * Author        : Julian Eccli
+ * Version       : 1.0
+ * Last Modified : February 7, 2011
+ * Platform      : All JUNOS Platforms
+ * Release       : 9.3 and above
+ *
+ * Description   : This event script automatically writes 1, 5, and 15 minute
+ *                 CPU load averages into the Utility MIB every 60 seconds
+ *
+ * 
+ * All values are recorded under the following OID:
+ * enterprises.juniperMIB.jnxMibs.jnxUtilMibRoot.jnxUtil.jnxUtilData.jnxUtilStringTable.jnxUtilStringEntry.jnxUtilStringValue.99.112.117.45.108.111.97.100.45
+ * .1.3.6.1.4.1.2636.3.47.1.1.5.1.2.99.112.117.45.108.111.97.100.45
+ *
+ * There are three values recorded each time the event triggers the script:
+ *
+ * CPU Load 1-Minute Average:
+ * jnxUtilStringValue.99.112.117.45.108.111.97.100.45.49.45.109.105.110
+ *
+ * CPU Load 5-Minute Average:
+ * jnxUtilStringValue.99.112.117.45.108.111.97.100.45.53.45.109.105.110
+ *
+ * CPU Load 15-Minute Average:
+ * jnxUtilStringValue.99.112.117.45.108.111.97.100.45.49.53.45.109.105.110 
+ *
+ *
+ * You can view the MIB walk using the following JUNOS CLI commands
+ * 
+ * julian@MX240-RE0> show snmp mib walk jnxUtilStringValue ascii    
+ * jnxUtilStringValue."cpu-load-1-min" = 0.08
+ * jnxUtilStringValue."cpu-load-15-min" = 0.00
+ * jnxUtilStringValue."cpu-load-5-min" = 0.03
+ * 
+ * julian@MX240-RE0> show snmp mib walk jnxUtilStringValue          
+ * jnxUtilStringValue.99.112.117.45.108.111.97.100.45.49.45.109.105.110 = 0.08
+ * jnxUtilStringValue.99.112.117.45.108.111.97.100.45.49.53.45.109.105.110 = 0.00
+ * jnxUtilStringValue.99.112.117.45.108.111.97.100.45.53.45.109.105.110 = 0.03
+ * 
+ * =============================================================================
+ *
+ * To set this up on your JUNOS device copy this script to the following folder:
+ * /var/db/scripts/event
+ *
+ * Then configure JUNOS with the following:
+ * 'set event-options event-script file ev-cpu-load-snmp.slax'
+ *
+ * Make sure you name the script 'ev-cpu-load-snmp.slax' or change references in
+ * the script and JUNOS config to be whatever you named it.
+ *
+ * =============================================================================
+ *
+ * For a simple explanation on what CPU load means check out:
+ * http://en.wikipedia.org/wiki/Load_%28computing%29
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Embedded event policy which launches every 60 seconds */
+var $event-definition = {
+  <event-options> {
+    <generate-event> {
+      <name> "1-minute";
+      <time-interval> "60";
+    }
+    <policy> {
+      <name> "ev-cpu-load-snmp";
+      <events> "1-minute";
+      <then> {
+        <event-script> {
+          <name> "ev-cpu-load-snmp.slax";
+        }
+      }
+    }
+  }
+}
+
+match / {
+    <op-script-results> {
+
+        var $sys-uptime-info-results = jcs:invoke( "get-system-uptime-information" );
+        
+        var $cpu-load-1-min = $sys-uptime-info-results/uptime-information/load-average-1;
+        var $cpu-load-5-min = $sys-uptime-info-results/uptime-information/load-average-5;
+        var $cpu-load-15-min = $sys-uptime-info-results/uptime-information/load-average-15;
+/*
+ * Uncomment to debug and show output in JUNOS CLI
+ *
+ *       <output> "1 Minute CPU Load Average is:  " _ $cpu-load-1-min;
+ *       <output> "5 Minute CPU Load Average is:  " _ $cpu-load-5-min;
+ *       <output> "15 Minute CPU Load Average is: " _ $cpu-load-15-min;
+ */
+        call invoke-snmp-set( $snmp-object-type = "string", $snmp-instance-name = "cpu-load-1-min", $snmp-object-value = $cpu-load-1-min);
+        call invoke-snmp-set( $snmp-object-type = "string", $snmp-instance-name = "cpu-load-5-min", $snmp-object-value = $cpu-load-5-min);
+        call invoke-snmp-set( $snmp-object-type = "string", $snmp-instance-name = "cpu-load-15-min", $snmp-object-value = $cpu-load-15-min);
+
+    }
+}
+
+template invoke-snmp-set ( $snmp-object-type, $snmp-instance-name, $snmp-object-value ) {
+    var $rpc = <request-snmp-utility-mib-set> {
+        <object-type> $snmp-object-type;
+        <instance> $snmp-instance-name;
+        <object-value> $snmp-object-value;
+    }
+    var $results = jcs:invoke($rpc);
+}
