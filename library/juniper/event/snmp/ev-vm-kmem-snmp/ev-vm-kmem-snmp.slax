@@ -1,0 +1,114 @@
+/*
+ * Author        : Julian Eccli
+ * Version       : 1.0
+ * Last Modified : March 21st, 2011
+ * Platform      : All JUNOS Platforms
+ * Release       : 9.3 and above
+ *
+ * Description   : This event script automatically writes sysctl vm.kmem
+ *                 variables into the Utility MIB every 60 seconds.
+ *
+ * =============================================================================
+ * Revision History
+ * -----------------------------------------------------------------------------
+ * 1.0: March 21st, 2011
+ *      - Initial Release
+ * 
+ * =============================================================================
+ * 
+ * All values are recorded under the following OID:
+ * enterprises.juniperMIB.jnxMibs.jnxUtilMibRoot.jnxUtil.jnxUtilData.jnxUtilStringTable.jnxUtilStringEntry.jnxUtilStringValue.118.109.45.107.109.101.109.45.
+ * .1.3.6.1.4.1.2636.3.47.1.1.5.1.2.118.109.45.107.109.101.109.45.
+ *
+ * There are five values recorded each time the event triggers the script.
+ *
+ * =============================================================================
+ *
+ * You can view the MIB walk using the following JUNOS CLI commands
+ * 
+ * julian@SRX210> show snmp mib walk jnxUtilIntegerValue ascii | match kmem 
+ * jnxUtilIntegerValue."vm-kmem-map-free" = 172097536
+ * jnxUtilIntegerValue."vm-kmem-mt-used-max-percent" = 1
+ * jnxUtilIntegerValue."vm-kmem-size" = 183595008
+ * jnxUtilIntegerValue."vm-kmem-size-max" = 209715200
+ * jnxUtilIntegerValue."vm-kmem-size-scale" = 3
+ * 
+ * julian@SRX210> show snmp mib walk jnxUtilIntegerValue                       
+ * jnxUtilIntegerValue.118.109.45.107.109.101.109.45.109.97.112.45.102.114.101.101 = 172097536
+ * jnxUtilIntegerValue.118.109.45.107.109.101.109.45.109.116.45.117.115.101.100.45.109.97.120.45.112.101.114.99.101.110.116 = 1
+ * jnxUtilIntegerValue.118.109.45.107.109.101.109.45.115.105.122.101 = 183595008
+ * jnxUtilIntegerValue.118.109.45.107.109.101.109.45.115.105.122.101.45.109.97.120 = 209715200
+ * jnxUtilIntegerValue.118.109.45.107.109.101.109.45.115.105.122.101.45.115.99.97.108.101 = 3
+ * 
+ * =============================================================================
+ *
+ * To set this up on your JUNOS device copy this script to the following folder:
+ * /var/db/scripts/event
+ *
+ * Then configure JUNOS with the following:
+ * 'set event-options event-script file ev-vm-kmem-snmp.slax'
+ *
+ * Make sure you name the script 'ev-vm-kmem-snmp.slax' or change references in
+ * the script and JUNOS config to be whatever you named it.
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Embedded event policy which launches every 60 seconds */
+var $event-definition = {
+  <event-options> {
+    <generate-event> {
+      <name> "1-minute";
+      <time-interval> "60";
+    }
+    <policy> {
+      <name> "ev-vm-kmem-snmp";
+      <events> "1-minute";
+      <then> {
+        <event-script> {
+          <name> "ev-vm-kmem-snmp.slax";
+          /*
+           * Uncomment if you want to execute this script as user "junoscript"
+           * Note that this user must also be configured in JUNOS
+           *
+           * <user-name> "junoscript";
+           */
+        }
+      }
+    }
+  }
+}
+
+match / {
+    <op-script-results> {
+
+        var $sysctl-vm-kmem-size-result = jcs:sysctl("vm.kmem_size", "i");
+        var $sysctl-vm-kmem-size-max-result = jcs:sysctl("vm.kmem_size_max", "i");
+        var $sysctl-vm-kmem-size-scale-result = jcs:sysctl("vm.kmem_size_scale", "i");
+        var $sysctl-vm-kmem-map-free-result = jcs:sysctl("vm.kmem_map_free", "i");
+        var $sysctl-vm-kmem-mt-used-max-percent-result = jcs:sysctl("vm.kmem_mt_used_max_percent", "i");
+
+        call snmp-mib-poke( $snmp-object-type = "integer", $snmp-instance-name = "vm-kmem-size", $snmp-object-value = $sysctl-vm-kmem-size-result);
+        call snmp-mib-poke( $snmp-object-type = "integer", $snmp-instance-name = "vm-kmem-size-max", $snmp-object-value = $sysctl-vm-kmem-size-max-result);
+        call snmp-mib-poke( $snmp-object-type = "integer", $snmp-instance-name = "vm-kmem-size-scale", $snmp-object-value = $sysctl-vm-kmem-size-scale-result);
+        call snmp-mib-poke( $snmp-object-type = "integer", $snmp-instance-name = "vm-kmem-map-free", $snmp-object-value = $sysctl-vm-kmem-map-free-result);
+        call snmp-mib-poke( $snmp-object-type = "integer", $snmp-instance-name = "vm-kmem-mt-used-max-percent", $snmp-object-value = $sysctl-vm-kmem-mt-used-max-percent-result);
+
+    }
+}
+
+template snmp-mib-poke ( $snmp-object-type, $snmp-instance-name, $snmp-object-value ) {
+    var $rpc = <request-snmp-utility-mib-set> {
+        <object-type> $snmp-object-type;
+        <instance> $snmp-instance-name;
+        <object-value> $snmp-object-value;
+    }
+    var $results = jcs:invoke($rpc);
+}
