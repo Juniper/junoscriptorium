@@ -16,11 +16,11 @@ match configuration {
                 var $int = name;
                 var $desc = description;
                 var $disable = count(node()[name() == "disable"]);
-                if (contains($desc, "SCOR") || contains($desc, "scor")) {
+                if (contains($desc, "CORE") || contains($desc, "core")) {
                         if ($disable == 1) {
                                 <xnm:warning> {
                                         <message> {
-                                                expr "SCOR uplink ";
+                                                expr "CORE uplink ";
                                                 expr $int;
                                                 expr " is disabled";
                                         }
