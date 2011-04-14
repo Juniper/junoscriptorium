@@ -158,13 +158,10 @@ match / {
 
         var $mx-power-usage-system-info = $get-mx-power-usage-sys-info-rpc/power-usage-system/power-usage-zone-information;
 
-        /* <output> $mx-power-usage-system-info; */
-
         if( jcs:empty( $mx-power-usage-system-info ) ) {
             <output> "No Zone Power information available!";
         }
         else {
-            <output> "Here is the Zone Power information:";
             for-each( $mx-power-usage-system-info ) {
 
                 call snmp-mib-poke ( $snmp-object-type = "integer",
@@ -199,3 +196,4 @@ template snmp-mib-poke ( $snmp-object-type, $snmp-instance-name, $snmp-object-va
     }
     var $results = jcs:invoke($rpc);
 }
+
