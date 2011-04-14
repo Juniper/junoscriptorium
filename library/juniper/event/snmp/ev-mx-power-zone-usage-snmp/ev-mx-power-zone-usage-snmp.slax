@@ -1,0 +1,201 @@
+/*
+ * Filename      : ev-mx-power-zone-usage-snmp.slax
+ * Author        : Julian Eccli
+ * Version       : 1.0
+ * Last Modified : April 14, 2011
+ * Platform      : All JUNOS Platforms
+ * Release       : Tested on 10.4
+ *
+ * Description   : This event script automatically writes MX240, MX480, and MX960
+ *                 chassis power zone capacities into the Utility MIB every
+ *                 60 seconds.
+ *
+ *                 Please note that as of JUNOS 10.4 this script will ONLY work
+ *                 on the MX240, MX480, and MX960.  Currently the MX80 does not
+ *                 support the "show chassis power" xml RPC and when it does it
+ *                 may not be compliant with this script.  This script does NOT
+ *                 work with other Juniper products other than those listed
+ *                 above!
+ *
+ * =============================================================================
+ * Revision History
+ * -----------------------------------------------------------------------------
+ * 1.0: April 14th, 2011
+ *      - Initial Release
+ * 
+ * =============================================================================
+ * 
+ * All values are recorded under the following OID:
+ * enterprises.juniperMIB.jnxMibs.jnxUtilMibRoot.jnxUtil.jnxUtilData.jnxUtilIntegerTable.jnxUtilIntegerEntry.jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121
+ * .1.3.6.1.4.1.2636.3.47.1.1.5.1.2.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121
+ *
+ * There are five values recorded in each MX power zone each time the event triggers the script:
+ * Note:  As of May 2011
+ *        Zone 0 only:   MX240 and MX480
+ *        Zone 0 and 1:  MX960
+ *
+ * MX chassis system power allocated capacity:
+ * Zone 0:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.97.108.108.111.99.97.116.101.100.45.122.111.110.101.45.48
+ * Zone 1:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.97.108.108.111.99.97.116.101.100.45.122.111.110.101.45.49
+ *
+ * MX chassis system power current capacity:
+ * Zone 0:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.99.117.114.114.101.110.116.45.122.111.110.101.45.48
+ * Zone 1:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.99.117.114.114.101.110.116.45.122.111.110.101.45.49
+ *
+ * MX chassis system power maximum capacity:
+ * Zone 0:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.109.97.120.105.109.117.109.45.122.111.110.101.45.48
+ * Zone 1:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.109.97.120.105.109.117.109.45.122.111.110.101.45.49
+ *
+ * MX chassis system power remiaining capacity:
+ * Zone 0:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.114.101.109.97.105.110.105.110.103.45.122.111.110.101.45.48
+ * Zone 1:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.114.101.109.97.105.110.105.110.103.45.122.111.110.101.45.49
+ *
+ * MX chassis system power actual usage capacity:
+ * Zone 0:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.117.115.101.100.45.122.111.110.101.45.48
+ * Zone 1:
+ *   jnxUtilStringValue.99.97.112.97.99.105.116.121.45.117.115.101.100.45.122.111.110.101.45.49
+ *
+ * =============================================================================
+ *
+ * You can view the MIB walk using the following JUNOS CLI commands
+ * Note:  Since this output is from an MX960 both power zones 0 and 1 are displayed
+ * 
+ * julian@MX960> show snmp mib walk jnxUtilIntegerValue ascii    
+ * jnxUtilIntegerValue."mx-power-capacity-allocated-zone-0" = 710
+ * jnxUtilIntegerValue."mx-power-capacity-allocated-zone-1" = 1000
+ * jnxUtilIntegerValue."mx-power-capacity-current-zone-0" = 2800
+ * jnxUtilIntegerValue."mx-power-capacity-current-zone-1" = 2800
+ * jnxUtilIntegerValue."mx-power-capacity-maximum-zone-0" = 2800
+ * jnxUtilIntegerValue."mx-power-capacity-maximum-zone-1" = 2800
+ * jnxUtilIntegerValue."mx-power-capacity-remaining-zone-0" = 2090
+ * jnxUtilIntegerValue."mx-power-capacity-remaining-zone-1" = 1800
+ * jnxUtilIntegerValue."mx-power-capacity-used-zone-0" = 260
+ * jnxUtilIntegerValue."mx-power-capacity-used-zone-1" = 510
+ * 
+ * julian@MX960> show snmp mib walk jnxUtilIntegerValue          
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.97.108.108.111.99.97.116.101.100.45.122.111.110.101.45.48 = 710
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.97.108.108.111.99.97.116.101.100.45.122.111.110.101.45.49 = 1000
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.99.117.114.114.101.110.116.45.122.111.110.101.45.48 = 2800
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.99.117.114.114.101.110.116.45.122.111.110.101.45.49 = 2800
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.109.97.120.105.109.117.109.45.122.111.110.101.45.48 = 2800
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.109.97.120.105.109.117.109.45.122.111.110.101.45.49 = 2800
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.114.101.109.97.105.110.105.110.103.45.122.111.110.101.45.48 = 2090
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.114.101.109.97.105.110.105.110.103.45.122.111.110.101.45.49 = 1800
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.117.115.101.100.45.122.111.110.101.45.48 = 260
+ * jnxUtilIntegerValue.109.120.45.112.111.119.101.114.45.99.97.112.97.99.105.116.121.45.117.115.101.100.45.122.111.110.101.45.49 = 510 * 
+ * 
+ * =============================================================================
+ *
+ * To set this up on your JUNOS device copy this script to the following folder:
+ * /var/db/scripts/event
+ *
+ * Then configure JUNOS with the following:
+ * 'set event-options event-script file ev-mx-power-zone-usage-snmp.slax'
+ *
+ * Make sure you name the script 'ev-mx-power-zone-usage-snmp.slax' or change references in
+ * the script and JUNOS config to be whatever you named it.
+ *
+ */
+
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+
+/* Embedded event policy which launches every 60 seconds */
+var $event-definition = {
+  <event-options> {
+    <generate-event> {
+      <name> "1-minute";
+      <time-interval> "60";
+    }
+    <policy> {
+      <name> "ev-mx-power-zone-usage-snmp";
+      <events> "1-minute";
+      <then> {
+        <event-script> {
+          <name> "ev-mx-power-zone-usage-snmp.slax";
+          /*
+           * Uncomment if you want to execute this script as user "junoscript"
+           * Note that this user must also be configured in JUNOS
+           *
+           * <user-name> "junoscript";
+           */
+        }
+      }
+    }
+  }
+}
+
+
+var $mx-power = "mx-power-capacity";
+var $mx-current-capacity = "current";
+var $mx-maximum-capacity = "maximum";
+var $mx-allocated-capacity = "allocated";
+var $mx-remaining-capacity = "remaining";
+var $mx-actual-usage = "used";
+var $mx-power-zone = "zone";
+
+match / {
+    <op-script-results> {
+        
+        /* Retrieve MX power usage information */
+        var $get-mx-power-usage-sys-info-rpc = jcs:invoke( "get-power-usage-information" );
+
+        var $mx-power-usage-system-info = $get-mx-power-usage-sys-info-rpc/power-usage-system/power-usage-zone-information;
+
+        /* <output> $mx-power-usage-system-info; */
+
+        if( jcs:empty( $mx-power-usage-system-info ) ) {
+            <output> "No Zone Power information available!";
+        }
+        else {
+            <output> "Here is the Zone Power information:";
+            for-each( $mx-power-usage-system-info ) {
+
+                call snmp-mib-poke ( $snmp-object-type = "integer",
+                                     $snmp-instance-name = $mx-power _ "-" _ $mx-current-capacity _ "-" _ $mx-power-zone _ "-" _ ./zone,
+                                     $snmp-object-value = ./capacity-actual );
+
+                call snmp-mib-poke ( $snmp-object-type = "integer",
+                                     $snmp-instance-name = $mx-power _ "-" _ $mx-maximum-capacity _ "-" _ $mx-power-zone _ "-" _ ./zone,
+                                     $snmp-object-value = ./capacity-max );
+
+                call snmp-mib-poke ( $snmp-object-type = "integer",
+                                     $snmp-instance-name = $mx-power _ "-" _ $mx-allocated-capacity _ "-" _ $mx-power-zone _ "-" _ ./zone,
+                                     $snmp-object-value = ./capacity-allocated );
+
+                call snmp-mib-poke ( $snmp-object-type = "integer",
+                                     $snmp-instance-name = $mx-power _ "-" _ $mx-remaining-capacity _ "-" _ $mx-power-zone _ "-" _ ./zone,
+                                     $snmp-object-value = ./capacity-remaining );
+
+                call snmp-mib-poke ( $snmp-object-type = "integer",
+                                     $snmp-instance-name = $mx-power _ "-" _ $mx-actual-usage _ "-" _ $mx-power-zone _ "-" _ ./zone,
+                                     $snmp-object-value = ./capacity-actual-usage );
+            }
+        }
+    }
+}
+
+template snmp-mib-poke ( $snmp-object-type, $snmp-instance-name, $snmp-object-value ) {
+    var $rpc = <request-snmp-utility-mib-set> {
+        <object-type> $snmp-object-type;
+        <instance> $snmp-instance-name;
+        <object-value> $snmp-object-value;
+    }
+    var $results = jcs:invoke($rpc);
+}
