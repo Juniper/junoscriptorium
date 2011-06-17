@@ -1,0 +1,47 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns logical = "http://iptools.net/logical";
+ns bitwise = "http://iptools.net/bitwise";
+ns iptools = "http://iptools.net/iptools";
+
+import "../import/junos.xsl";
+
+
+template logical:and ( $bitA = "0", $bitB = "0" ) {
+	if ($bitA eq "1" && $bitB eq "1") {1}
+	else {0}
+}
+
+template logical:or ( $bitA = "0", $bitB = "0" ) {
+	if ($bitA eq "1" || $bitB eq "1") {1}
+	else {0}
+}
+
+template logical:nand ( $bitA = "0", $bitB = "0" ) {
+	if ($bitA eq "0" && $bitB eq "0") {1}
+	else {0}
+}
+
+template logical:nor ( $bitA = "0", $bitB = "0" ) {
+	if ($bitA eq "0" || $bitB eq "0") {1}
+	else {0}
+}
+
+template logical:xor ( $bitA = "0", $bitB = "0" ) {
+	if ($bitA ne $bitB) {1}
+	else {0}
+}
+
+template logical:xnor ( $bitA = "0", $bitB = "0" ) {
+	if ($bitA eq $bitB) {1}
+	else {0}
+}
+
+template logical:not ( $bitA = "0" ) {
+	if ($bitA eq "0") {1}
+	else {0}
+}
+
