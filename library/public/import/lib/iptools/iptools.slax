@@ -1,0 +1,71 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns logical = "http://iptools.net/logical";
+ns bitwise = "http://iptools.net/bitwise";
+ns binary = "http://iptools.net/binary";
+ns circuit = "http://iptools.net/circuit";
+ns iptools = "http://iptools.net/iptools";
+
+import "../import/junos.xsl";
+import "./bintools.slax";
+
+
+template iptools:ipv4-next-net ($ipA, $plen = substring-after($ipA, "/"), $inc = "1") {
+	
+
+	var $realinc = $inc - ($plen > number(substring-after($ipA, "/")));
+	
+
+
+		var $ipbinA = { call binary:ipv42bin ($ipA = $ipA); }
+		var $binplen = { call binary:pre2bin ($prelen = $plen); }
+		var $x = { call binary:dec2bin ($dec = $realinc, $width = $plen); }
+		var $y = { call circuit:alu ($binA = substring($ipbinA, 1, $plen), $binB = $x); }
+		var $net = $y _ substring-after($binplen, substring-before($binplen, "0"));
+		call binary:bin2ipv4($binA = $net _ "/" _ $binplen);
+
+
+	
+	
+	
+}
+
+
+template iptools:ipv4-last-net ($ipA, $plen = substring-after($ipA, "/"), $inc = "1") {
+
+	var $realinc = $inc - ($plen < number(substring-after($ipA, "/")));
+
+
+		var $ipbinA = { call binary:ipv42bin ($ipA = $ipA); }
+		var $binplen = { call binary:pre2bin ($prelen = $plen); }
+		var $x = { call binary:dec2bin ($dec = $realinc, $width = $plen); }
+		var $y = { call circuit:alu ($binA = substring($ipbinA, 1, $plen), $binB = $x, $ctrl = "1"); }
+		var $net = $y _ substring-after($binplen, substring-before($binplen, "0"));
+		call binary:bin2ipv4($binA = $net _ "/" _ $binplen);
+
+
+
+	
+
+}
+
+
+template iptools:ipv4-summ ($ipA, $ipB, $plen = "32") {
+	
+	var $xipbinA = { call binary:ipv42bin ($ipA = substring-before ($ipA, "/") _ "/" _ $plen); }	
+	var $ipbinB = { call binary:ipv42bin ($ipA = $ipB); }
+	
+	
+	var $summplen = { call circuit:ipsumm ($ipbinA = $xipbinA, $ipbinB = $ipbinB); }
+
+     var $summnet = substring($xipbinA, 1, string-length(substring-before($summplen, "0"))) _ 
+                    substring-after($summplen, substring-before($summplen, "0"));
+
+	call binary:bin2ipv4 ($binA = $summnet _ "/" _ $summplen);
+	
+}
+ 
+
