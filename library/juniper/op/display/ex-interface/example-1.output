@@ -27,27 +27,27 @@ What the customer wanted was the output to include the "description" field from 
 Output from the operation script "ex-interface"
 
 jnpr@VC2-SPP> op ex-interface
-Interface  State  VLAN Member           Blocked     Description
-ae0        up     vlan200               unblocked  
-ae1        up     vlan200               RTG Blocked
-ge-0/0/10  down   default               unblocked  
-ge-0/0/11  down   default               unblocked  
-ge-0/0/12  down   default               unblocked  
-ge-0/0/13  down   default               unblocked  
-ge-0/0/14  down   default               unblocked  
-ge-0/0/15  down   default               unblocked  
-ge-0/0/16  down   default               unblocked   Link to SD
-ge-0/0/17  down   default               unblocked  
-ge-0/0/18  down   default               unblocked  
-ge-0/0/19  down   default               unblocked  
-ge-1/0/0   down   vlan200               unblocked   Link to NY
-ge-2/0/0   up     netman                unblocked 
+Interface  State  VLAN Member  Blocked      Speed  Duplex  Auto-Negotiation  Status     Description
+ae0        up     vlan200      unblocked    Auto   Auto    enabled           complete
+ae1        up     vlan200      RTG Blocked  Auto   Auto    enabled           complete
+ge-0/0/10  down   default      unblocked    Auto   Auto    enabled           incomplete
+ge-0/0/11  down   default      unblocked    Auto   Auto    enabled           incomplete
+ge-0/0/12  down   default      unblocked    Auto   Auto    enabled           incomplete
+ge-0/0/13  down   default      unblocked    Auto   Auto    enabled           incomplete
+ge-0/0/14  down   default      unblocked    Auto   Auto    enabled           incomplete
+ge-0/0/15  down   default      unblocked    Auto   Auto    enabled           incomplete
+ge-0/0/16  down   default      unblocked    Auto   Auto    enabled           incomplete  Link to SD
+ge-0/0/17  down   default      unblocked    Auto   Auto    enabled           incomplete 
+ge-0/0/18  down   default      unblocked    Auto   Auto    enabled           incomplete
+ge-0/0/19  down   default      unblocked    Auto   Auto    enabled           incomplete
+ge-1/0/0   down   vlan200      unblocked    Auto   Auto    enabled           incomplete  Link to NY
+ge-2/0/0   up     netman       unblocked    Auto   Auto    enabled           complete
 
 
 Output from the operation script limited to a member "interface fpc 1"
 
 jnpr@VC2-SPP> op ex-interface fpc 1
-Interface  State  VLAN Member           Blocked     Description
-ge-1/0/0   down   vlan200               unblocked   Link to NY
+Interface  State  VLAN Member  Blocked    Speed  Duplex  Auto-Negotiation  Status      Description
+ge-1/0/0   down   vlan200      unblocked  Auto   Auto    enbaled           incomplete  Link to NY
 
 The script only works on >=JUNOS 9.3 because the structure returned by the get-ethernet-switching-interface-information call changed between JUNOS9.2 and JUNOS9.3.  If you wish to run this on a earlier version of JUNOS, I have documented in the imbedded comments what needs to be changed to make it work.
