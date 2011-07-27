@@ -1,7 +1,7 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.07
- * Last Modified : June 3, 2011
+ * Version       : 1.08
+ * Last Modified : July 26, 2011
  * Platform      : all
  * Release       : JUNOS 8.2 and above
  *
@@ -60,8 +60,8 @@ ns ext = "http://xmlsoft.org/XSLT/namespace";
 import "../import/junos.xsl";
 
 /* Update everytime the parts list is changed */
-var $last-eol-parts-list-update = "06/03/2011";
-var $version = "1.07";
+var $last-eol-parts-list-update = "07/28/2011";
+var $version = "1.08";
 
 /* These are used within the program to minimize mistypes */
 var $eol-announcement-date = "EOL Announcement Date";
@@ -687,6 +687,171 @@ template build-line( $length ) {
  * <description> - Description to use (for quad-pics because their description isn't reliable
  */
 var $eol-parts-rtf = {
+    <part> {
+        <psn-number> "PSN-2011-07-314";
+        <model-number> "DPCE-R-2XGE-XFP";
+        <part-number> "750-020503";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "07/18/2011";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "07/31/2012";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "07/31/2013";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "07/31/2014";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "07/31/2016";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "10/31/2016";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "07/31/2017";
+        }
+    }
+    <part> {
+        <psn-number> "PSN-2011-07-314";
+        <model-number> "DPCE-X-20GE-2XGE";
+        <part-number> "750-022766";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "07/18/2011";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "07/31/2012";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "07/31/2013";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "07/31/2014";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "07/31/2016";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "10/31/2016";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "07/31/2017";
+        }
+    }
+    <part> {
+        <psn-number> "PSN-2011-07-314";
+        <model-number> "DPCE-R-Q-4XGE-XFP";
+        <part-number> "750-016833";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "07/18/2011";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "07/31/2012";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "07/31/2013";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "07/31/2014";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "07/31/2016";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "10/31/2016";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "07/31/2017";
+        }
+    }
+    <part> {
+        <psn-number> "PSN-2011-07-314";
+        <model-number> "DPCE-R-Q-40GE-SFP";
+        <part-number> "750-016670";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "07/18/2011";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "07/31/2012";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "07/31/2013";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "07/31/2014";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "07/31/2016";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "10/31/2016";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "07/31/2017";
+        }
+    }
+    <part> {
+        <psn-number> "PSN-2011-07-315";
+        <model-number> "DPCE-X-40GE-TX";
+        <part-number> "750-021617";
+        <date> {
+            <type> "EOL Announcement Date";
+            <date> "07/18/2011";
+        }
+        <date> {
+            <type> "Last Order Date";
+            <date> "12/31/2012";
+        }
+        <date> {
+            <type> "Last Date to Convert Warranty";
+            <date> "12/31/2013";
+        }
+        <date> {
+            <type> "Same-day Support Discontinued";
+            <date> "12/31/2014";
+        }
+        <date> {
+            <type> "Next-day Support Discontinued";
+            <date> "12/31/2016";
+        }
+        <date> {
+            <type> "End of New JUNOS Release Support";
+            <date> "03/31/2017";
+        }
+        <date> {
+            <type> "End of Support";
+            <date> "12/31/2017";
+        }
+    }
     <part> {
         <psn-number> "PSN-2011-02-156";
         <model-number> "JX-1ADSL-B-S";

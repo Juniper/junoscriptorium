@@ -48,9 +48,9 @@
  (Contact information can be retrieved by clicking on the upper-right link).
  
  Minimum JUNOS Version: 8.2 (Unofficially, late revisions of 7.6-8.1 should work as well)
- Latest Script Version: 1.07
- MD5 Checksum: 820d6130704eb5ed1bd1378431ac268d
- SHA-256 Checksum: 86c2aaee69facb7b031ad26756ead22fefda1ccbe303eb5cb0baf2979d352e64
+ Latest Script Version: 1.08
+ MD5 Checksum: 88c79972f057bc5aedeed567b23cc69c
+ SHA-256 Checksum: fcf5b720637cab4612a0ad5d391a5643fa5fc0b6c449e822ca1fcda5bb423f19
 ]]>
   </description>
   <example>
