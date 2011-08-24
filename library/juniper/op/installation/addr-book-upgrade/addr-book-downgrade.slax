@@ -1,0 +1,204 @@
+/*
+*
+*    NAME: addr-book-downgrade.slax
+*    PURPOSE: This op script is used to convert address books from global
+*             address book to zone-defined address books. User can run it
+*             before downgrade Junos to 11.1 or earlier version software.
+*
+*
+*    CREATED: 08/23/11
+*    BY: Jingbo Ni
+*    VERSION: 1.00
+*
+*    Platform supported: all SRXs (branch and high-end)
+*
+*    MODIFICATION HISTORY:
+*        V1.00 = Initial release
+*
+*/
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+/* This is an op script */
+
+
+match / {
+ <op-script-results> {
+
+				var $lsys := { call get-lsys(); }
+				/*
+				if ( not(jcs:empty($lsys)) && $lsys != "root-logical-system" ) {
+					<op-script-results> {
+						<output> "Current logical system is " _ $lsys _ "\nDowngrade can only be performed by the root user in the root system."; 
+						<xslt:message terminate="yes"> "";
+					}
+				}
+				*/
+			/* When $lsys == "", the device is assumed to be a branch device, which doesn't support lsys at all */
+		if ( not(jcs:empty($lsys)) && $lsys != "" &&  not (contains ($lsys,"root-logical-system")) ) {
+                       	<op-script-results> {
+                        	<output> "Current logical system is " _ $lsys _ "\nDowngrade can only be performed by the root user in the root system.";
+                               	<xslt:message terminate="yes"> "";
+                	}
+                }
+                /* Check version. If >= 11.2, do address book conversion */
+
+                var $version = { call get-junos-version(); }
+
+				 
+				
+                if ($version > 11.1) {
+                        var $conn = jcs:open();
+                        <output> "Converting address books in the committed configuration database to pre-11.2 ..."; 
+						 
+				
+                        var $books-rpc = <get-configuration database="committed"> {
+                                <configuration> {
+                                        <security> {
+                                                <address-book>;
+                                        }
+                                }
+                        }
+
+			
+                        var $all-books := jcs:execute($conn, $books-rpc);
+
+
+			/*
+			copy-of $all-books;
+
+                        copy-of $all-books/security/address-book[name=="global"]/address;
+			*/
+
+            if ( $all-books/security/address-book[name=="global"]/address ) {
+				  
+                               	<output> "ERROR OCCURRED:\nDefault global address book found. Pre-11.2 JUNOS does not support default global address books, the downgrade cannot be performed.";
+								<xslt:message terminate="yes"> "";
+			} else if ( $all-books ) {
+				
+                                var $cfg := <configuration> {
+                                        <security> {
+                                                /* To delete 11.1 address books */
+                                                
+                                                for-each ($all-books) {
+
+                                                        for-each (./security/address-book[name!="global"]) {
+                                                                <address-book delete="delete"> {
+                                                                        <name> ./name;
+                                                                }
+                                                        }
+                                                }
+
+                                                <zones> {
+                                                        /* Loop through all books and convert them to pre-11.1 books */
+                                                        for-each ($all-books) {
+                                                                        for-each (./security/address-book[name != "global"]) {
+                                                                                if ( not(jcs:empty(./address)) ) {
+										    for-each (./attach/zone) {
+                                                                                        	var $zone = ./name;
+                                                                                                /* We only convert address books that attach to a zone 
+                                                                                                 * For those attached to interface or whatever, pre-11.1 images
+                                                                                                 * don't support them anyway
+                                                                                                 */
+                                                                                                <security-zone> {
+                                                                                                        <name> $zone;
+                                                                                                        <address-book> {
+                                                                                                                /* "copy-of ." consumes too much memory. 
+                                                                                                                 * So we explicitly reconstruct the address/address-set objects
+                                                                                                                 */
+                                                                                                                for-each (../../address) {
+                                                                                                                        <address> {
+                                                                                                                                <name> ./name;
+                                                                                                                                if ( ./ip-prefix ) {
+                                                                                                                                        <ip-prefix> ./ip-prefix;
+                                                                                                                                } else if ( ./dns-name ) {
+                                                                                                                                        <dns-name> {
+                                                                                                                                                <name> ./dns-name/name;
+                                                                                                                                                if ( ./dns-name/ipv4-only ) {
+                                                                                                                                                        <ipv4-only>;
+                                                                                                                                                } else if ( ./dns-name/ipv6-only) {
+                                                                                                                                                        <ipv6-only>;
+                                                                                                                                                }
+                                                                                                                                        }
+
+                                                                                                                                } else if ( ./range-address ) {
+                                                                                                                                        /* Do nothing as older version doesn't support range addresses. */
+                                                                                                                                } else if ( ./wildcard-address ) {
+                                                                                                                                        <wildcard-address> {
+                                                                                                                                                <name> ./wildcard-address/name;
+                                                                                                                                        }
+                                                                                                                                }
+                                                                                                                        }
+                                                                                                                }
+                                                                                                                for-each (../../address-set) {
+                                                                                                                        <address-set> {
+                                                                                                                                <name> ./name;
+                                                                                                                                for-each (./address) {
+                                                                                                                                        <address> {
+                                                                                                                                                <name> ./name;
+                                                                                                                                        }
+                                                                                                                                }
+                                                                                                                                for-each (./address-set) {
+                                                                                                                                        <address-set> {
+                                                                                                                                                <name> ./name;
+                                                                                                                                        }
+                                                                                                                                }
+                                                                                                                        }
+                                                                                                                }
+                                                                                                        }
+                                                                                                }
+ 										    }
+                                                                                }
+                                                                        }
+                                                        }
+                                                }
+                                        }
+                                }
+
+                                /* For debugging only */
+                                /*copy-of $cfg;*/
+
+				if ( $cfg ) {
+                                	var $result := { call jcs:load-configuration($connection = $conn, $configuration = $cfg); }
+
+
+                                	if( $result//xnm:error ) {
+                                        	<output> "ERRORS OCCURRED:\n\t";
+                                        	for-each( $result//xnm:error ) {
+                                                	<output> message;
+                                        	}
+                                        	<output> "Unable to perform downgrade. Nothing committed.\nPlease commit or clean up your modifications and try again.";
+                                	}
+					<output> "Address books downgraded and committed.";
+				} else {
+					<output> "No address book converted.";
+				}
+                        }
+                        var $close = jcs:close($conn);
+                }
+        }
+}
+
+
+/*
+  * Template the get the running JUNOS version
+  */
+template get-junos-version() {
+
+     var $osrelease = jcs:sysctl("kern.osrelease", "s");
+
+     var $version = jcs:split("[IRB-]", $osrelease, 2);
+
+     expr $version[1];
+ 
+}
+
+template get-lsys() {
+	 
+    var $command = <command> "show system security-profile auth-entry detail | display xml";
+    var $sysinfo := jcs:invoke( $command );
+    copy-of $sysinfo//logical-system-name; 
+}
