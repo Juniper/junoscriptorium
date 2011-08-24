@@ -1,15 +1,16 @@
 <?xml version="1.0"?>
 <script>
   <title>addr-book-upgrade.slax</title>
+  <alternate>add-book-downgrade.slax</title>
   <author>jni</author>
   <synopsis>
- 	This op-script is used to convert address book from zone-defined address books (used by Junos 11.1 and earlier version) to global address book.
+ 	These op-scripts are used to convert address book from zone-defined address books to global address book, and vice versa.
   </synopsis>
   <coe>op</coe>
   <type>installation</type>
 
   <description>
-User can run this op-script after 11.1 or later version software boots up.
+Run the upgrade script to convert address book from zone-defined address books (applicable in Junos 11.1 and earlier) to global address book (applicable in 11.2 and later). Run the downgrade script to convert address book from global address book to zone-defined address books. 
   </description>
 
   <keyword>installation</keyword>
