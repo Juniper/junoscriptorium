@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>addr-book-upgrade.slax</title>
-  <alternate>add-book-downgrade.slax</title>
+  <alternate>add-book-downgrade.slax</alternate>
   <author>jni</author>
   <synopsis>
  	These op-scripts are used to convert address book from zone-defined address books to global address book, and vice versa.
