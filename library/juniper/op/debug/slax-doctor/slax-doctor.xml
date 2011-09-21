@@ -47,8 +47,8 @@
 The slax-doctor script will process the script file line and line and report any possible problems it finds.
 
 Minimum JUNOS Version: 9.4.
-Latest Script Version: 1.42
-SHA-256 Checksum: b165914b2409c6aaa69b3f97a72dd225cdb6c882391ff436ae5f50d31487000e]]>
+Latest Script Version: 1.43
+SHA-256 Checksum: c00ff4623602b8d8f1f6b7461e15245a89f5b486876b1f0a538f5bcfc32afb90]]>
   </description>
   <example>
     <description>

@@ -1,7 +1,7 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.42
- * Last Modified : September 28, 2009
+ * Version       : 1.43
+ * Last Modified : September 21, 2011
  * Platform      : all
  * Release       : 9.4 and above
  * License       : Public Domain
@@ -48,6 +48,7 @@
  * 1.41 - Added check for back function argument syntax
  *      - Added check for missing namespace on <func:function> function name
  * 1.42 - Fixed function argument syntax check to not mistake templates for functions
+ * 1.43 - Made minor syntax change to workaround a PR - no change in functionality
  *
  */ 
 
@@ -611,7 +612,8 @@ template process-lines( $chunk, $base-index, $no-quote, $no-containers, $no-cont
     }
     
     /* Recurse through the chunk... */
-    if( count( $chunk ) >= $index + 1 ) {
+    var $new_test_var = count( $chunk );
+    if( ($new_test_var >= $index + 1) ) {
         call process-lines( $chunk, $base-index, $no-quote, $no-containers, $no-containers-or-semi-colon, $templates, $comment-line = $new-comment-line, $index = $index + 1 );
     }
     else {
