@@ -9,7 +9,8 @@
   <type>interfaces</type>
 
   <description>
-The requirement is that when a link status changes from up to down or down to up, send a syslog message with the interface description. You can also generate a new SNMP trap based on the newly created syslog message.
+The requirement is that when a link status changes from up to down or down to up, send a syslog message with the interface description.
+You can also generate a new SNMP trap based on the newly created syslog message.
 
   </description>
 
