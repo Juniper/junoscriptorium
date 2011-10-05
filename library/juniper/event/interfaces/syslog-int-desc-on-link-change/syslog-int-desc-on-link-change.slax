@@ -1,4 +1,6 @@
-/* syslog-int-desc-on-link-change.slax
+/*
+*
+*    NAME: syslog-interface-description-on-link-change.slax
 *    PURPOSE: The requirement is that when a link status changes
 *             from up to down or down to up, send a syslog messsage
 *             with the interface description. You can also gererate
@@ -7,12 +9,14 @@
 *
 *    CREATED: 09/15/11
 *    BY: Robert Delancy (Systems Engineer - Juniper Networks)
-*    LAST MOD: 09/15/11
+*    LAST MOD: 09/19/11
 *    BY: Robert Delancy
-*    VERSION: 1.00
+*    VERSION: 1.01 
 *
 *    MODIFICATION HISTORY:
 *        V1.00 = Initial release
+*        V1.01 = Adjusted show interface variables to support SNMP
+*                function
 *
 */ 
 version 1.0;
@@ -34,28 +38,32 @@ import "../import/junos.xsl";
 
 /*
 *
-* To invoke this event script enter the following into the device config.
+* To invoke this event script, place the syslog-interface-description-on-
+* link-change.slax file in /var/db/scripts/event/ and enter the following 
+* into the device config.
 * The second policy is to also create a trap on the newly created syslog
 * message.
 *
 * ----Begin config snippet---- 
 *
-* [edit event-options]
-* root@ROUTER# show 
+* root@JUNIPER_DEVICE# show event-options
 * policy sylog_if_description {
-*     events [ snmp_trap_link_down snmp_trap_link_up ];
+*     events [ snmp_trap_link_up snmp_trap_link_down ];
 *     then {
-*         event-script syslog-int-desc-on-link-change.slax;
+*         event-script syslog-interface-description-on-link-change.slax;
 *     }
 * }
 * policy snmptrap_if_description {
-*     events NEW_SNMP_TRAP_LINK_DOWN;
+*     events SYSTEM;
+*     attributes-match {
+*         SYSTEM.message matches NEW_SNMP_TRAP_LINK;
+*     }
 *     then {
 *         raise-trap;
 *     }
 * }
 * event-script {
-*     file syslog-int-desc-on-link-change.slax;
+*     file syslog-interface-description-on-link-change.slax;
 * }
 *
 * ----End config snippet----
@@ -72,7 +80,7 @@ match / {
 <event-script-input> {
 
         /* Record the syslog message */
-        var $message = event-script-input/trigger-event/message;
+	var $message = event-script-input/trigger-event/message;
 
         /* Record the syslog facility */
         var $facility = event-script-input/trigger-event/facility;
@@ -80,9 +88,12 @@ match / {
         /* Record the syslog severity */
         var $severity = event-script-input/trigger-event/severity;
 
-       /* Record the syslog interface name */
+        /* Record the triggering event */
+        var $trigger = event-script-input/trigger-event/id;
+
+        /* Record the syslog interface name */
         var $int-name = event-script-input/trigger-event/attribute-list/
-        attribute[name=="interface-name"]/value; 
+	attribute[name=="interface-name"]/value; 
 
         /* Record the syslog hostname */
         var $hostname = event-script-input/trigger-event/hostname;
@@ -92,13 +103,62 @@ match / {
 * Get the interface descriptions
 *
 /*
+
         /* Record the infterface desctiption */
-        var $rpc =  <command> 'show interfaces descriptions ' _ $int-name;
-        var $ifdesc = jcs:invoke($rpc);
+        /* 
+	*old way to do it	
+	* var $rpc =  <command> 'show interfaces descriptions ' _ $int-name;
+	*  var $ifdesc-out = jcs:invoke($rpc);
+	*/
+
+	/*new way to do it*/
+	var $rpc = {
+		<get-interface-information> {
+			<descriptions>;
+			<interface-name> $int-name;
+		}
+	}
+        var $ifdesc-out = jcs:invoke($rpc);
+		 
+var $description = {
+	if ( not ( jcs:empty($ifdesc-out/logical-interface/description) ) ) {
+		expr $ifdesc-out/logical-interface/description;
+	}
+	else if ( not ( jcs:empty($ifdesc-out/physical-interface/description) ) ) {
+		expr $ifdesc-out/physical-interface/description;
+        }
+      }
+
+var $admin-status = {
+        if ( not ( jcs:empty($ifdesc-out/logical-interface/admin-status) ) ) {
+                expr $ifdesc-out/logical-interface/admin-status;
+        }
+        else if ( not ( jcs:empty($ifdesc-out/physical-interface/admin-status) ) ) {
+                expr $ifdesc-out/physical-interface/admin-status;
+        }
+      }
+
+var $oper-status = {
+        if ( not ( jcs:empty($ifdesc-out/logical-interface/oper-status) ) ) {
+                expr $ifdesc-out/logical-interface/oper-status;
+        }
+        else if ( not ( jcs:empty($ifdesc-out/physical-interface/oper-status) ) ) {
+                expr $ifdesc-out/physical-interface/oper-status;
+        }
+      }
+
+var $phyname = {
+        if ( not ( jcs:empty($ifdesc-out/logical-interface/name) ) ) {
+                expr $ifdesc-out/logical-interface/name;
+        }
+        else if ( not ( jcs:empty($ifdesc-out/physical-interface/name) ) ) {
+                expr $ifdesc-out/physical-interface/name;
+        }
+      }
 
 /*
 *
-* Create new syslog message
+* Create syslog facility.severity 
 *
 /*
 
@@ -110,9 +170,10 @@ match / {
 * Assemble new syslog message
 *
 /* 
-        /* Create new syslog message */
-        var $new_message = "NEW_" _ $message _ ", " _ $hostname _ ", " _ $ifdesc;
-
+        
+         /* Create new syslog message */
+        var $new_message = "NEW_" _ $trigger _ ", " _ $hostname _ ", " _ $phyname _ ", " _ $admin-status _ ", " _ $oper-status _ ", " _ $description;
+     
 /*
 *
 * Generate newly assembled message
@@ -123,4 +184,3 @@ match / {
         expr jcs:syslog( $facility-severity, $new_message);
    }
 }
-
