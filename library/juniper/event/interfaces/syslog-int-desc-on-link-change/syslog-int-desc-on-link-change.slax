@@ -1,0 +1,126 @@
+/* syslog-int-desc-on-link-change.slax
+*    PURPOSE: The requirement is that when a link status changes
+*             from up to down or down to up, send a syslog messsage
+*             with the interface description. You can also gererate
+*             a new SNMP trap based on the newly created syslog 
+*             message.
+*
+*    CREATED: 09/15/11
+*    BY: Robert Delancy (Systems Engineer - Juniper Networks)
+*    LAST MOD: 09/15/11
+*    BY: Robert Delancy
+*    VERSION: 1.00
+*
+*    MODIFICATION HISTORY:
+*        V1.00 = Initial release
+*
+*/ 
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+*
+* This event script will gererate a new syslog message based on the triggering 
+* syslog message of SNMP_TRAP_LINK_DOWN or SNMP_TRAP_LINK_UP. It collects the
+* related interface information from the syslog message and also grabs the 
+* interface decription to form a new syslog message.
+*
+*/
+
+/*
+*
+* To invoke this event script enter the following into the device config.
+* The second policy is to also create a trap on the newly created syslog
+* message.
+*
+* ----Begin config snippet---- 
+*
+* [edit event-options]
+* root@ROUTER# show 
+* policy sylog_if_description {
+*     events [ snmp_trap_link_down snmp_trap_link_up ];
+*     then {
+*         event-script syslog-int-desc-on-link-change.slax;
+*     }
+* }
+* policy snmptrap_if_description {
+*     events NEW_SNMP_TRAP_LINK_DOWN;
+*     then {
+*         raise-trap;
+*     }
+* }
+* event-script {
+*     file syslog-int-desc-on-link-change.slax;
+* }
+*
+* ----End config snippet----
+*
+*/
+
+/*
+*
+*  Capture the arguments from the triggering event that will be passed into the script.
+*
+*/
+
+match / {
+<event-script-input> {
+
+        /* Record the syslog message */
+        var $message = event-script-input/trigger-event/message;
+
+        /* Record the syslog facility */
+        var $facility = event-script-input/trigger-event/facility;
+
+        /* Record the syslog severity */
+        var $severity = event-script-input/trigger-event/severity;
+
+       /* Record the syslog interface name */
+        var $int-name = event-script-input/trigger-event/attribute-list/
+        attribute[name=="interface-name"]/value; 
+
+        /* Record the syslog hostname */
+        var $hostname = event-script-input/trigger-event/hostname;
+
+/*
+*
+* Get the interface descriptions
+*
+/*
+        /* Record the infterface desctiption */
+        var $rpc =  <command> 'show interfaces descriptions ' _ $int-name;
+        var $ifdesc = jcs:invoke($rpc);
+
+/*
+*
+* Create new syslog message
+*
+/*
+
+        /* Assemble the facility-sevrity string */        
+        var $facility-severity = $facility _ "." _ $severity;
+
+/*
+*
+* Assemble new syslog message
+*
+/* 
+        /* Create new syslog message */
+        var $new_message = "NEW_" _ $message _ ", " _ $hostname _ ", " _ $ifdesc;
+
+/*
+*
+* Generate newly assembled message
+*
+/*
+ 
+        /*  Create syslog message */  
+        expr jcs:syslog( $facility-severity, $new_message);
+   }
+}
+

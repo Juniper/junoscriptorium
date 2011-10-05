@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<script>
+  <title>syslog-int-desc-on-link-change.slax</title>
+  <author>royklee</author>
+  <synopsis>
+	Send a syslog message with interface descriptiong when a link status changes from up to down or down to up.
+  </synopsis>
+  <coe>event</coe>
+  <type>interfaces</type>
+
+  <description>
+The requirement is that when a link status changes from up to down or down to up, send a syslog message with the interface description. You can also generate a new SNMP trap based on the newly created syslog message.
+
+  </description>
+
+  <example>
+  <title>Sample configuration</title>
+  <description>Configuration for the script</description>
+  <config>syslog-int-desc-on-link-change.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
