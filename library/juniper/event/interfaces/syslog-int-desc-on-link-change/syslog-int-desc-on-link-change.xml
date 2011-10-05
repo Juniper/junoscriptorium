@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>syslog-int-desc-on-link-change.slax</title>
-  <author>royklee</author>
+  <author>rdelancy</author>
   <synopsis>
 	Send a syslog message with interface descriptiong when a link status changes from up to down or down to up.
   </synopsis>
