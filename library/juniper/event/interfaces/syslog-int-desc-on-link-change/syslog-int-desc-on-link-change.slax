@@ -1,6 +1,6 @@
 /*
 *
-*    NAME: syslog-interface-description-on-link-change.slax
+*    NAME: syslog-int-desc-on-link-change.slax
 *    PURPOSE: The requirement is that when a link status changes
 *             from up to down or down to up, send a syslog messsage
 *             with the interface description. You can also gererate
@@ -50,7 +50,7 @@ import "../import/junos.xsl";
 * policy sylog_if_description {
 *     events [ snmp_trap_link_up snmp_trap_link_down ];
 *     then {
-*         event-script syslog-interface-description-on-link-change.slax;
+*         event-script syslog-int-desc-on-link-change.slax;
 *     }
 * }
 * policy snmptrap_if_description {
@@ -63,7 +63,7 @@ import "../import/junos.xsl";
 *     }
 * }
 * event-script {
-*     file syslog-interface-description-on-link-change.slax;
+*     file syslog-int-desc-on-link-change.slax;
 * }
 *
 * ----End config snippet----
