@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <script>
   <title>enable-primary-nexthop-metric.slax</title>
-  <alternate>enable-alternate-nexthop-metrix.slax</alternate>
+  <alternate>enable-alternate-nexthop-metric.slax</alternate>
   <author>rlemm</author>
   <synopsis>
 	An event script that disabled an IPSec Tunnel based on a timeout from an RPM probe
