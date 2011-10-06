@@ -16,7 +16,7 @@ This script will get executed on the occurrence of event 'ping_test_completed'.
   </description>
 
   <example>
-    <config>enable-primary-nexthop-metric.conf</config>
+    <config>example-1.conf</config>
   </example>
 
   <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
