@@ -1,51 +1,14 @@
 user@cli# run op show-interface-status
-Interface      Status VLAN Members   Port-mode   Speed       Duplex
-ge-0/0/0.0     up     IC-to-ISG      untagged    Auto        Auto
-ge-0/0/1.0     up     IC-to-ISG      untagged    Auto        Auto
-ge-0/0/2.0     down   default        untagged    Auto        Auto
-ge-0/0/3.0     down   default        untagged    Auto        Auto
-ge-0/0/4.0     down   default        untagged    Auto        Auto
-ge-0/0/5.0     down   default        untagged    Auto        Auto
-ge-0/0/6.0     down   default        untagged    Auto        Auto
-ge-0/0/7.0     down   default        untagged    Auto        Auto
-ge-0/0/8.0     down   default        untagged    Auto        Auto
-ge-0/0/9.0     down   default        untagged    Auto        Auto
-ge-0/0/10.0    down   default        untagged    Auto        Auto
-ge-0/0/11.0    down   default        untagged    Auto        Auto
-ge-0/0/12.0    down   default        untagged    Auto        Auto
-ge-0/0/13.0    down   default        untagged    Auto        Auto
-ge-0/0/14.0    down   default        untagged    Auto        Auto
-ge-0/0/15.0    down   default        untagged    Auto        Auto
-ge-0/0/16.0    down   default        untagged    Auto        Auto
-ge-0/0/17.0    down   default        untagged    Auto        Auto
-ge-0/0/18.0    down   default        untagged    Auto        Auto
-ge-0/0/19.0    down   default        untagged    Auto        Auto
-ge-0/0/20.0    down   default        untagged    Auto        Auto
-ge-0/0/21.0    down   default        untagged    Auto        Auto
-ge-0/0/22.0    down   default        untagged    Auto        Auto
-ge-0/0/23.0    down   default        untagged    Auto        Auto
-ge-0/0/24.0    down   default        untagged    Auto        Auto
-ge-0/0/25.0    down   default        untagged    Auto        Auto
-ge-0/0/26.0    down   default        untagged    Auto        Auto
-ge-0/0/27.0    down   default        untagged    Auto        Auto
-ge-0/0/28.0    down   default        untagged    Auto        Auto
-ge-0/0/29.0    down   default        untagged    Auto        Auto
-ge-0/0/30.0    down   default        untagged    Auto        Auto
-ge-0/0/31.0    down   default        untagged    Auto        Auto
-ge-0/0/32.0    down   default        untagged    Auto        Auto
-ge-0/0/33.0    down   default        untagged    Auto        Auto
-ge-0/0/34.0    down   default        untagged    Auto        Auto
-ge-0/0/35.0    down   default        untagged    Auto        Auto
-ge-0/0/36.0    down   default        untagged    Auto        Auto
-ge-0/0/37.0    down   default        untagged    Auto        Auto
-ge-0/0/38.0    down   default        untagged    Auto        Auto
-ge-0/0/39.0    down   default        untagged    Auto        Auto
-ge-0/0/40.0    down   default        untagged    Auto        Auto
-ge-0/0/41.0    down   default        untagged    Auto        Auto
-ge-0/0/42.0    down   default        untagged    Auto        Auto
-ge-0/0/43.0    down   default        untagged    Auto        Auto
-ge-0/0/44.0    down   default        untagged    Auto        Auto
-ge-0/0/45.0    down   default        untagged    Auto        Auto
-ge-0/0/46.0    down   default        untagged    Auto        Auto
-ge-0/0/47.0    down   default        untagged    Auto        Auto
-
+Interface    Physical Description     Logical Description      Status VLAN Members  Vlan-Id  Port-mode   In(bps)   Out(bps)  In-Err    Out-Err   Speed-Conf  Duplex-Conf  Flow-Ctrl-Conf  Speed(neg)  Duplex(neg)  Flow-Ctrl(neg)
+ae6.0                                                          up     IC-to-ISG     100      untagged    186080    187144                        3Gbps                    disabled                                             
+ae7.0                                                          down   default       100      untagged    0         0                             Unspecified              disabled                                             
+ge-0/0/0.0                                                     up     IC-to-ISG     100      untagged    45496     320544                        Auto        Auto         enabled         1000 Mbps   full-duplex  None        
+ge-0/0/1.0                                                     up     IC-to-ISG     100      untagged    0         366048                        Auto        Auto         enabled         1000 Mbps   full-duplex  None        
+ge-0/0/2.0                                                     up     IC-to-ISG     100      untagged    46040     321568                        Auto        Auto         enabled         1000 Mbps   full-duplex  None        
+ge-0/0/3.0                                                     up     IC-to-ISG     100      untagged    0         366048                        Auto        Auto         enabled         1000 Mbps   full-duplex  None        
+ge-0/0/6.0                                                     up     IC-to-ISG     100      untagged    47032     319520                        1000mbps    Full-Duplex  enabled                                              
+ge-0/0/8.0                                                     down   default       100      untagged    0         0                             1000mbps    Full-Duplex  enabled                                              
+ge-0/0/18.0                                                    up     IC-to-ISG     100      untagged    0         366048                        Auto        Auto         enabled         1000 Mbps   full-duplex  Symmetric   
+ge-0/0/19.0                                                    up     IC-to-ISG     100      untagged    45496     321056                        Auto        Auto         enabled         1000 Mbps   full-duplex  Symmetric   
+ge-0/0/20.0                                                    up     IC-to-ISG     100      untagged    0         366496                        Auto        Auto         enabled         1000 Mbps   full-duplex  Symmetric   
+ge-0/0/21.0                                                    up     IC-to-ISG     100      untagged    0         365984                        Auto        Auto         enabled         1000 Mbps   full-duplex  Symmetric 

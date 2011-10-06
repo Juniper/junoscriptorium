@@ -2,11 +2,13 @@
  *  show_interface_staus.slax
  *
  *  Created by Todd Okolowicz (tokolowicz@juniper.net) on 20090713.
- *  Copyright (c) 2009 Juniper Networks. All rights reserved.
+ *  Copyright (c) 2011 Juniper Networks. All rights reserved.
  *
  *  Version History
  *  ===============
- *  v0.1	 Initial release.
+ *  v0.1    Initial release (by Todd Okolowicz)
+ *  v0.2    Modified to include vlans on a given port and whether
+ *          or not it was trunked (by Robery Lemm)
  *
  */
 
@@ -36,8 +38,14 @@ match / {
         var $results1 = jcs:invoke( "get-interface-information" );
  
         /* Send JUNOS XML API Element via jcs:invoke */
-        var $command-rpc = <command> "show ethernet-switching interfaces";
-        var $results2 = jcs:invoke( $command-rpc );
+        var $command-rpc2 = <command> "show ethernet-switching interfaces";
+        var $results2 = jcs:invoke( $command-rpc2 );
+
+        var $command-rpc3 = <command> "show interfaces extensive";
+        var $results3 = jcs:invoke( $command-rpc3 );
+
+        var $command-rpc4 = <command> "show ethernet switching table";
+        var $results4 = jcs:invoke( $command-rpc4 );
 
 	 /* This is a functional code block that uses a regular
  	  * expression to check the interface cli option for correct syntax. I 
@@ -55,24 +63,26 @@ match / {
 		}
 	  */
 	
-		var $matching-interface = $results2/interface [ interface-name == $interface ];
-		if( not ( jcs:empty ($interface ) ) and jcs:empty ( $matching-interface ) ) {
-			<xsl:message terminate="yes"> "The interface " _ $interface _ " isn't valid.\nUsage example: op show_interface_status interface ge-0/0/0.0";
-		}
+	 var $matching-interface = $results2/interface [ interface-name == $interface ];
+	 if( not ( jcs:empty ($interface ) ) and jcs:empty ( $matching-interface ) ) {
+	     <xsl:message terminate="yes"> "The interface " _ $interface _ " isn't valid.\nUsage example: op show_interface_status interface ge-0/0/0.0";
+	 }
 
 	 /* Create node list based on location path, loop through each node */
-        <output> jcs:printf("%-15s%-7s%-15s%-12s%-12s%-15s", "Interface", "Status", "VLAN Members", "Port-mode", "Speed", "Duplex" );
-            for-each ( $results2/interface [ string-length($interface)==0 or interface-name=$interface ] ) {
-				var $first-vlan = interface-vlan-member-list/interface-vlan-member/interface-vlan-name [position() == 1 ];
-                var $interface-name = interface-name;
-                var $status = interface-state;
-                var $vlan-tagness = interface-vlan-member-list/interface-vlan-member/interface-vlan-member-tagness;
-                var $logical-interface = $results1/physical-interface/logical-interface [name==$interface-name];
-                <output> jcs:printf("%-15s%-7s%-15s%-12s%-12s%-15s", $interface-name, $status, $first-vlan, $vlan-tagness, $logical-interface/../speed, $logical-interface/../duplex );
-		    	/* Second for-each loop embedded within first to create node-list of additional vlans possibly assigned to trunk interfaces */
-	    	    for-each ( ./interface-vlan-member-list/interface-vlan-member[position() != 1 ] ) {
-                    <output> jcs:printf("%-22s%-12s", "", ./interface-vlan-name );
-                }
-            }
+	 <output> jcs:printf("%-13s%-25s%-25s%-7s%-14s%-9s%-12s%-10s%-10s%-10s%-10s%-12s%-13s%-16s%-12s%-13s%-12s", "Interface", "Physical Description", "Logical Description", "Status", "VLAN Members", "Vlan-Id", "Port-mode", "In(bps)", "Out(bps)", "In-Err", "Out-Err", "Speed-Conf", "Duplex-Conf", "Flow-Ctrl-Conf", "Speed(neg)", "Duplex(neg)", "Flow-Ctrl(neg)" );
+	 for-each ( $results2/interface [ string-length($interface)==0 or interface-name=$interface ] ) {
+	     var $first-vlan = interface-vlan-member-list/interface-vlan-member/interface-vlan-name [position() == 1 ];
+	     var $vlan-tag = interface-vlan-member-list/interface-vlan-member/interface-vlan-member-tagid [position() == 1 ];
+	     var $interface-name = interface-name;
+	     var $status = interface-state;
+	     var $vlan-tagness = interface-vlan-member-list/interface-vlan-member/interface-vlan-member-tagness;
+	     var $logical-interface = $results1/physical-interface/logical-interface [name==$interface-name];
+	     var $physical-interface = $results3/physical-interface/logical-interface [name==$interface-name];
+	     var $phys-interface = $results3/physical-interface;
+	     <output> jcs:printf("%-13s%-25s%-25s%-7s%-14s%-9s%-12s%-10s%-10s%-10s%-10s%-12s%-13s%-16s%-12s%-13s%-12s", $interface-name, $physical-interface/../description, $logical-interface/description, $status, $first-vlan, $vlan-tag, $vlan-tagness, $logical-interface/../traffic-statistics/input-bps, $logical-interface/../traffic-statistics/output-bps, $logical-interface/../input-error-count, $logical-interface/../output-error-count, $logical-interface/../speed, $logical-interface/../duplex, $logical-interface/../if-flow-control, $physical-interface/../ethernet-autonegotiation/link-partner-speed, $physical-interface/../ethernet-autonegotiation/link-partner-duplexity,$physical-interface/../ethernet-autonegotiation/flow-control );
+	     for-each ( ./interface-vlan-member-list/interface-vlan-member[position() != 1 ] ) {
+	         <output> jcs:printf("%-70s%-14s%-14s", "", ./interface-vlan-name, ./interface-vlan-member-tagid );
+	     }
+	 }
     }
 }
