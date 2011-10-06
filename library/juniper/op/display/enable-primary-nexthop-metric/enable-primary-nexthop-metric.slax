@@ -1,0 +1,72 @@
+/*
+ * Author        : Robert Lemm
+ * Version       : 1.0
+ * Last Modified :
+ * Release       : 9.3 and above
+ * Platform      : all
+ *
+ * Description   : enable-primary-nexthop.slax
+ * This script changes the metric on an existing route entry for a remote host.
+ * This script will get executed on the occurrence of event 'ping_test_completed'.
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+match / {
+    <event-script-results> {
+        /*
+         * Open connection with mgd.
+         */
+        var $con = jcs:open();
+        if (not($con)) {
+            <xnm:error> {
+                <message> "Not able to connect with local mgd";
+            }
+        }
+        /*
+         * Change Metric for primary-path to 100 and secondary-path to 150.
+         */
+        var $change-route = { 
+            <configuration> {
+                <routing-options> {
+                    <static> {
+                        <route> {
+                            <name> "0.0.0.0/0";
+                            <qualified-next-hop> {
+                                <name> "10.254.1.2";
+                                <metric> "100";
+                            }
+                            <qualified-next-hop> {
+                                <name> "172.16.1.2";
+                                <metric> "150";
+                            }
+                        }
+                    }
+                }
+                <security> {
+                    <ike> {
+                        <gateway> {
+                            <name> "gw1";
+                            <ike-policy> "phase1-policy";
+                            <address> "172.31.1.1";
+                            <local-identity> {
+                                <hostname> {
+                                    <identity-hostname> "srx210";
+                                }
+                            }
+                            <external-interface> "ge-0/0/0.0";
+                        }
+                    }
+                }
+            }
+        }
+        var $change-route-results = {
+            call jcs:load-configuration($connection = $con, $configuration = $change-route);
+        }
+    }
+}

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<script>
+  <title>enable-primary-nexthop-metric.slax</title>
+  <alternate>enable-alternate-nexthop-metrix.slax</alternate>
+  <author>rlemm</author>
+  <synopsis>
+	An event script that disabled an IPSec Tunnel based on a timeout from an RPM probe
+  </synopsis>
+  <coe>op</coe>
+  <type>display</type>
+
+  <description>
+This script changes the metric on an existing route entry for a remote host.
+This script will get executed on the occurrence of event 'ping_test_completed'.
+
+  </description>
+
+  <example>
+    <config>enable-primary-nexthop-metric.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
