@@ -3,13 +3,16 @@
 <title>show-interface-status.slax</title>
 <author>tokolowicz</author>
 <synopsis>
-This script mirrors the Cisco IOS comand "show interface status"
+This script mirrors the Cisco IOS comand "show interface status" 
 </synopsis>
 <coe>op</coe>
 <type>display</type>
 
 <description>
-This script displays the logical-interface name, status, VLAN members, speed and duplex of the Ethernet switching-interfaces on the system. It is meant to provide similar output to the Cisco IOS command "show interface status". A command-line argument exists (interface) that filters the exact interface. Error checking is performed based on the interface entered by the user. 
+This script displays the logical-interface name, status, VLAN members and Id, speed and duplex of the Ethernet switching-interfaces on the system.
+It is meant to provide similar output to the Cisco IOS command "show interface status".
+A command-line argument exists (interface) that filters the exact interface.
+Error checking is performed based on the interface entered by the user. 
   
 
 </description>
