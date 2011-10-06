@@ -1,0 +1,117 @@
+Title: Propagation of configuration information across multiple Juniper switches
+Author: Kevin Barker, Independent Technology Group (kevinjbarker@indeptec.com)
+
+The primary script share-data.slax allows for the propagation of configuration information from one Junos device to another. This script takes advantage of the Junos group function to store information and allow that information to be pushed from one Juniper switch to another. 
+
+How to setup: 
+------------
+1-Install the scripts on the unit(s) that you will use as the primary or master configuration switches
+    a.	Copy share-data.slax to the /var/db/scripts/op directory
+    b.	Copy lib-util.slax to the /var/db/scripts/import directory 
+2-Implement the script in the configuration on the boxes it was installed on
+    a.	Issue the following configuration level commands:
+        i.	user@host# set system scripts op file share-data.slax 
+        ii.	user@host# commit
+3-Configure the data to be propagated
+    a.	Define the group(s) 
+    b.	Define the IP addresses for the switches to be updated
+    c.	Define the data
+4-Execute the script as desired on the master switch
+    a.	user@host> run op share-data
+
+How it works: 
+------------
+To implement you will build a group -  this is a Junos construct that assists in the management of configuration data. The group will contain the information to be pushed to both local switch (optional) and the remote switches. It will also contain the information needed to access the switches. 
+
+The script will read the group information, establish an ssh session to each remote switch and push out the information. It will create a matching group on each remote switch and will update that group every time the script is executed.
+
+It will also create an entry to apply the group information on the switch. This entry will be in the form of an apply-groups command. 
+
+How it looks: 
+------------
+Following is an example:
+
+Master switch setup: 
+        user@host# set groups vlan-distro apply-macro share-data 192.168.3.249
+        user@host# set groups vlan-distro apply-macro share-data 192.168.3.250
+        user@host# set groups vlan-distro vlans vlan-10 vlan-id 10
+	user@host# set groups vlan-distro vlans vlan-20 vlan-id 20
+	user@host# set groups vlan-distro vlans vlan-30 vlan-id 30
+Master switch execution:
+        user@host> run op share-data
+        The following group(s) are not applied locally:
+          vlan-distro
+        Apply locally now? [yes/no]: yes
+        results = {
+         commit-configuration;
+        }
+        sharing group 'vlan-distro'
+         target: 192.168.3.249
+          connecting to 192.168.3.249
+        root@192.168.3.249's password:
+          connected; transfering group vlan-distro
+        results = {
+         commit-configuration;
+        }
+         target: 192.168.3.250
+          connecting to 192.168.3.250
+        root@192.168.3.250's password:
+          connected; transfering group vlan-distro
+        results = {
+         commit-configuration;
+        }
+
+This shows the execution of the script. The first six lines show the application of the script to the local switch as the local switch IP was not defined in the group setup. The remaining lines show the application of the script to the two remote switches (IP 249 & 250)
+
+Remote Switch Configuration (After Push): 
+	user@host# show
+        ## Last changed: 2011-09-21 19:41:04 PDT
+        version 11.1R2.3;
+        /*
+         * $Id$
+         *
+         * ex4200-defaults.conf  - Default configurations for EX4200
+         *
+         * Copyright (c) 2010, Juniper Networks, Inc.
+         * All rights reserved.
+         */
+        groups {
+            vlan-distro {
+                apply-macro share-data {
+                    192.168.3.249;
+                    192.168.3.250;
+                }
+                vlans {
+                    vlan-10 {
+                        vlan-id 10;
+                    }
+                    vlan-20 {
+                        vlan-id 20;
+                    }
+                    vlan-30 {
+                        vlan-id 30;
+                    }
+                }
+            }
+        }
+        apply-groups vlan-distro;
+
+	user@host# show vlans | display inheritance | except #
+        vlan-10 {
+            vlan-id 10;
+        }
+        vlan-20 {
+            vlan-id 20;
+        }
+        vlan-30 {
+            vlan-id 30;
+        }
+
+Caveats: 
+Group information is inherited: If the information contained in the group is already configured on the switch it will not be updated. The existing configuration will remain in place. In turn if that information is then deleted from the group it will NOT be deleted from the base configuration. 
+
+Group information is displayed at the group level: By default group information is not displayed in the body of the configuration. To see group information use the following commands:
+	user@host# show system location | display inheritance | except # 
+
+Deleting the group on the master switch does not remove it from the remote switches: If the decision is made to stop using the script for data propagation please note that the remote switches will have to be edited to have the groups removed from them. 
+

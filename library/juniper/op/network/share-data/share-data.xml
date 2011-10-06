@@ -55,6 +55,7 @@
     <title>Example</title>
     <description>Simple test case</description>
     <config>example-1.conf</config>
+    <output>how-to.output</output>
     <input>example-1.input</input>
   </example>
 
