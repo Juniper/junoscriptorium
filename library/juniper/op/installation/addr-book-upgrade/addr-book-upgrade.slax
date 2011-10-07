@@ -4,12 +4,18 @@
 *    PURPOSE: This op script is used to convert address book from zone-defined
 *             address books (used by Junos 11.1 and earlier version) to global
 *             address book. User can run it after upgrade to Junos to 11.2 or
-*             later version.  
+*             later version.
 *
 *
 *    CREATED: 08/23/11
-*    BY: Jingbo Ni                                      
-*    VERSION: 1.00
+*    BY: Jingbo Ni
+*    VERSION: 1.01
+*    Change Notes:
+*    (1) Removed dead code and cleaned indentation messed up by Eclipse
+*    (2) Removed root sys check:
+*        (a). The CLI command used for vsys check is no longer supported since 11.4
+*        (b). Originally did vsys check to make sure the script won't be executed by non-root vsys. 
+*             But it's unnecessary as the scripts is not visible in non-vsys
 *
 *    Platform supported: all SRXs (branch and high-end)
 *
@@ -17,6 +23,7 @@
 *        V1.00 = Initial release
 *
 */
+
 version 1.0;
 ns junos = "http://xml.juniper.net/junos/*/junos";
 ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
@@ -26,44 +33,15 @@ import "../import/junos.xsl";
 
 match / {
 
-        /* Check version. If >= 11.1, do address book conversion */
-	var $cur-lsys = { call get-cur-lsys(); }
-	/*
-		if ( $cur-$lsys != "root-logical-system" ) {
-			<op-script-results> {
-				<output> "Current logical system is " _ $cur-lsys _ "\nUpgrade can only be performed by the root user in the root system."; 
-				<xslt:message terminate="yes"> "";
-			}
-		}
-	*/
-		
-	/* When cur-lsys is "", the device is assumed to be a branch device, which doesn't support lsys at all */
-	if ( not(jcs:empty($cur-lsys))  && $cur-lsys != "" &&  not (contains ($cur-lsys,"root-logical-system")) ) {
-        	<op-script-results> {
-               		<output> "Current logical system is " _ $cur-lsys _ "\nDowngrade can only be performed by the root user in the root system.";
-                       	<xslt:message terminate="yes"> "";
-        	}               
-        }              
 
+        /* Check version. If >= 11.1, do address book conversion */
         var $version = { call get-junos-version(); }
-		
-		
         if ($version > 11.1) {
                 var $conn = jcs:open();
-                
+
                 <op-script-results> {
- 
+
                         <output> "Converting old address books in the committed configuration database to " _ $version _ " address books ...";
-        				/*
-        				var $rpc0 = <get-configuration database="committed">;
-        				var $rpc1 = <get-configuration database="candidiate">;
-        				
-        				if ( $rpc0 != $rpc1 ) {
-        					<output> "There are uncommitted configurations. Upgrade can'y be performed.";
-        					<xslt:message terminate="yes"> ""; 
-        				}
-        				*/
-        				
                         var $rpc = <get-configuration database="committed"> {
                                 <configuration> {
                                         <security> {
@@ -71,56 +49,56 @@ match / {
                                         }
                                 }
                         }
-                        
-                        
 
-			var $lsys-rpc = <get-configuration database="committed"> {
+
+
+                        var $lsys-rpc = <get-configuration database="committed"> {
                                 <configuration> {
-                                        <logical-systems>;  
+                                        <logical-systems>;
                                 }
                         }
- 
+
                         var $root-sys-zones := jcs:execute($conn, $rpc);
 
 
-			var $lsys := jcs:execute($conn, $lsys-rpc);
- 				
- 			
+                        var $lsys := jcs:execute($conn, $lsys-rpc);
+
+
                          /* Loop through all zones to convert their address books */
-            var $cfg := <configuration> {
-               	if ( $root-sys-zones//address-book ) {   
-                       <security> {
-							call  gen-upgrade-cfg ( $zones = $root-sys-zones );  
-                       }        
-                }
-			    if ($lsys//security/zones//address-book) {
-						for-each ( $lsys//security ) { 
-					   		<logical-systems> {
-							
-								<name> ../name;					 
-                            	<security> {								 
-								 	call gen-upgrade-cfg ( $zones = . ); 
-								}
-							}
-                    	}
-				}
-			}
+                        var $cfg := <configuration> {
+                                if ( $root-sys-zones//address-book ) {
+                                                <security> {
+                                                        call  gen-upgrade-cfg ( $zones = $root-sys-zones );
+                                                }
+                                }
+                                if ($lsys//security/zones//address-book) {
+                                                for-each ( $lsys//security ) {
+                                                        <logical-systems> {
 
-			
-			copy-of $cfg;
-			
+                                                                <name> ../name;
+                                                                <security> {
+                                                                        call gen-upgrade-cfg ( $zones = . );
+                                                                }
+                                                        }
+                                                }
+                                }
+                        }
 
-			/* Loop through all old style address books configured in logical-systems 
+
+                        copy-of $cfg;
+
+
+                        /* Loop through all old style address books configured in logical-systems
                          * Normally it should not be a upgrade concern because older versions simply don't have
-		         * logical system concept. But we take care of it anyway to cover the case in which
+                         * logical system concept. But we take care of it anyway to cover the case in which
                          * a user may run the upgrade script after configuring old style address books in logical systems.
                          */
 
-			if ( $cfg//security/address-book ) {
+                        if ( $cfg//security/address-book ) {
                                 var $result := { call jcs:load-configuration($connection = $conn, $configuration = $cfg); }
 
                                 if( $result//xnm:error ) {
-                                		<output> "ERRORS OCCURRED:\n\t";
+                                                <output> "ERRORS OCCURRED:\n\t";
                                         for-each( $result//xnm:error ) {
                                                 <output> message;
                                         }
@@ -128,15 +106,15 @@ match / {
                                 } else {
                                         <output> "Address books conversion completed and committed.";
                                 }
-			} else {
+                        } else {
                                         <output> "No address book converted.";
-			}
+                        }
 
           }
                 var $close = jcs:close($conn);
         }
 
-} 
+}
 /* End of match */
 
 /*
@@ -151,88 +129,76 @@ template get-junos-version() {
      expr $version[1];
 }
 
-template get-cur-lsys() {
-	 
-    var $command = <command> "show system security-profile auth-entry detail | display xml";
-    var $sysinfo := jcs:invoke( $command );
-    if( $sysinfo//xnm:error ) {
-	/* Should be branch device */
-	copy-of $sysinfo;
-    } else {	
-    	copy-of $sysinfo//logical-system-name; 
-    }
-}
-
 template gen-upgrade-cfg ( $zones )
 {
-	for-each( $zones//security-zone ) {
-       		if ( .//address-book/address ) {
-                	/* If there're old address books */
+        for-each( $zones//security-zone ) {
+                if ( .//address-book/address ) {
+                        /* If there're old address books */
                         var $zone = ./name;
                         var $bookname = $zone _ "-address-book";
 
                         /* Delete old style address book from zone */
                         <zones> {
-                        	<security-zone> {
-                               		<name> $zone;
+                                <security-zone> {
+                                        <name> $zone;
                                         <address-book delete="delete">;
-                        	}
+                                }
                         }
 
                         /* Add new address books */
                         <address-book> {
-                        	<name> $bookname;
+                                <name> $bookname;
                                 /* Ideally we should use "copy-of .". But it consumes too much memory! */
                                 for-each( ./address-book/address ) {
-                                	<address> {
-                                        	<name> ./name;
+                                        <address> {
+                                                <name> ./name;
                                                 if ( ./ip-prefix ) {
-                                                	<ip-prefix> ./ip-prefix;
+                                                        <ip-prefix> ./ip-prefix;
                                                 } else if ( ./dns-name ) {
-                                                	<dns-name> {
-                                                        	<name> ./dns-name/name;
+                                                        <dns-name> {
+                                                                <name> ./dns-name/name;
                                                                 if ( ./dns-name/ipv6-only ) {
-                                                                	<ipv6-only>;
+                                                                        <ipv6-only>;
                                                                 } else if (./dns-name/ipv4-only) {
-                                                                	<ipv4-only>;
+                                                                        <ipv4-only>;
                                                                 }
 
                                                          }
 
                                                  } else if ( ./wildcard-address ) {
-                                                 	<wildcard-address> {
-                                                        	<name> ./wildcard-address/name;
+                                                        <wildcard-address> {
+                                                                <name> ./wildcard-address/name;
                                                         }
                                                  }
                                          }
-                                 }               
+                                 }
 
-				
+
 
                                  for-each( ./address-book/address-set ) {
-                                 	<address-set> {
-                                        	<name> ./name;
-                                               	for-each (./address) {
-                                                	<address> {
-                                                        	<name> ./name;
-                                                      	}
-                                              	}
+                                        <address-set> {
+                                                <name> ./name;
+                                                for-each (./address) {
+                                                        <address> {
+                                                                <name> ./name;
+                                                        }
+                                                }
                                                 for-each (./address-set) {
-                                                	<address-set> {
-                                                       		<name> ./name;
+                                                        <address-set> {
+                                                                <name> ./name;
                                                         }
                                                 }
                                          }
-                                 }               
+                                 }
 
                                  /* Attach the address to the zone where it is found */
-                                 <attach> {      
-                                 	<zone> {        
-                                        	<name> $zone;   
-                                        }               
+                                 <attach> {
+                                        <zone> {
+                                                <name> $zone;
+                                        }
                                  }
-                        }               
+                        }
                }
-	}               
+        }
 }
 
