@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<script>
+<author>mwiget</author>
+<title>check-vcp-ports.slax</title>
+<synopsis>
+This event script disables a list of interfaces if none of a given list of VC ports is operational
+</synopsis>
+<coe>event</coe>
+<type>HA</type>
+
+<description>
+For the EX platform, the check-vcp-ports feature allows for automatically disable (and re-enable) one or more interfaces by checking the operational status of one or more VC ports. If none of the listed VC ports is operational, a configured list of interfaces is disabled. As soon as at least one of the listed VC ports becomes available, the interfaces are enabled again.
+</description>
+
+ <example>
+ <title>Example</title>
+ <config>example-1.conf</config>
+ </example>
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>

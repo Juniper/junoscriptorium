@@ -1,0 +1,347 @@
+/*
+ *  check-vc-ports.slax
+ *  Version 1.1
+ *  
+ *  Event script that Checks the status of one or more vc-ports. 
+ *  If none of the given vc-ports is operational, 
+ *  disable a list of interfaces
+ *  If at least one of the vc-ports is active (Up),
+ *  then activate the list of interfaces again
+ *
+ *  Syslog events vccpd_protocol_adjdown vccpd_protocol_adjup
+ *  can be used to trigger the execution. 
+ *  Caveat: syslog must have Info level turned on for
+ *  vccpd_protocol_adjup trigger to function.
+ *  vccpd_protocol_adjdown has level notice, which is usually
+ *  logged.
+ * 
+ *  Created: Oct 6, 2011
+ *  by: Marcel Wiget <mwiget@juniper.net>
+ *
+ *  MODIFICATION HISTORY:
+ *        1.1 = control IFD, not IFL's (ge-0/1/0 instead of ge-0/1/0.0)
+ *        1.0 = Initial release
+ *
+ * Installation:
+ *
+ * Copy the script to the switch at 
+ * /var/db/scripts/event/
+ *
+ * Don't forget to copy the script to all fpc's. e.g. with:
+ * file copy /var/db/scripts/event/check-vc-ports.slax fpc1:/var/db/scripts/event/ 
+ *
+ * ---- Begin config snipplet ---- 
+ 
+  user@ex4200-vc1> show configuration event-options
+  policy vc-port-change {
+    events [ vccpd_protocol_adjdown vccpd_protocol_adjup ];
+    then {
+      event-script check-vc-ports.slax {
+        arguments {
+          check-member 1;
+          vc-ports "vcp-0 vcp-1";
+          change-interfaces "ge-1/0/20 ge-1/0/21";
+        }
+      }
+    }
+  }
+  event-script {
+    file check-vc-ports.slax;
+  }
+
+ * ---- End config snippet ---- 
+ *
+ * For testing purposes, the script can also be run as an op script after
+ * copying the script into /var/db/scripts/op/
+ * 
+ * ---- Begin config snipplet ---- 
+
+ user@ex4200-vc1> show configuration system scripts
+ op {
+       file check-vc-ports.slax;
+ }
+ * ---- End config snippet ---- 
+ *
+ *
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Script Arguments */
+var $arguments = {
+  <argument> {
+      <name> "member";
+      <description> "check virtual-chassis member (0,1,2 etc)";
+  }
+  <argument> {
+      <name> "vc-ports";
+      <description> "virtual-chassis ports to check";
+  }
+  <argument> {
+      <name> "change-interfaces";
+      <description> "interface list to bring up or down based on vc-ports status";
+  }
+  <argument> {
+      <name> "debug";
+      <description> "if set to 1, show progress on console, higher values increase detail";
+  }
+}
+
+param $member;
+param $vc-ports;
+param $change-interfaces;
+param $debug;
+
+match / {
+  <event-script-input> {
+
+    /* Record the triggering event */
+    var $trigger = event-script-input/trigger-event/id;
+
+    if ($debug > 1) {
+        expr jcs:output("member=", $member);
+        expr jcs:output("vc-ports=", $vc-ports);
+        expr jcs:output("change-interfaces=", $change-interfaces);
+    }
+
+    /* get the virtual chassis vc-port status */
+     var $rpc1 = <get-virtual-chassis-port-information>;
+     var $result1 = jcs:invoke($rpc1);
+
+     /* check if at least one vc-port from the list is Up */
+     var $vcup = { call get-vc-port-oper-status($ports = $vc-ports, $r = $result1); }
+
+     if ("" == $vcup) {
+
+       call log-notice($message = "none of the vc-ports (" _ $vc-ports _ ") is up");
+
+       /* We know that all the required vc-ports are down, 
+        * so lets bring the requested links down via config change.
+        * If they are already down, then this fact will be checked
+        * call bring-interfaces-down() and the commit is avoided
+        * (because an empty config change is recognized by Junos)
+        */
+       var $rpc-config-req = <get-configuration database="committed" inherit="inherit">;
+       var $configuration = jcs:invoke($rpc-config-req);
+
+       var $xml = { call bring-interfaces-down($interfaces = $change-interfaces, $config = $configuration); }
+       call doConfigChange($xml);
+
+     } else {
+
+       call log-notice($message = "at least one of the vc-ports (" _ $vc-ports _ ") is up");
+
+       /* Bring the interfaces back online. At least one of the vc-ports is up
+        */
+
+       var $rpc-config-req = <get-configuration database="committed" inherit="inherit">;
+       var $configuration = jcs:invoke($rpc-config-req);
+
+       var $xml = { call bring-interfaces-up($interfaces = $change-interfaces, $config = $configuration); }
+       call doConfigChange($xml);
+     }
+  }
+}
+
+
+/* Input ports = space separated list of vc-port names to check, e.g. "vcp-0 vcp-1"
+ * Returns space separated string with op-status for each given vc-port that is Up
+ * Empty means none of the interfaces was up, which makes checking if at least one
+ * vc-port is up really easy ;-)
+ */
+
+template get-vc-port-oper-status( $ports, $r )  {
+
+  var $vc-ports := jcs:split(" ",$ports);
+
+  for-each($vc-ports) {
+    var $port = .;
+    var $fpc = "fpc" _ $member;
+    var $op-status = $r/multi-routing-engine-item[re-name==$fpc]/virtual-chassis-port-information/port-list/port-information[port-name==$port]/port-status;
+    if ("Up" == $op-status) {
+      expr "Up ";
+    }
+  }
+}
+
+/*
+ *
+ */
+
+template doConfigChange($xml) {
+   /*
+    * Open connection with mgd
+    */
+    var $con = jcs:open();
+
+    if (not($con)) {
+      call log-error($message = "Not able to connect to local mgd");
+    }
+    var $config-private = <open-configuration> {
+       <private>;
+    }
+    var $private-results = jcs:execute($con, $config-private);
+
+    var $load-configuration = <load-configuration> {
+      <configuration> {
+        copy-of $xml;
+      }
+    }
+
+   var $load-results = jcs:execute($con, $load-configuration);
+  /*
+   * Use load-configuration template defined in junos.xsl to load and
+   * commit the configuration
+   */
+
+   var $commit-configuration = <commit-configuration> {
+     <log> "check-vc-ports.slax";
+   }
+
+   var $commit-results = jcs:execute($con, $commit-configuration);
+
+   var $close-private = <close-configuration>;
+
+   var $close-configuration-results = jcs:execute($con, $close-private);
+   var $close-results = jcs:close($con);
+
+   /*
+    * Emit warnings
+    */
+   for-each ($commit-results//xnm:warning) {
+      call log-warning($message = message);
+   }
+
+   if ($commit-results//xnm:error) {
+      for-each ($results//xnm:error) {
+         call log-error($message = message);
+      }
+   } else {
+      call log-notice($message = "succeeded.");
+   }
+
+   if ($debug) {
+      <op-script-results> {
+         copy-of $commit-results;
+      }
+   }
+}
+
+/*
+ *
+ */
+template bring-interfaces-down( $interfaces, $config ) {
+
+  /* loop thru the interfaces and create config stanza's 
+   */
+  var $iflist := jcs:split(" ",$interfaces);
+
+  for-each($iflist) {
+
+    var $ifname = .;
+
+    /*
+     * Parse interface to get IFD and IFL
+     */
+    var $split = jcs:split("\\.", $ifname);
+    var $ifd = $split[1];
+
+    if ($config/interfaces/interface[name=$ifd]) {
+
+      if ($config/interfaces/interface[name=$ifd]/disable) {
+
+        call log-notice($message = "Interface " _ $ifname _ " is already disabled.");
+
+      } else {
+
+        call log-notice($message = "disabling interface " _ $ifname _ " ... ");
+
+        <interfaces> {
+          <interface> {
+            <name> $ifd;
+            <disable>;
+          }  /* end <interface> */
+        } /* end <interfaces> */
+
+      }
+
+    } else {
+      call log-error($message = "Interface " _ $ifname _ " not found in committed config");
+    }
+  }
+}
+
+template bring-interfaces-up( $interfaces, $config ) {
+
+  /* loop thru the interfaces and create config stanza's 
+   */
+  var $iflist := jcs:split(" ",$interfaces);
+
+  for-each($iflist) {
+
+    var $ifname = .;
+
+    /*
+     * Parse interface to get IFD and IFL
+     */
+    var $split = jcs:split("\\.", $ifname);
+    var $ifd = $split[1];
+
+    if ($config/interfaces/interface[name=$ifd]) {
+
+      if (not($config/interfaces/interface[name=$ifd]/disable)) {
+
+        call log-notice($message = "Interface " _ $ifname _ " is already up.");
+
+      } else {
+
+        call log-notice($message = "enabling interface " _ $ifname _ " ... ");
+
+        <interfaces> {
+          <interface> {
+            <name> $ifd;
+            <disable delete="disable">;
+          }  /* end <interface> */
+        } /* end <interfaces> */
+
+      }
+
+    } else {
+      call log-error($message = "Interface " _ $ifname _ " not found in committed config");
+    }
+  }
+}
+
+/* 
+ *
+ */
+template log-notice($message) {
+
+  if ($debug) {
+    expr jcs:output("notice: ", $message);
+  }
+  expr jcs:syslog("user.notice","check-vc-ports.slax[Notice]: ", $message);
+}
+
+template log-error($message) {
+
+  if ($debug) {
+    expr jcs:output("error: ", $message);
+  }
+  expr jcs:syslog("user.error", "check-vc-ports.slax[Error]: ", $message);
+}
+
+template log-warning($message) {
+
+  if ($debug) {
+    expr jcs:output("warning: ", $message);
+  } 
+  expr jcs:syslog("user.warning", "check-vc-ports.slax[Warning]: ", $message);
+}
