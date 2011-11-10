@@ -1,0 +1,659 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns math = "http://exslt.org/math";
+ns func extension = "http://exslt.org/functions";
+ns wizard extension = "http://xml.juniper.net/wizard";
+
+import "../import/junos.xsl";
+import "../import/lib-util.slax";
+import "../import/lib-wizard.slax";
+
+/*
+ * This "op" script generates configuration data for VCPE nodes.
+ * There are two parts to the generated config.  In the first part,
+ * the requested parameters are recorded in the config group "vcpe".
+ * These allow the script to audit the config to find errors or update
+ * the config later, as well as allowing the user to see the high-level
+ * view of what the desire outcome is.  New versions of the script can
+ * use this information to regenerate the configuration as the script
+ * evolves.
+ */
+
+var $arguments = {
+    <argument> {
+        <name> "address";
+        <description> "Public address of this vcpe";
+    }
+    <argument> {
+        <name> "customer";
+        <description> "Name of this vcpe";
+    }
+    <argument> {
+        <name> "interface";
+        <description> "Name of interface for this vcpe";
+    }
+    <argument> {
+        <name> "security";
+        <description> "Security template for this vcpe";
+    }
+    <argument> {
+        <name> "vlan-id";
+        <description> "VLAN ID for this vcpe";
+    }
+    <argument> {
+        <name> "action";
+        <description> "Action to perform";
+    }
+}
+
+/* Param values are used if provided; othewise we prompt for them */
+param $address;
+param $customer;
+param $interface;
+param $security;
+param $vlan-id;
+param $show;
+param $sort = "customer";
+
+param $action = "add";
+
+var $group = "vcpe";
+var $expanded = "vcpe-expanded";
+
+var $guide := {
+    <container title="VCPE Configuration" path="vcpe"> {
+	<leaf title="Customer name" path="customer"
+		type="string" mandatory="yes"> {
+	    <help> "Name of the customer for this VCPE";
+	    <validator> "wizard:validate-customer-name";
+	}
+	<leaf title="Interface name" path="interface"
+		type="interface" mandatory="yes"> {
+	    <help> "Outgoing interface name for this VCPE";
+	}
+	<leaf title="VLAN Id" path="vlan-id"
+		type="integer" range="1..4096" mandatory="yes"> {
+	    <help> "Customer VLAN-Id (1..4096)";
+	}
+	<leaf title="Customer address" path="address"
+		type="ip-address" mandatory="yes"> {
+	    <help> "IP Address for this VCPE";
+	}
+	<leaf title="Security profile" path="security"
+		type="string" mandatory="yes"> {
+	    <help> "Security profile for this VCPE";
+	}
+    }
+}
+
+var $local-connection = jcs:open();
+
+match / {
+    <op-script-results> {
+	<pipe> {
+	    <more-no-more>;
+	}
+
+	if ($action == "add") {
+	    call vcpe-add();
+	} else if ($action == "list" || $action == "ls") {
+	    call vcpe-list();
+	} else if ($action == "remove" || $action == "delete") {
+	    call vcpe-delete();
+	} else {
+	    <xsl:message terminate="yes"> "Unknown action: " _ $action;
+	}
+    }
+}
+
+template vcpe-add () {
+    var $config := <vcpe> {
+	if ($customer) {
+	    <customer> $customer;
+	}
+	if ($address) {
+	    <address> $address;
+	}
+	if ($vlan-id) {
+	    <vlan-id> $vlan-id;
+	}
+	if ($interface) {
+	    <interface> $interface;
+	}
+	if ($security) {
+	    <security> $security;
+	}
+    }
+
+    var $raw := {
+	call wizard-builder($config, $guide, $title = "VCPE Builder");
+    }
+
+    var $vcpe := { call get-vcpe($name = $raw/vcpe/customer); }
+    if (not(jcs:empty($vcpe/node()))) {
+	<xsl:message terminate="yes">
+	    "Customer already exists: " _ $raw/vcpe/customer;
+    }
+
+    var $sp := { call get-sp(); }
+    var $unit = { call get-ifunit($interface = $raw/vcpe/interface); }
+
+    var $new := {
+	call generate-add($in = $raw/vcpe, $sp, $unit);
+    }
+
+    if ($show) {
+	call jcs:dump($name = "new", $out = $new);
+    }
+
+    expr jcs:output("    [loading configuration ...]");
+    var $out := {
+	call jcs:load-configuration($connection = $local-connection,
+				    $configuration = $new);
+    }
+
+    var $rpc = <load-configuration> {
+	copy-of $new;
+    }
+    var $xx = jcs:invoke($rpc);
+    copy-of $xx;
+
+    var $errors := $out//self::xnm:error;
+    if ($errors) {
+	copy-of $out;
+	<xsl:message terminate="yes"> "Exit due to errors: ";
+    }
+
+    expr jcs:output("    [finished]");
+
+    expr jcs:output("VCPE ", $raw/vcpe/customer, " has been provisioned");
+}
+
+template get-sp ($conn = $local-connection, $iftype = "sp-") {
+    var $rpc = <get-interface-information> {
+	<terse>;
+    }
+
+    var $results = jcs:execute($conn, $rpc);
+
+    var $iflist = $results/physical-interface[starts-with(name, $iftype)];
+
+    var $if = $iflist[1];
+
+    <ifname> $if/name;
+
+    if (jcs:empty($if)) {
+	expr jcs:output("No service interfaces were found");
+	<xsl:message terminate="yes"> "Exit due to error";
+    }
+
+    var $unit = { call get-next-unit($if); }
+
+    <inside> $unit;
+    <outside> $unit + 1;
+
+    if ($show) {
+	expr jcs:output("    [Using service interface ", $if/name,
+			" (in=.", $unit, ", out=.", $unit + 1, ")]");
+    }
+}
+
+template get-ifunit ($interface, $conn = $local-connection) {
+    var $rpc = <get-interface-information> {
+	<terse>;
+	<interface-name> $interface;
+    }
+
+    var $results = jcs:execute($conn, $rpc);
+
+    var $iflist = $results/physical-interface;
+
+    var $if = $iflist[1];
+
+    if (jcs:empty($if)) {
+	expr jcs:output("Interface not found: ", $interface);
+	<xsl:message terminate="yes"> "Exit due to error";
+    }
+
+    var $unit = { call get-next-unit($if); }
+    if ($show) {
+	expr jcs:output("    [Using interface ", $if/name, ".", $unit, "]");
+    }
+    expr $unit;
+}
+
+template get-next-unit ($if, $min = 1) {
+    var $count = count($if/logical-interface);
+
+    if ($count == 0) {
+	expr $min;
+
+    } else if ($count == 1) {
+	var $cur = $if/logical-interface/name;
+	var $this = substring-after($cur, '.');
+	if ($this < 16000) {
+	    expr $this + 1;
+	} else {
+	    expr $min;
+	}
+
+    } else {
+	var $all := {
+	    for-each ($if/logical-interface/name) {
+		var $value = substring-after(., '.');
+		if ($value < 16000) {
+		    <value> $value;
+		}
+	    }
+	}
+
+	var $cur = math:max($all/node());
+	if (string($cur) == "NaN") {
+	    <xsl:message terminate="true"> {
+		expr "max unit invalid for " _ $if/name;
+	    }
+	}
+	expr $cur + 1;
+    }
+}
+
+template vcpe-delete ($name = $customer, $conn = $local-connection) {
+    var $cust = {
+	if ($customer) {
+	    expr $customer;
+	} else {
+	    call prompt($prompt = "    Enter Customer name",
+			$mandatory = true());
+	}
+    }
+
+    var $vcpe := { call get-vcpe($name = $cust); }
+    if ($show) {
+	call jcs:dump($name = "vcpe", $out = $vcpe);
+    }
+
+    if (jcs:empty($vcpe/interface)) {
+	<xsl:message terminate="yes"> "Unknown customer: " _ $cust;
+    }
+
+    var $if = $vcpe/interface;
+    if ($show) {
+	expr jcs:output("    [vcpe: ", $if/name, " : ", $if/unit/name, "]");
+    }
+
+    var $rpc := <get-configuration> {
+	<configuration> {
+	    <groups> {
+		<name> $expanded;
+		<interfaces> {
+		    <interface> {
+			<name> $if/name;
+			<unit> {
+			    <name> $if/unit/name;
+			    <apply-macro> {
+				<name> $group;
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    }
+    var $in = jcs:execute($conn, $rpc);
+    var $macro = $in/groups/interfaces/interface/unit/apply-macro;
+
+    if ($show) {
+	call jcs:dump($name = "rpc", $out = $rpc);
+	call jcs:dump($name = "macro", $out = $macro);
+    }
+
+    var $new := {
+	call generate-delete($name, $vcpe, $macro, $if);
+    }
+
+    if ($show) {
+	call jcs:dump($name = "new", $out = $new);
+    }
+
+    expr jcs:output("    [deleting configuration ...]");
+    var $out := {
+	call jcs:load-configuration($connection = $local-connection,
+				    $configuration = $new);
+    }
+
+    var $errors := $out//self::xnm:error;
+    if ($errors) {
+	copy-of $out;
+	<xsl:message terminate="yes"> "Exit due to errors: ";
+    }
+
+    expr jcs:output("    [finished]");
+    expr jcs:output("VCPE ", $cust, " has been deleted");
+}
+
+template vcpe-list ($conn = $local-connection) {
+    var $rpc = <get-configuration> {
+	<configuration> {
+	    <groups> {
+		<name> $group;
+	    }
+	}
+    }
+    var $out = jcs:execute($conn, $rpc);
+
+    if ($show) {
+	call jcs:dump($name = "list", $out);
+    }
+
+    var $fmt = "%-12s %-12s %-12s %-8s %-12s";
+    <output> jcs:printf($fmt, "Name", "Interface",
+		    "Address", "Vlan-Id", "Security");
+
+    for-each ($out/groups/interfaces/interface/unit) {
+	<xsl:sort select="apply-macro[name = $group]
+			/data[name = $sort]/value">;
+	var $mac = apply-macro[name == $group];
+	var $ifname = ../name _ "." _ name;
+	<output> jcs:printf($fmt,  $mac/data[name == "customer"]/value,
+			$ifname,
+			$mac/data[name == "address"]/value,
+			$mac/data[name == "vlan-id"]/value,
+			$mac/data[name == "security"]/value);
+    }
+}
+
+template get-vcpe ($name) {
+    var $vcpe-rpc = <get-configuration> {
+	<configuration> {
+	    <groups> {
+		<name> $group;
+	    }
+	}
+    }
+    var $vcpe-config = jcs:execute($local-connection, $vcpe-rpc);
+    var $vcpe = $vcpe-config/groups/interfaces/interface
+	/unit[apply-macro[name == "vcpe"
+			  && data[name == "customer" && value == $name]]];
+
+    if (not(jcs:empty($vcpe))) {
+	<interface> {
+	    <name> $vcpe/../name;
+	    copy-of $vcpe;
+	}
+    }
+}
+
+template generate-add ($in, $sp, $unit) {
+    var $ifname = $in/interface _ "." _ $unit;
+    var $instance = "test-" _ $sp/inside _ "-" _ $sp/outside;
+
+    <configuration> {
+	<groups> {
+	    <name> $group;
+	    <interfaces> {
+		<interface> {
+		    <name> $in/interface;
+		    <unit> {
+			<name> $unit;
+			<apply-macro> {
+			    <name> $group;
+			    if ($in/customer) {
+				<data> {
+				    <name> "customer";
+				    <value> $in/customer;
+				}
+			    }
+			    if ($in/address) {
+				<data> {
+				    <name> "address";
+				    <value> $in/address;
+				}
+			    }
+			    if ($in/vlan-id) {
+				<data> {
+				    <name> "vlan-id";
+				    <value> $in/vlan-id;
+				}
+			    }
+			    if ($in/security) {
+				<data> {
+				    <name> "security";
+				    <value> $in/security;
+				}
+			    }
+			}
+		    }
+		}
+	    }
+	}
+	<apply-groups> $expanded;
+	<groups> {
+	    <name> $expanded;
+	    <apply-flags> {
+		<omit>;
+	    }
+	    <interfaces> {
+		<interface> {
+		    <name> $in/interface;
+		    <vlan-tagging>;
+		    <unit> {
+			<name> $unit;
+			/*
+			 * Not sure if we really need this, but it might
+			 * make a good place to hang info we need to know
+			 * how we expanded the VCPE that's not really
+			 * configuration.
+			 */
+			<apply-macro> {
+			    <name> $group;
+			    <data> {
+				<name> "instance";
+				<value> $instance;
+			    }
+			    <data> {
+				<name> "sp-ifname";
+				<value> $sp/ifname;
+			    }
+			    <data> {
+				<name> "sp-inside";
+				<value> $sp/inside;
+			    }
+			    <data> {
+				<name> "sp-outside";
+				<value> $sp/outside;
+			    }
+			}
+			<vlan-id> $in/vlan-id;
+			<family> {
+			    <inet> {
+				<address> {
+				    <name> "192.168.1.1/24";
+				}
+			    }
+			}
+		    }
+		}
+		<interface> {
+		    <name> $sp/ifname;
+		    <unit> {
+			<name> $sp/outside;
+			<family> {
+			    <inet>;
+			}
+			<service-domain> "outside";
+		    }
+		    <unit> {
+			<name> $sp/inside;
+			<family> {
+			    <inet>;
+			}
+			<service-domain> "inside";
+		    }
+		}
+	    }
+	    <routing-instances> {
+		<instance> {
+		    <name> $instance;
+		    <instance-type> "virtual-router";
+		    <system> {
+			<services> {
+			    <dhcp-local-server> {
+				<group> {
+				    <name> "ifs";
+				    <interface> {
+					<name> $ifname;
+				    }
+				}
+			    }
+			}
+		    }
+		    <interface> {
+			<name> $ifname;
+		    }
+		    <interface> {
+			<name> $sp/ifname _ "." _ $sp/inside;
+
+		    }
+		    <routing-options> {
+			<static> {
+			    <route> {
+				<name> "0.0.0.0/0";
+				<next-hop> $sp/ifname _ "." _ $sp/inside;
+
+			    }
+			}
+		    }
+		}
+	    }
+	    <services> {
+		<service-set> {
+		    <name> $instance;
+		    <stateful-firewall-rules> {
+			<name> "default";
+		    }
+		    <nat-rules> {
+			<name> $instance;
+		    }
+		    <next-hop-service> {
+			<inside-service-interface>
+			     $sp/ifname _ "." _ $sp/inside;
+			<outside-service-interface>
+			     $sp/ifname _ "." _ $sp/outside;
+		    }
+		}
+		<nat> {
+		    <pool> {
+			<name> $instance;
+			<address> {
+			    <name> $in/address _ "/32";
+			}
+			<port> {
+			    <automatic>;
+			}
+		    }
+		    <rule> {
+			<name> $instance;
+			<match-direction> "input";
+			<term> {
+			    <name> "translate";
+			    <from> {
+				<source-address> {
+				    <name> "192.168.1.0/24";
+				}
+			    }
+			    <then> {
+				<translated> {
+				    <source-pool> $instance;
+				    <translation-type> {
+					<source> "dynamic";
+				    }
+				}
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    }
+}
+
+template generate-delete ($name, $vcpe, $macro, $if) {
+    var $vmac = $vcpe/interface/unit/apply-macro[name == $group];
+    var $instance = $macro/data[name == "instance"]/value;
+    var $sp-ifname = $macro/data[name == "sp-ifname"]/value;
+    var $sp-inside = $macro/data[name == "sp-inside"]/value;
+    var $sp-outside = $macro/data[name == "sp-outside"]/value;
+    var $customer = $vmac/data[name == "customer"]/value;
+    var $address = $vmac/data[name == "address"]/value;
+
+    <configuration> {
+	<groups> {
+	    <name> $group;
+	    <interfaces> {
+		<interface> {
+		    <name> $if/name;
+		    <unit delete="delete"> {
+			<name> $if/unit/name;
+		    }
+		}
+	    }
+	}
+	<groups> {
+	    <name> $expanded;
+	    <interfaces> {
+		<interface> {
+		    <name> $if/name;
+		    <unit delete="delete"> {
+			<name> $if/unit/name;
+		    }
+		}
+		<interface> {
+		    <name> $sp-ifname;
+		    <unit delete="delete"> {
+			<name> $sp-outside;
+		    }
+		    <unit delete="delete"> {
+			<name> $sp-inside;
+		    }
+		}
+	    }
+	    <routing-instances> {
+		<instance delete="delete"> {
+		    <name> $instance;
+		}
+	    }
+	    <services> {
+		<service-set delete="delete"> {
+		    <name> $instance;
+		}
+		<nat> {
+		    <pool delete="delete"> {
+			<name> $instance;
+		    }
+		    <rule delete="delete"> {
+			<name> $instance;
+		    }
+		}
+	    }
+	}
+    }
+}
+
+<func:function name="wizard:validate-customer-name"> {
+    param $response;
+    param $opaque;
+    param $data;
+
+    var $vcpe := { call get-vcpe($name = $response); }
+    if (not(jcs:empty($vcpe/node()))) {
+	expr jcs:output(">>>> error: Customer already exists: ", $response);
+    } else {
+
+	<func:result> {
+	    expr $response;
+	}
+    }
+}

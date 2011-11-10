@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<script>
+  <title>provision-vcpe-profile.slax</title>
+  <author>phil.shafer</author>
+  <synopsis>
+	Adds a Virtual CPE (VCPE) customer address
+  </synopsis>
+  <coe>op</coe>
+  <type>services</type>
+
+  <description>
+This "op" script generates configuration data for VCPE nodes.
+There are two parts to the generated config.  In the first part,
+the requested parameters are recorded in the config group "vcpe".
+These allow the script to audit the config to find errors or update
+the config later, as well as allowing the user to see the high-level
+view of what the desire outcome is.  New versions of the script can
+use this information to regenerate the configuration as the script
+evolves.
+
+  </description>
+
+  <keyword>vcpe</keyword>
+  <keyword>high-level</keyword>
+  <keyword>abstract</keyword>
+  <keyword>wizard</keyword>
+  <keyword>cpe</keyword>
+  <example>
+    <title>Sample VCPE Session</title>
+    <description>Creates an instance of VCPE</description>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
