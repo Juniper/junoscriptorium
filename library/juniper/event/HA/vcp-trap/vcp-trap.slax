@@ -1,0 +1,122 @@
+/*
+ *  vcp-trap.slax
+ *  Version 1.0
+ *  
+ *  Event script that creates a standard linkUp/linkDown
+ *  when jnxVccpPortUp or jnxVccpPortDown are received.
+ * 
+ *  Created: Nov 15, 2011
+ *  by: Marcel Wiget <mwiget@juniper.net>
+ *
+ *  MODIFICATION HISTORY:
+ *        1.0 = Initial release
+ *
+ * Installation:
+ *
+ * Copy the script to the MX in Virtual-Chassis mode in
+ * /var/db/scripts/event/
+ *
+ * Don't forget to copy the script to all RE's
+ * file copy /var/db/scripts/event/vcp-trap.slax member0-re0:/var/db/scripts/event/ 
+ * file copy /var/db/scripts/event/vcp-trap.slax member0-re1:/var/db/scripts/event/ 
+ * file copy /var/db/scripts/event/vcp-trap.slax member1-re0:/var/db/scripts/event/ 
+ * file copy /var/db/scripts/event/vcp-trap.slax member1-re1:/var/db/scripts/event/ 
+ *
+ * ---- Begin config snippet ---
+
+event-options {
+  event-script {
+    file check-vc-ports.slax;
+  }
+}
+
+ * ---- End config snippet ---- 
+ *
+ *
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/* Embedded event policy */ 
+var $event-definition = {
+  <event-options> { 
+    <policy> {
+      <name> "vcp-trap";
+      <events> "vccpd_protocol_adjdown";
+      <events> "vccpd_protocol_adjup";
+      <then> {
+        <event-script> {
+          <name> "vcp-trap.slax";
+        } 
+      }
+    } 
+  }
+}
+
+match / {
+  <event-script-input> {
+
+    /* Record the triggering event */
+    var $id = event-script-input/trigger-event/id;
+    var $message = event-script-input/trigger-event/message;
+
+    /* need to parse the message string for the vcport vcp-x/y/z in
+       VCCPD_PROTOCOL_ADJUP: New adjacency to 0021.5904.9000 on vcp-5/0/0.32768
+     */
+
+    var $tmp1 = substring-after($message, " on ");
+    var $interface = substring-before($tmp1, ".");
+
+    /* find ifindex for that interface */
+    var $rpc1 = {
+      <get-interface-information> {
+        <interface-name> $interface;
+      }
+    }
+
+    var $ifout = jcs:invoke($rpc1);
+
+    var $ifindex = $ifout/physical-interface/snmp-index;
+    var $opstatus = $ifout/physical-interface/oper-status;
+
+    /* create linkUp or linkDown trap based on link status */
+
+    if ("up" == $ifout/physical-interface/oper-status) {
+
+      call log-notice($message = "Sending linkUp trap for interface=" _ $interface);
+      var $rpc =  <request-snmp-generate-trap> {
+        <trap> "linkUp";
+        <variable-bindings> "ifIndex[" _ $ifindex _ "]=" _ $ifindex _ ", "
+          _ "ifAdminStatus[" _ $ifindex _ "]=1, "
+          _ "ifOperStatus[" _ $ifindex _ "]=1, "
+          _ "ifName[" _ $ifindex _ "]=" _ $interface _ "";
+      }
+      var $res = jcs:invoke($rpc); 
+
+    } else {
+
+      call log-notice($message = "Sending linkDown trap for interface " _ $interface);
+      var $rpc = <request-snmp-generate-trap> {
+        <trap> "linkDown";
+        <variable-bindings> "ifIndex[" _ $ifindex _ "]=" _ $ifindex _ ", "
+          _ "ifAdminStatus[" _ $ifindex _ "]=2, "
+          _ "ifOperStatus[" _ $ifindex _ "]=2, "
+          _ "ifName[" _ $ifindex _ "]=" _ $interface _ "";
+      }
+      var $res = jcs:invoke($rpc); 
+
+    }
+  }
+}
+
+template log-notice($message) {
+  expr jcs:output("notice: ", $message);
+  expr jcs:syslog("user.notice","vcp-trap.slax[Notice]: ", $message);
+}

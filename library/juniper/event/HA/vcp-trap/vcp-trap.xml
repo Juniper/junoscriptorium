@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<script>
+<author>mwiget</author>
+<title>vcp-trap.slax</title>
+<synopsis>
+This event script, when installed on a MX in virtual-chassis mode, creates a standard linkUp/linkDown whenever the events VCCPD_PROTOCOL_ADJDOWN or VCCPD_PROTOCOL_ADJUP are received. 
+</synopsis>
+<coe>event</coe>
+<type>HA</type>
+
+<description>
+MX virtual-chassis interconnect links, vcp ports, are treated different from standard interfaces in Junos. For once, they must be configured via 'request' and aren't part of the standard Junos configuration, and second, any link status change is only signaled via enterprise specific SNMP traps jnxVccpPortUp and jnxVccpPortDown. This behavior might change in the future, but with the release 11.2R12 thats the case.
+This event script, once installed, will generate standard linkUp or linkDown SNMP traps whenever the link status of one of the vcp ports changes. 
+Notice level syslog messages are created to document this:
+Nov 13 22:12:15.268 2011  lab-rotuer cscript: vcp-trap.slax[Notice]: Sending linkDown trap for interface vcp-5/0/0
+Nov 13 22:12:30.422 2011  lab-router cscript: vcp-trap.slax[Notice]: Sending linkUp trap for interface vcp-5/0/0
+</description>
+
+ <example>
+ <title>Example</title>
+ <config>example-1.conf</config>
+ </example>
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>
