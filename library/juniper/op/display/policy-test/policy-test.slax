@@ -37,6 +37,8 @@ var $arguments = {
         <description> "Egress zone of the packet";
     }
 }
+/* Open a persistent connection */
+var $connection = jcs:open();
 param $source-address = {
     expr "0.0.0.0/0";
 }
@@ -60,7 +62,7 @@ param $to-zone = {
 }
 /* print-policy: Displays the policy info */
 template print-policy ($name, $from-zone, $to-zone, $source-address, $destination-address, $application, $action, $comment, $row = number("1"), $header = false()) {
-    var $format-string = "%-12.11s %-12.11s %-15.14j1s %-15.14s %-15.14s %-12.11s %-10.9s %s\n";
+    var $format-string = "%-12.11s %-12.11s %-15.14j1s %-15.14s %-15.14s %-12.11s %-10.9s %s \n";
     
     if ($header) {
         expr jcs:printf($format-string, "From-Zone", "To-Zone", "Name", "Src-Addr", "Dst-Addr", "Application", "Action", "");
@@ -97,14 +99,14 @@ template find-zone ($ip) {
             expr $ip;
             expr " active-path best";
         }
-        var $get-rotue = jcs:invoke($get-route-rpc);
+        var $get-rotue = jcs:execute($connection, $get-route-rpc);
         var $zone = {
             if ($get-rotue//via) {
                 var $get-int-rpc = <command> {
                     expr "show interface ";
                     expr $get-rotue//via;
                 }
-                var $get-int = jcs:invoke($get-int-rpc);
+                var $get-int = jcs:execute($connection, $get-int-rpc);
                 
                 expr $get-int//logical-interface-zone-name;
             
@@ -172,74 +174,93 @@ template match-prefix-list ($ip, $prefix-list) {
 
 match / {
     <op-script-results> {
-        <output> {
-            call print-policy($header = true());
-        }
-        var $filters = {
-            if ($from-zone != "any") {
-                expr " from-zone ";
-                expr $from-zone;
-            }
-            if ($to-zone != "any") {
-                expr " to-zone ";
-                expr $to-zone;
-            }
-        }
-        var $get-policies-rpc = <command> {
-            expr " show security policies ";
-            expr $filters;
-            expr " detail ";
-        }
-        /* Get the list of possible policies */
-        var $policies = jcs:invoke($get-policies-rpc);
-        /* Loop throught the policies to find the matching ones */
+        /* First, check parameters passed */
+        if (not(jcs:parse-ip($source-address))) {
+            <output> jcs:printf("Bad IP address format: %s
+", $source-address);
         
-        for-each ($policies//policy-information) {
-            var $match-source = {
-                call match-prefix-list($ip = $source-address, $prefix-list = .//source-address//address-prefix);
+        } else if (not(jcs:parse-ip($destination-address))) {
+            <output> jcs:printf("Bad IP address format: %s
+", $destination-address);
+        
+        } else if (not($source-port >= 0 && $source-port <= 65535)) {
+            <output> jcs:printf("Bad IP port number: %s
+", $source-port);
+        
+        } else if (not($destination-port >= 0 && $destination-port <= 65535)) {
+            <output> jcs:printf("Bad IP port number: %s
+", $destination-port);
+        
+        } else {
+            <output> {
+                call print-policy($header = true());
             }
-            var $match-destination = {
-                call match-prefix-list($ip = $destination-address, $prefix-list = .//destination-address//address-prefix);
-            }
-            var $match-destination-port = {
-                if ($destination-port == "0") {
-                    expr true();
-                
-                } else if (./applications/application/application-term/destination-port-range[low == "0" && high == "0"]) {
-                    expr true();
-                
-                } else if (./applications/application/application-term/destination-port-range[low <= $destination-port && high >= $destination-port]) {
-                    expr true();
-                
-                } else {
-                    expr false();
+            var $filters = {
+                if ($from-zone != "any") {
+                    expr " from-zone ";
+                    expr $from-zone;
+                }
+                if ($to-zone != "any") {
+                    expr " to-zone ";
+                    expr $to-zone;
                 }
             }
-            var $match-source-port = {
-                if ($source-port == "0") {
-                    expr true();
-                
-                } else if (./applications/application/application-term/source-port-range[low == "0" && high == "0"]) {
-                    expr true();
-                
-                } else if (./applications/application/application-term/source-port-range[low <= $source-port && high >= $source-port]) {
-                    expr true();
-                
-                } else {
-                    expr false();
-                }
+            var $get-policies-rpc = <command> {
+                expr " show security policies ";
+                expr $filters;
+                expr " detail ";
             }
+            /* Get the list of possible policies */
+            var $policies = jcs:execute($connection, $get-policies-rpc);
+            /* Loop throught the policies to find the matching ones */
             
-            /* <output>
-            <xsl:value-of select="jcs:printf('Policy name: %s\n',./policy-name)"/>
-            <xsl:value-of select="jcs:printf('  match source: %s\n', $match-source)"/>
-            <xsl:value-of select="jcs:printf('  match destination: %s\n', $match-destination)"/>
-            <xsl:value-of select="jcs:printf('  match source port: %s\n', $match-source-port)"/>
-            <xsl:value-of select="jcs:printf('  match destination port: %s\n', $match-destination-port)"/>
-            </output> */
-            if ($match-source == "true" && $match-destination == "true" && $match-source-port == "true" && $match-destination-port == "true") {
-                <output> {
-                    call print-policy($from-zone = ../../context-information/source-zone-name, $to-zone = ../../context-information/destination-zone-name, $name = ./policy-name, $destination-address = ./destination-addresses/destination-address/address-name, $source-address = ./source-addresses/source-address/address-name, $application = ./applications/application/application-name, $action = ./policy-action/action-type);
+            for-each ($policies//policy-information) {
+                var $match-source = {
+                    call match-prefix-list($ip = $source-address, $prefix-list = .//source-address//address-prefix);
+                }
+                var $match-destination = {
+                    call match-prefix-list($ip = $destination-address, $prefix-list = .//destination-address//address-prefix);
+                }
+                var $match-destination-port = {
+                    if ($destination-port == "0") {
+                        expr true();
+                    
+                    } else if (./applications/application/application-term/destination-port-range[low == "0" && high == "0"]) {
+                        expr true();
+                    
+                    } else if (./applications/application/application-term/destination-port-range[low <= $destination-port && high >= $destination-port]) {
+                        expr true();
+                    
+                    } else {
+                        expr false();
+                    }
+                }
+                var $match-source-port = {
+                    if ($source-port == "0") {
+                        expr true();
+                    
+                    } else if (./applications/application/application-term/source-port-range[low == "0" && high == "0"]) {
+                        expr true();
+                    
+                    } else if (./applications/application/application-term/source-port-range[low <= $source-port && high >= $source-port]) {
+                        expr true();
+                    
+                    } else {
+                        expr false();
+                    }
+                }
+                
+                /* <output>
+                <xsl:value-of select="jcs:printf('Policy name: %s\n',./policy-name)"/>
+                <xsl:value-of select="jcs:printf('  match source: %s\n', $match-source)"/>
+                <xsl:value-of select="jcs:printf('  match destination: %s\n', $match-destination)"/>
+                <xsl:value-of select="jcs:printf('  match source port: %s\n', $match-source-port)"/>
+                <xsl:value-of select="jcs:printf('  match destination port: %s\n', $match-destination-port)"/>
+                </output> */
+                if ($match-source == "true" && $match-destination == "true" && $match-source-port == "true" && $match-destination-port == "true") {
+                    <output> {
+                        call print-policy($from-zone = ../../context-information/source-zone-name, $to-zone = ../../context-information/destination-zone-name, $name = ./policy-name, $destination-address = ./destination-addresses/destination-address/address-name, $source-address = ./source-addresses/source-address/address-name, $application = ./applications/application/application-name, $action = ./policy-action/action-type);
+                    }
                 }
             }
         }
