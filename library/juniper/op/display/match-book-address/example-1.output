@@ -1,0 +1,9 @@
+[edit]
+user@router# run op match-book-address ip 32.32.0.0/16
+ZONE: untrust, ENTRY NAME: test1, ENTRY IP: 32.32.32.4/30 , MATCH: OVERLAP
+ZONE: vpn, ENTRY NAME: remotenet, ENTRY IP: 32.32.32.0/24 , MATCH: OVERLAP
+
+[edit]
+user@router# run op match-book-address ip 32.32.32.0/24
+ZONE: untrust, ENTRY NAME: test1, ENTRY IP: 32.32.32.4/30 , MATCH: OVERLAP
+ZONE: vpn, ENTRY NAME: remotenet, ENTRY IP: 32.32.32.0/24 , MATCH: EXACT

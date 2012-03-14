@@ -1,0 +1,64 @@
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns tr = "http://xml.juniper.net/junos/*/junos-probe-tests";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+/*
+ * Created by Michael Pergament, mpergament@juniper.net, Rel.1 -
+ * Returns all book entries in all zones matching specific IP prefix + more specific entries
+ */ 
+ 
+/* This is imported into JUNOS as a CLI option */ 
+var $arguments = { 
+    <argument> { 
+	<name> "ip"; 
+        <description> "IP prefix to find in address books (e.g. 10.10.10.0/24)"; 
+    } 
+} 
+ 
+/* Command-line argument */ 
+param $ip; 
+
+/*
+var $addr = jcs:parse-ip("10.1.2.10/255.255.255.0");
+$addr[1] contains the host address 10.1.2.10.
+$addr[2] contains the protocol family inet.
+$addr[3] contains the prefix length 24.
+$addr[4] contains the network address 10.1.2.0.
+$addr[5] contains the netmask for IPv4 255.255.255.0.
+*/
+var $ipinfo = jcs:parse-ip($ip);
+ 
+match / {
+    <op-script-output> {
+        var $get-configuration = <get-configuration database = "committed"> {
+            <configuration> {
+                <security> {
+                	<zones>;
+                }
+            }
+        }
+        
+        var $config = jcs:invoke($get-configuration);
+ 
+        for-each ($config/security/zones/security-zone) {
+        	var $zone-name = ./name;
+        	for-each ($config/security/zones/security-zone[name=$zone-name]/address-book/address) {
+        		var $ip-name = ./name;
+        		var $ip_running = ./ip-prefix;
+        		var $ipnet_running = jcs:split("/", $ip_running);
+        		var $ipinfo_running = jcs:parse-ip($ip_running);
+        		if ($ipinfo[3] <= $ipinfo_running[3]) {
+        			var $ip_running_modified = $ipnet_running[1] _ "/"  _ $ipinfo[3];
+        			var $ipinfo_running_modified = jcs:parse-ip($ip_running_modified);
+        			if (($ipinfo_running_modified[4] == $ipinfo[4]) && ($ipinfo[3] == $ipinfo_running[3])) {
+        				<output> "ZONE: " _ $zone-name _ ", ENTRY NAME: " _ $ip-name _ ", ENTRY IP: " _ $ip_running _ " , MATCH: EXACT\n";
+        			} else if (($ipinfo_running_modified[4] == $ipinfo[4]) && ($ipinfo[3] < $ipinfo_running[3])) {
+        				<output> "ZONE: " _ $zone-name _ ", ENTRY NAME: " _ $ip-name _ ", ENTRY IP: " _ $ip_running _ " , MATCH: OVERLAP\n";
+        			}
+        		}
+        	}
+        }
+    }
+}
