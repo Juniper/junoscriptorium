@@ -1,0 +1,62 @@
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns tr = "http://xml.juniper.net/junos/*/junos-probe-tests";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+/*
+ * Created by Michael Pergament, mpergament@juniper.net, Rel.1 -
+ * Check route validity of route lookup for every address book entry
+ */ 
+ 
+
+match / {
+    <op-script-output> {
+        var $get-configuration = <get-configuration database = "committed"> {
+            <configuration> {
+                <security> {
+                	<zones>;
+                }
+            }
+        }
+        
+        var $if-status-rpc = <get-interface-information> {
+        	<extensive>;
+        }
+        
+        var $config = jcs:invoke($get-configuration);
+        var $if-status = jcs:invoke($if-status-rpc);
+ 
+        for-each ($config/security/zones/security-zone) {
+        	var $zone-name = ./name;
+        	var $first-if = ./interfaces/name;
+        	var $if-array = jcs:split("\\.", $first-if);
+        	var $if = $if-array[1];
+        	var $zone-rt-number = $if-status/physical-interface[name == $if]/logical-interface[name == $first-if]/address-family/route-table;
+        	
+        	var $instance-status = jcs:invoke("get-instance-information");
+        	
+        	for-each ($instance-status/instance-core) {
+        		if (position() == $zone-rt-number+1) {
+        			var $rt-name = ./instance-rib/irib-name;
+        			<output> "ZONE \"" _ $zone-name _ "\" RESOLVES OVER \"" _ $rt-name _ "\"\n";
+        			for-each ($config/security/zones/security-zone[name=$zone-name]/address-book/address) {
+        				var $ip-name = ./name;
+        				var $ip_running = ./ip-prefix;
+
+						var $route-status-rpc = <get-route-information> {
+                			<destination> $ip_running;
+                			<best>;
+                			<table> $rt-name;
+						}
+						var $route-status = jcs:invoke($route-status-rpc);
+						
+						if (count($route-status/route-table/rt) == 0) {
+							<output> "    ADDRESS ENTRY \"" _ $ip-name _ "\" WITH IP \"" _ $ip_running _ "\" ZONE \"" _ $zone-name _ "\" CANNOT BE RESOLVED!\n";
+						}
+        			}
+        		}
+        	} 	
+        }
+    }
+}

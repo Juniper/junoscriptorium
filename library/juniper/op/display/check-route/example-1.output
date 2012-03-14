@@ -1,0 +1,12 @@
+This script would do following:
+1)	Go over all zones 
+2)	Check over which route table this zone will resolve routes
+3)	For each address entry it will check whether route exists in the right routing table
+
+user@router> op check-route    
+ZONE "trust" RESOLVES OVER "inet.0"
+ZONE "untrust" RESOLVES OVER "inet.0"
+ZONE "vpn" RESOLVES OVER "inet.0"
+ZONE "test" RESOLVES OVER "test.inet.0"
+    ADDRESS ENTRY "test" WITH IP "98.99.98.98/32" ZONE "test" CANNOT BE RESOLVED!
+
