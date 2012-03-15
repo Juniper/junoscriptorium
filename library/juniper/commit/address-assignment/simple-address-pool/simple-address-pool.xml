@@ -12,7 +12,7 @@ This script will simplify the access address-assignment IPv4/IPv6 pool configura
 Junos doesn't allow multiple network prefix lines under the same pool currently,
 but E-series/Junos allows SP to configure multiple pool range under the same pool name,
 which means SPs who use E-series/JUNOSe are familiar with sharing same pool name for
-multiple address ranges and developing & enghancing address provisioning system.
+multiple address ranges and developing and enhancing address provisioning system.
 Now, this script is addressing a pain-point of lack of pool name sharing for multiple
 v4/v6 network prefixes in Junos by doing auto pool name generation. And place each
 prefix under unique auto-generated pool name that is derived major pool name and all
