@@ -1,0 +1,412 @@
+/*
+ * Author        : Simon Rho
+ * File          : simple-address-pool.slax
+ * Version       : 1.1
+ * Last Modified : February 14, 2012
+ * Platform      : all
+ * Release       : 11.4 and above
+ *
+ * Description:
+ * This script will simplify the access address-assignment IPv4/IPv6 pool
+ * configuration by using apply-macro command under [address-assignment]
+ * of access configuration stanza.
+ * 
+ * JUNOS doesn't allow multiple network prefix lines under same pool
+ * now currently - but E-series/JUNOSe allows SP to configure multiple
+ * pool range under same pool name, which means SPs who is using E-series/JUNOSe
+ * are familiar with sharing same pool name for multiple address ranges 
+ * and developing & enhancing address provisioning system.
+ *
+ * Now, this script is addressing a pain point of lack of pool name sharing
+ * for multiple v4/v6 network prefixes in JUNOS by doing auto pool name generation.
+ * And place each prefix under unique auto-generated pool name that is derived
+ * major pool name and all pools derived from same pool name will be linked
+ * from 1st to the last.
+ *
+ * So, SP doesn't need to remember or track all pool name but only name of
+ * major/head pool will be needed to be remembered - it's quite simple and easy
+ * for radius side frame-pool provisioning.
+ */ 
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns func extension = "http://exslt.org/functions";
+ns math = "http://exslt.org/math";
+ns exsl = "http://exslt.org/common";
+ns jhk = "http://xml.juniper.net/jhk";
+
+import "../import/junos.xsl";
+
+match configuration {
+
+
+	/*
+	 * Reading group names applied to configuration.
+	 */
+	var $apply-groups = <get-configuration> {
+		<configuration> {
+			<apply-groups>;
+		}
+	}
+
+	var $r = jhk:get-config( $apply-groups );
+	
+	for-each ($r/apply-groups) {
+		var $gn = .;
+		
+		/* For debugging
+		var $msg = jcs:printf("applied group name is %s", $gn );
+		<xnm:warning> {
+			<message> $msg;
+		}
+		*/
+		
+		/*
+		 * Reading access configuration of each group
+		 */
+		var $access = <get-configuration> {
+			<configuration> {
+				<groups> {
+					<name>$gn;
+					<access>;
+				}
+			}
+		}
+		var $a = jhk:get-config( $access );
+		
+		
+		/*
+		 * Check if access stanza of group has apply-macro line or not.
+		*/
+		if ( not ( jcs:empty ( $a/groups[name == $gn]/access/apply-macro ) ) ) {
+		
+			/*
+			 * If there is inet/inet6 family pool under access configuration stanza
+			 * 
+			 */
+			for-each ( $a/groups[name == $gn]/access/address-assignment/pool ) {
+				var $pn = ./name;
+
+				<change> {
+					<groups> {
+						<name> $gn;
+						<access> {
+							<address-assignment> {
+								<pool delete="delete"> {
+									<name> $pn;
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			/*
+			 * Each apply-macro line will create family inet pool.
+			 */
+			for-each ( $a/groups[name == $gn]/access/apply-macro[ not( jcs:regex( ":", data) ) && ( name != "link" ) ] ) {
+				var $am-name = ./name;
+				var $am-data = ./data;
+				
+				for-each ($am-data) {
+
+					/*
+					 * It's first line of apply-macro sharing same pool name: 
+					 * link option exists and pool name should be same to apply-macro's first parameter.
+					 */
+					 
+					var $pname = { 
+						if ( position () == 1) {
+							expr $am-name;
+						}
+						else {
+							expr jhk:build-pool-name ( $am-name, ./name );
+						}
+					}
+						
+					var $link = {
+						if ( position () < last () )  {
+							var $i = position () + 1;
+							expr jhk:build-pool-name ( $am-name, ../data[ $i ]/name );
+						}
+						else {
+							expr "";
+						}
+					}
+					
+					var $network = ./name;
+					var $range = ./value;
+					
+					call adding_pool( $group = $gn, $pname, $network, $range, $link );
+				}
+			}
+			
+
+			/*
+			 * Each apply-macro line will create family inet6 pool.
+			 */
+			for-each ( $a/groups[name == $gn]/access/apply-macro[ ( jcs:regex( ":", data) ) && ( name != "link" ) ] ) {
+				var $am-name = ./name;
+				var $am-data = ./data;
+				
+				for-each ($am-data) {
+
+					/*
+					 * It's first line of apply-macro sharing same pool name: 
+					 * link option exists and pool name should be same to apply-macro's first parameter.
+					 */
+					 
+					var $pname = { 
+						if ( position () == 1) {
+							expr $am-name;
+						}
+						else {
+							expr jhk:build-pool-name-v6 ( $am-name, ./name );
+						}
+					}
+						
+					var $link = {
+						if ( position () < last () )  {
+							var $i = position () + 1;
+							expr jhk:build-pool-name-v6 ( $am-name, ../data[ $i ]/name );
+						}
+						else {
+							expr "";
+						}
+					}
+					
+					
+					var $network = ./name;
+					var $parameters = jcs:split("[[.space.]]+", ./value);
+					var $range_length = $parameters[1];
+					var $dns1 = $parameters[2];
+					var $dns2 = $parameters[3];
+					
+					call adding_pool_v6($group = $gn, $pname, $network, $range_length, $dns1, $dns2, $link ) ;
+				}
+			}
+			
+
+			/*
+			 * apply-macro 'link' connects p1 and p2.
+			 */			
+			for-each ( $a/groups[name == $gn]/access/apply-macro[ name == "link" ]/data ) {
+				var $p1 = ./name;
+				var $p2 = ./value;
+
+				var $prefix = $a/groups[name == $gn]/access/apply-macro[ name == $p1 ]/data;
+				var $pname = {
+					if (count ($prefix) == 1) {
+						expr $p1;
+					}
+					else {
+						var $p = $prefix[ last( ) ]/name;
+						
+						if ( not ( jcs:regex ( ":", $p ) ) ) {
+							expr jhk:build-pool-name ( $p1, $p );
+						}
+						else {
+							expr jhk:build-pool-name-v6 ( $p1, $p );
+						}
+					}
+				}
+				
+				call adding_link($group = $gn, $pname = $pname, $link = $p2);
+			}
+		}
+	}
+}
+
+<func:function name="jhk:get-config">
+{
+	param $configuration-rpc;
+	
+	var $connection = jcs:open();	
+	var $result = jcs:execute( $connection, $configuration-rpc );
+	expr jcs:close( $connection );
+	
+	<func:result select="$result">;
+} 
+
+<func:function name="jhk:build-pool-name">
+{
+	param $pool_name_prefix;
+	param $network_pool;
+	
+	var $r = jcs:parse-ip($network_pool);
+	
+	var $host = $r[1];
+	var $family = $r[2];
+	var $prefix = $r[3];
+	var $network = $r[4];
+	var $s = jcs:split("\\.", $network);
+	
+	var $result = jcs:printf("%s_%s_%s_%s_%s_%s", $pool_name_prefix, $s[1], $s[2], $s[3], $s[4], $prefix);
+	
+	<func:result select="$result">;
+} 
+
+<func:function name="jhk:build-pool-name-v6">
+{
+	param $pool_name_prefix;
+	param $network_pool;
+	
+	var $r = jcs:parse-ip($network_pool);
+	
+	var $host = $r[1];
+	var $family = $r[2];
+	var $prefix = $r[3];
+	var $network = $r[4];
+	var $s = translate($network, ":", "Z");
+	
+	var $result = jcs:printf("%s_%s_%s", $pool_name_prefix, $s, $prefix);
+	
+	<func:result select="$result">;
+}
+
+
+<func:function name="jhk:get-low">
+{
+	param $network_pool;
+	
+	var $r = jcs:parse-ip($network_pool);
+	
+	var $host = $r[1];
+	var $family = $r[2];
+	var $prefix = $r[3];
+	var $network = $r[4];
+	var $s = jcs:split("\\.", $network);
+	
+	var $result = jcs:printf("%s.%s.%s.%s", $s[1], $s[2], $s[3], $s[4]+1);
+	
+	<func:result select="$result">;
+} 
+
+
+<func:function name="jhk:get-high">
+{
+	param $network_pool;
+	
+	var $r = jcs:parse-ip($network_pool);
+	
+	var $host = $r[1];
+	var $family = $r[2];
+	var $prefix = $r[3];
+	var $network = $r[4];
+	var $s = jcs:split("\\.", $network);
+	
+	var $n = 32 - $prefix;
+	var $high = math:power ( 2, $n ) - 2;
+	
+	var $result = jcs:printf("%s.%s.%s.%s", $s[1], $s[2], $s[3], $s[4] + $high);
+	
+	<func:result select="$result">;
+} 
+
+
+template adding_pool($group, $pname, $network, $range = "", $link = "") 
+{
+	<change> {
+		<groups> {
+			<name>$group;
+			<access> {
+				<address-assignment> {
+					<pool> {
+						<name>$pname;
+						if ( $link != "" ) {
+							<link>$link;
+						}
+						<family> {
+							<inet> {
+								<network>$network;
+								if ( $range != "" ) {
+									var $r1 = jcs:split ( "[[.space.]]+", $range );
+									var $low = $r1[1];
+									var $high = $r1[2];
+									<range> {
+										<name>"r1";
+										<low>$low;
+										<high>$high;
+									}
+								}
+								else {
+									var $low = jhk:get-low ($network);
+									var $high = jhk:get-high ($network);
+									<range> {
+										<name>"r1";
+										<low>$low;
+										<high>$high;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+} 
+
+
+template adding_pool_v6($group, $pname, $network, $range_length, $dns1, $dns2, $link = "") 
+{
+	<change> {
+		<groups> {
+			<name>$group;
+			<access> {
+				<address-assignment> {
+					<pool> {
+						<name>$pname;
+						if ( $link != "" ) {
+							<link>$link;
+						}
+						<family> {
+							<inet6> {
+								<prefix>$network;
+								<range> {
+									<name>"r1";
+									<prefix-length>$range_length;
+								}
+								<dhcp-attributes> {
+									<dns-server> {
+										<name>$dns1;
+									}
+									<dns-server> {
+										<name>$dns2;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+} 
+
+
+template adding_link($group, $pname, $link) 
+{
+	<change> {
+		<groups> {
+			<name>$group;
+			<access> {
+				<address-assignment> {
+					<pool> {
+						<name>$pname;
+						<link>$link;
+					}
+				}
+			}
+		}
+	}
+} 
+
+template debug_output ($msg) {
+	<xnm:warning> {
+		<message> $msg;
+	}
+}
