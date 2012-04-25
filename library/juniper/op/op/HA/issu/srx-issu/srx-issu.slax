@@ -1,0 +1,448 @@
+/*
+ * Author        : Manekar Umamaheshwararao (urao@juniper.net)
+ * Version       : 1.0
+ * First Created : Feb 23, 2012
+ * Last Modified : April 23, 2012
+ * Platform      : SRX 1k/3k, and 5k series
+ * Release       : 10.4R4 and above
+ *
+ * Please go over the SRX_ISSU_README document before running this script
+ *
+ */
+
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns ext = "http://xmlsoft.org/XSLT/namespace"; /* http://exslt.org/common */
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "file";
+        <description> "Required: specify the full path of the ISSU upgrade image file.";
+    }
+}
+
+param $file;
+param $hostname;
+param $product;
+param $username = "root";
+param $passwd = "Embe1mpls";
+param $log-file = "srx-issu-op-script";
+param $directory = "/var/log/";
+param $issu_ver = "10.4R4";
+
+match / {
+    <op-script-results> {
+    
+        /* Get the connection handle to execute RPCs */
+        expr jcs:output("Connecting locally ... ");
+        var $conn = jcs:open();
+        if (not($conn)) {
+            <xsl:message terminate="yes"> "Unable to connect to local mgd of node0.";
+        }
+        expr jcs:output("Connected locally ... ");
+
+        /* First check if they have specified a filename, if not then show error and halt script */
+        if(not($file)) {
+            <xsl:message terminate="yes"> "Please specify the ISSU upgrade image along with image path.";
+        }
+
+        /* Check the product family */
+        expr jcs:output("Checking the SRX product family.... ");
+        if ($product != srx5800 || $product != srx5600 || $product != srx3400 || $product != srx3600 || $product != srx1400) {
+            <xsl:message terminate="yes"> "Script is not supported on this product, only supported on SRX 1k/3k and 5k product family, so exiting!!";
+        }
+        expr jcs:output("Done checking the product family.... ");
+
+        /* Check if the script is running on the HA cluster environment */
+        expr jcs:output("Checking whether script is running in chassis cluster mode.... ");
+        var $value = jcs:sysctl("hw.re.mcluster_status", "i");
+        if ($value == "0") {
+            <xsl:message terminate="yes"> "Script should not be run in standalone mode, so exiting!!";
+        } else {
+            expr jcs:output("Script is running in chassis cluster mode");
+        }
+
+        /* Check the passed image version and the existing version to check if its not downgrade */
+        /* Get the current image version */
+        expr jcs:output("Checking current image on node");
+        var $kern-osrelease = jcs:sysctl("kern.osrelease", "s");
+        var $version-set = jcs:split("[IRSB-]", $kern-osrelease );
+        var $e_major_in = $version-set[1];
+        var $e_minor_in = $version-set[2];
+
+        /* Check whether the current image on the node is higher than 10.4R4 */
+        var $issu_img_cmd = jcs:split("[IRSB-]", $issu_ver);
+        var $issu_img_1 = $version-set[1];
+        var $issu_img_2 = $version-set[2];
+        if ($e_major_in > $issu_img_1) {
+            expr jcs:output("Current image on node higher than recommended image ", $issu_ver);
+        } else if ($e_major_in == $issu_img_1) {
+            if ($e_minor_in >= $issu_img_2) {
+                expr jcs:output("Current image on node higher than recommended image ", $issu_ver);
+            } else {
+                <xsl:message terminate="yes"> "Current image on node lower than the recommended image version, so exiting!!";
+            }
+        } else {
+            <xsl:message terminate="yes"> "Current image on node lower than the recommended image version, so exiting!!";
+        }
+
+        /* upgrade file version given along with the op-script */
+        expr jcs:output("Checking the upgrade image version ...");
+        var $pattern = "([0-9]+\\.[0-9BR\\-\\.]+)"; 
+        var $ver = jcs:regex($pattern, $file);
+        var $u_version-set = jcs:split("[IRSB-]", $ver);
+        var $u_major_in = $u_version-set[1];
+        var $u_minor_in = $u_version-set[2];
+
+        if ($u_major_in > $e_major_in) {
+            expr jcs:output("ISSU upgrade can happen now...");
+        } else if ($u_major_in == $e_major_in) {
+            var $maj_set_e_1 = substring-before($e_minor_in, ".");
+            var $maj_set_e_2 = substring-after($e_minor_in, ".");
+            var $min_set_u_1 = substring-before($u_minor_in, ".");
+            var $min_set_u_2 = substring-after($u_minor_in, ".");
+            if ($min_set_u_1 > $maj_set_e_1) {
+                expr jcs:output("ISSU upgrade can happen now...");
+            } else if($min_set_u_1 == $maj_set_e_1) {
+                if ($min_set_u_2 > $maj_set_e_2) {
+                    expr jcs:output("ISSU upgrade can happen now...");
+                } else {
+                    <xsl:message terminate="yes"> "Downgrade is not supported via ISSU, so exiting!!!!";
+                }
+            } else {
+                <xsl:message terminate="yes"> "Downgrade is not supported via ISSU, so exiting!!!!";
+            }
+        } else {
+            <xsl:message terminate="yes"> "Downgrade is not supported via ISSU, so exiting!!!!";
+        }
+        
+        /* Enable traceoptions op scripts to capture the ISSU console messages*/
+        var $clear_op_log_cmd = <command> {
+             expr "clear log "_ $log-file;
+        }
+        expr jcs:output("Configuring operational script traceoptions on the cluster...");
+	var $op-xml = {
+		<configuration> {
+		    <system> {
+			<scripts> {
+                            <op> {
+			    <traceoptions> {
+				<file> {
+				    <filename> $log-file;
+				}
+				<flag> {
+				    <name> "all";
+				}
+			    }
+			}
+		    }
+		}
+            }
+	 }
+
+	 var $results-op := {
+             call jcs:load-configuration($action = "merge", $connection = $conn, $configuration = $op-xml);
+         }
+
+	 if ($results-op//xnm:error) {
+             call emit-warning($message = "Got the following error while configuring operational script traceoptions");
+	     for-each ($results-op//xnm:error) {
+                 call emit-error($message = message);
+	     }
+	 } else {
+	     expr jcs:progress("Configured operational script traceoptions");
+	 }
+
+        expr jcs:output("Clearing operational script traceoptions file on both the nodes....");
+        var $clear_op_cmd_res = jcs:execute($conn, $clear_op_log_cmd); 
+        expr jcs:output("Done clearing operational script traceoptions file on both the nodes....");
+
+        /* Determine if the local node is RG0 primary or not */
+        /* Compare the node0 hostname via configuration hostname on which this script is executed */
+        var $rpc0 = <get-configuration> {
+                <configuration> {
+                    <groups> {
+                        <name> "node0";
+                        <system> {
+                            <host-name>;
+                        }
+                    }
+                }
+        }
+        var $cfg = jcs:invoke($rpc0);
+        var $node0_host_cfg = $cfg/groups[name=="node0"]/system/host-name;
+
+        var $rpc1 = <get-configuration> {
+                <configuration> {
+                    <groups> {
+                        <name> "node1";
+                        <system> {
+                            <host-name>;
+                        }
+                    }
+                }
+        }
+        var $cfg1 = jcs:invoke($rpc1);
+        var $node1_host_cfg = $cfg1/groups[name=="node1"]/system/host-name;
+
+        var $stat = jcs:invoke('get-chassis-cluster-status');
+        var $RG-node-0 = $stat/redundancy-group[redundancy-group-id == 0]/device-stats/device-name;
+        var $RG-status-0 = $stat/redundancy-group[redundancy-group-id == 0]/device-stats/redundancy-group-status;
+        var $RG-node-1 = $stat/redundancy-group[redundancy-group-id == 0]/device-stats/device-name[2];
+        var $RG-status-1 = $stat/redundancy-group[redundancy-group-id == 0]/device-stats/redundancy-group-status[2];
+        
+         var $peer_node_info = {
+             if ($hostname == $node0_host_cfg  &&  contains($RG-status-0, "primary")) {
+                 expr jcs:output("Script is running on Primary RE node of cluster...continuing..");
+                 expr "0:" _ $node1_host_cfg;
+             } else if ($hostname == $node1_host_cfg  &&  contains($RG-status-1, "primary")) {
+                 expr jcs:output("Script is running on Primary RE node of cluster...continuing..");
+                 expr "1:" _ $node0_host_cfg;
+             } else {
+                 expr -1;
+                 <xsl:message terminate="yes"> "Script is not running on Primary RE node of cluster, so exiting!!";
+             }
+        }
+
+        var $failover_node_id = substring-before($peer_node_info, ":");
+        var $sec_node_name = substring-after($peer_node_info, ":");
+
+        /* Do RG1+ failover to RE primary node */
+        expr jcs:output("Checking node priorities on all the configured RGs...");
+        expr jcs:output("Doing RG1+ failover to the primary node if they are currently active on secondary node....");
+        var $status = jcs:invoke('get-chassis-cluster-status');
+        for-each ($status/redundancy-group) {  
+            var $RG = number(./redundancy-group-id);
+            if ($RG > 0) {
+                /* check the node priority for each RG */
+                var $rg-node0-pri = ./device-stats/device-priority[1];
+                var $rg-node1-pri = ./device-stats/device-priority[2];
+                if ($rg-node0-pri == 0 || $rg-node1-pri == 0) {
+                    <xsl:message terminate="yes"> "One of the node priorities is zero, recover and run the script, exiting!!";
+                } else {
+                }
+
+                var $failover_state = {
+                    if ($failover_node_id == 0) {
+                       expr ./device-stats/redundancy-group-status[1];
+                    } else {
+                       expr ./device-stats/redundancy-group-status[2];
+                    }
+                }
+
+                if ($failover_state != "primary") {
+                    var $dis_str = "RG" _ $RG _ " failover happening to primary node" _ $failover_node_id;
+                    expr jcs:output($dis_str);
+                    /* RG1+ failover command */
+                    var $fail-cmd-str = <rpc> {
+                            <command> {
+                             expr "request chassis cluster failover";
+                             expr " redundancy-group ";
+                             expr number($RG);
+                             expr " node ";
+                             expr number($failover_node_id);
+                        }
+                    }
+                    var $re1 = jcs:invoke($fail-cmd-str);
+                  
+                    /* RG1+ failover reset command */
+                    var $fail-reset-str = <rpc> {
+                       <command> {
+                       expr "request chassis cluster failover reset redundancy-group ";
+                       expr number($RG);
+                       }
+                    }
+                    var $re2 = jcs:invoke($fail-reset-str);
+                }
+            }
+        }
+        expr jcs:output("Done checking node priorities on all the configured RGs...");
+        expr jcs:output("Done RG1+ failover to the primary node...");
+
+        /* Check the idp detector version, if not same warn it.*/
+        /* Check the cpu utilization on primary node */
+        expr jcs:output("Checking CPU utilization on nodes...");
+        var $prim_spc = <command> {
+            expr "show chassis hardware node " _ $failover_node_id;
+        }
+        var $prim_spc_res = jcs:execute($conn, $prim_spc);
+        var $fpc-regex = "(FPC )([0-9]+)";
+        for-each ($prim_spc_res//chassis/chassis-module) {
+             if (contains(./description, "SPC")) {
+                 var $fpc-number = jcs:regex($fpc-regex, ./name);
+                 var $rpc-security-monitor-fpc = <command> {
+                          expr "show security monitor fpc ";
+                          expr number($fpc-number[3]);
+                          expr " node " _ number($failover_node_id);
+                          expr " no-forwarding";
+                 }
+                 var $security-monitor-results = jcs:execute($conn, $rpc-security-monitor-fpc);
+                 for-each ($security-monitor-results/spu-utilization-statistics) {
+                     var $spu-cpu-utilization0 = number(fpc/pic/spu-cpu-utilization[1]);
+                     var $spu-cpu-utilization1 = number(fpc/pic/spu-cpu-utilization[1]);
+                     if ( $spu-cpu-utilization0 > 80 || $spu-cpu-utilization1 > 80 ) {
+	                call emit-warning($message = "nodes are running on high CPU utilization ...");
+                     }
+                 }
+             }
+        }
+        expr jcs:output("Done checking CPU utilization on nodes...");
+
+        /* Disk space availability */
+        expr jcs:output("Checking disk space availability on nodes...");
+        var $sys_stor = <get-system-storage>;
+        var $sys_stor_res = jcs:execute($conn, $sys_stor);
+        for-each ($sys_stor_res/multi-routing-engine-item) {
+            if (re-name == "node0") {
+                var $sys_stor_res_n0 = ./system-storage-information/filesystem[filesystem-name == "/dev/ad0s1a"]/available-blocks;
+                /* expr jcs:output ("Available disk space on node 0: ", $sys_stor_res_n0) ; */
+            } else if (re-name == "node1") {
+                var $sys_stor_res_n1 = ./system-storage-information/filesystem[filesystem-name == "/dev/ad0s1a"]/available-blocks;
+                /* expr jcs:output ("Available disk space on node 1: ", $sys_stor_res_n1) ; */
+            } else {
+                expr jcs:output("some issue with the cluster, please check..");
+            }
+        }
+        if ($product == srx3400 || $product == srx3600 || $product == srx1400) { 
+            if ( $sys_stor_res_n0 < 210 || $sys_stor_res_n1 < 210 ) {
+                <xsl:message terminate="yes"> "Not enough disc space is available for upgrade, cleanup and run script again, exiting!!";
+            }
+        } else if ($product == srx5600 || $product == srx5800) { 
+            if ( $sys_stor_res_n0 < 400 || $sys_stor_res_n1 < 400 ) {
+                <xsl:message terminate="yes"> "Not enough disc space is available for upgrade, cleanup and run script again, exiting!!";
+            }
+        }
+        expr jcs:output("Done checking disk space availability on nodes...");
+
+        /* Interface monitoring is enabled or not, just display meesage */
+        var $intf_check = <get-chassis-cluster-interfaces>;
+        var $intf_check_res = jcs:execute($conn, $intf_check);
+        if (jcs:empty($intf_check_res/interface-monitoring/interface-name-for-monitoring)) {
+        } else {
+            expr jcs:output("Interface monitoring is enabled on cluster, will be disabled during ISSU process and enabled after its done ...");
+        }
+
+        /* IP monitoring is enabled or not, just display meesage */
+        var $intp_check = <get-chassis-cluster-ip-monitoring-status>;
+        var $intp_check_res = jcs:execute($conn, $intp_check);
+        for-each ($intp_check_res/multi-routing-engine-item) {
+            if (re-name == "node0") {
+                if (jcs:empty(./chassis-cluster-ip-monitoring/redundancy-group)) {
+                } else {
+                    expr jcs:output("IP monitoring is enabled on cluster, will be disabled during ISSU process and enabled after its done ...");
+                }
+            }
+        }
+
+        /* Fab monitoring is enabled or not, just display meesage */
+        var $fab_mon_check = <get-chassis-cluster-information-fabric-link>;
+        var $fab_mon_check_res = jcs:execute($conn, $fab_mon_check);
+        for-each ($fab_mon_check_res/multi-routing-engine-item) {
+            if (re-name == "node0") {
+                var $fab_state = ./fabric-link-information/fabric-monitoring-information/fabric-monitoring-status/fabric-monitoring-state; 
+            if ($fab_state == "Disabled") {
+            } else {
+               expr jcs:output("Fabric monitoring is enabled on cluster, will be disabled during ISSU process and enabled after its done ...");
+            }
+          }
+        }
+
+        /* Check IDP detector version */
+        expr jcs:output("Checking IDP detector version on nodes...");
+        var $idp_lic_cmd = <get-license-usage-summary>;
+        var $idp_lic_cmd_res = jcs:execute($conn, $idp_lic_cmd);
+        if ($idp_lic_cmd_res/feature-summary[name == "idp-sig"]) {
+            var $idp_det_cmd = <get-idp-security-package-information>;
+            var $idp_det_cmd_res = jcs:execute($conn, $idp_det_cmd);
+            var $n0_ver = $idp_det_cmd_res/multi-routing-engine-item[re-name == "node0"]/idp-security-package-information/detector-version;
+            var $n1_ver = $idp_det_cmd_res/multi-routing-engine-item[re-name == "node1"]/idp-security-package-information/detector-version;
+            if ($n0_ver != $n1_ver) {
+                call emit-warning($message = "IDP detector version is not same on both nodes, please check...");
+            } else {
+                expr jcs:output("IDP detector version is same on both nodes...");
+            }
+        } else {
+            expr jcs:output("IDP license is not installed on the cluster....so IDP detector version is not checked");
+        }
+        expr jcs:output("Done checking IDP detector version on nodes...");
+
+        /* Set timestamp on both the nodes */
+        var $set_time_cmd = {
+              <command> 'set cli timestamp';
+        }
+        expr jcs:output("Setting timestamp on nodes....");
+        var $set_time_cmd_res = jcs:execute($conn, $set_time_cmd); 
+        call execute-cmd-other-node($peer = $sec_node_name, $cmd-to-exe = $set_time_cmd);
+        expr jcs:output("Done setting timestamp on nodes....");
+
+	expr jcs:output("Please open console connections to both nodes, to check the ISSU status ...");
+	expr jcs:output("Prerequisites met, continuning with ISSU command, this will take couple of minutes, please check the status on opened console connections ...");
+
+        /* Issue ISSU cmd on primary RG0 node */
+	expr jcs:output("Executing ISSU command");
+        var $issu_cmd_str = <command> {
+                expr "request system software in-service-upgrade ";
+                expr $file;
+                expr " reboot";
+        }
+        var $issu_cmd = jcs:execute($conn, $issu_cmd_str);
+        expr jcs:output("Checking the ISSU console messages if any error happens....");
+        for-each($issu_cmd//text()) {
+           var $issu_op_line = .;
+           if (contains($issu_op_line, "ISSU currently do not support")) {
+              expr jcs:ouput("error: Unsupported features is configured, check the kb article, will be exiting ISSU window ...");
+              expr jcs:output("Closing the connection to local mgd...");
+              expr jcs:close($conn);
+           } else if (contains($issu_op_line, "File does not exist:")) {
+              expr jcs:output("error: Upgrade image file does not exists, check the file location, will be exiting ISSU window ...");
+              expr jcs:output("Closing the connection to local mgd...");
+              expr jcs:close($conn);
+           } else if (contains($issu_op_line, "ISSU aborted and exiting ISSU window")) {
+              expr jcs:output("error: Errors found during ISSU, check console messages, so exiting ...");
+              expr jcs:output("Closing the connection to local mgd...");
+              expr jcs:close($conn);
+           }
+        }
+    }
+}
+
+/*
+* Execute cmd in the given peer machine
+*/
+template execute-cmd-other-node($peer, $cmd-to-exe)
+{
+    expr jcs:progress("Executing this cmd on the other node '", $peer, "' ...");
+    expr jcs:progress("Connecting to other node '", $peer, "' ...");
+
+    var $conn = jcs:open($peer, $username, $passwd);
+    if (jcs:empty($conn)) {
+	call emit-warning($message = "Not able to connect to peer " _ $peer);
+    } else {
+	expr jcs:progress("Connected to peer '", $peer, "' ...");
+        var $clear_peer_node_cmd_res = jcs:execute($conn, $cmd-to-exe); 
+    }
+    expr jcs:close($conn);
+}
+
+/*
+ * Emit the give error message
+ */
+template emit-error($message) {
+    <xnm:error> {
+	<message> $message;
+    }
+}
+
+/*
+ * Emit the give warning message
+ */
+template emit-warning($message) {
+    <xnm:warning> {
+	<message> $message;
+    }
+}
