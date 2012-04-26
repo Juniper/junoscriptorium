@@ -30,7 +30,7 @@ param $file;
 param $hostname;
 param $product;
 param $username = "root";
-param $passwd = "Embe1mpls";
+param $passwd = "root123";
 param $log-file = "srx-issu-op-script";
 param $directory = "/var/log/";
 param $issu_ver = "10.4R4";
