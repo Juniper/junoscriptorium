@@ -1,0 +1,39 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match configuration {
+    var $toplevel = .;
+    var $all-sonets = interfaces/interface[starts-with(name, "so-")];
+    for-each ($all-sonets/name) {
+    var $sonet = .;
+    var $split = jcs:regex("(so)-([0-9]+)/([0-9]+)/([0-9]*)", $sonet);
+    var $fpc = $split[3];
+    var $pic = $split[4];
+        if (not($toplevel/chassis/fpc[name == $fpc]/pic[name == $pic]/framing)) {
+            call jcs:emit-change ($dot = $toplevel) {
+                with $message = {
+                    expr " Configuring sdh framing for FPC: ";
+                    expr $fpc;
+                    expr " and for PIC: ";
+                    expr $pic;
+                 }
+                with $content = {
+        <chassis> {
+                        <fpc> {
+                            <name> $fpc;
+                            <pic> {
+                                <name> $pic;
+                               <framing> "sdh";
+				}
+                        }
+                }
+            }
+	}
+      }
+   }
+}
