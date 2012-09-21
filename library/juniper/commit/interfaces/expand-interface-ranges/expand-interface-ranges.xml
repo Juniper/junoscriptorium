@@ -68,9 +68,9 @@ expand-interface-ranges script by running a single CLI command:
 op url http://junoscriptorium.googlecode.com/svn/trunk/library/juniper/op/installation/install-expand-interface-ranges/install-expand-interface-ranges.slax
 
 Minimum JUNOS Version: 10.0
-Latest Script Version: 1.0
-MD5 Checksum: ae6f22a3fe11d0454358b3d192706003
-SHA-256 Checksum: 27a426b6914a06da39a5c03a4929fe3d3786ffda17205b6694309f442b91f6b7
+Latest Script Version: 1.2
+MD5 Checksum: cc2415916de1b398249b9fc4bfdeb0b9
+SHA-256 Checksum: 3f6fa0db14da4847c419c0d758ff3522e8daa8c20112856d693bc361f8af0c10
 ]]>
   </description>
   <example>
