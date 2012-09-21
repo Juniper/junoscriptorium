@@ -1,7 +1,7 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.0
- * Last Modified : November 10, 2009
+ * Version       : 1.2
+ * Last Modified : September 20, 2012
  * Platform      : all
  * Release       : 10.0 and above
  * Description: The expand-interace-ranges script alters the behavior of the 
@@ -19,8 +19,13 @@
  * the configuration, will be considered as a possible target of an expanded interface-
  * range.
  * 
+ * Revisions:
+ *     1.1 - Added support for numeric ranges when using the member statement. Must be
+ *     from 0 to 99. e.g. ge-0/0/[1-41]
+ *     1.2 - Added support for comma ranges when using the member statement. [1,3,5] etc
+ *
  * License       : BSD-Style
- *  Copyright (c) 2009 Curtis Call. All Rights Reserved.
+ *  Copyright (c) 2012 Curtis Call. All Rights Reserved.
  *  Redistribution and use in source and binary forms, with or without modification, 
  *  are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice, this 
@@ -171,8 +176,14 @@ template get-interfaces( $interfaces, $interface-range, $interface-config ) {
     var $all-members := {
         /* Process each member statement */
         for-each( $interface-range/*[name() == "member"] ) {
+        
+            /* Replace any dash ranges [#-#] */
+            var $modified-interface-1 = { call replace-dash-ranges( $interface = name ); }
+            /* Replace any comma ranges [#,#] */
+            var $modified-interface-2 = { call replace-comma-ranges( $interface = $modified-interface-1 ); }
+            
             /* Figure out what $interfaces match based on the regex */
-            var $regex = str:replace( name, "*", ".*" );
+            var $regex = concat( str:replace( $modified-interface-2, "*", ".*" ), "$");
             /* Check installed interfaces */
             for-each( $interfaces/physical-interface/name ) {
                 var $name = .;
@@ -333,5 +344,165 @@ template is-interface-before( $interface, $before-interface ) {
     }
     else {
         expr $false;
+    }
+}
+
+/*
+ * Replace any comma ranges with regex patterns
+ */
+template replace-comma-ranges( $interface ) {
+    /* Scan for comma within brackets */
+    var $comma-range = jcs:regex( "[[]([[:digit:]]{1,2},)+[[:digit:]]{0,2}[]]", $interface );
+    
+    if( count( $comma-range ) > 0 ) {
+        /* Strip off the brackets */
+        var $inside = substring-before( substring-after( $comma-range[1], "[" ), "]" );
+        
+        /* Grab all the numbers */
+        var $numbers = jcs:split( ",", $inside );
+        
+        /* We don't want any blanks */
+        var $non-blank-numbers := {
+            for-each( $numbers ) {
+                if( string-length( . ) > 0 ) {
+                    <number> .;
+                }                
+            }
+        }
+        
+        /* Create new range using parenthesis and pipes */
+        var $new-inside = {
+            expr "(";
+            for-each( $non-blank-numbers/number ) {
+                expr "(" _ . _ ")";
+                if( position() != last() ) {
+                    expr "|";
+                }
+            }
+            expr ")";
+        }
+        
+        var $new-interface = str:replace( $interface, $comma-range[1], $new-inside );
+        
+        call replace-comma-ranges( $interface = $new-interface );
+    }
+    else {
+        expr $interface;
+    }
+}
+
+/*
+ * Replace any dash ranges with regex patterns
+ */
+template replace-dash-ranges( $interface ) {
+    /* Scan for dash within brackets with at least one two digit number */
+    var $dash-range = jcs:regex( "[[][[:digit:]]{1,2}-[[:digit:]]{2}[]]", $interface );
+    
+    if( count( $dash-range ) > 0 ) {
+
+        var $pattern = { call convert-range-to-pattern( $range = $dash-range[1] ); } 
+        var $new-interface = str:replace( $interface, $dash-range[1], $pattern );
+        
+        call replace-dash-ranges( $interface = $new-interface );
+    }
+    else {
+        expr $interface;
+    }
+}
+
+/*
+ * Converts number ranges in the format [#-#] into valid regex patterns.
+ * Supports an incrementing range from 0 to 99.
+ * i.e. [1-9] just becomes [1-9], but [1-11] becomes (([1-9])|(1[0-1]))
+ */
+template convert-range-to-pattern( $range ) {
+
+    /* Compute low number and high number */
+    var $low-number = normalize-space( substring-before( substring-after( $range, "["), "-" ) );
+    var $high-number = normalize-space( substring-before( substring-after( $range, "-"), "]" ) );
+    
+    /* Exit if invalid */
+    if( string( number( $low-number ) ) == "NaN" || string( number( $high-number ) ) == "NaN" ||
+        $low-number > $high-number || $low-number < 0 || $high-number > 99 ) {
+    
+        <xsl:message terminate="yes"> "Invalid range: " _ $range;
+    }
+    
+    /* If numbers are the same or both are less than ten then just use the existing range string */
+    if( $low-number == $high-number || ( $low-number < 10 && $high-number < 10 ) ) {
+        expr $range;
+    }
+    else {
+    
+        /* Otherwise, start the regex pattern */
+        expr "(";
+    
+        /* Convert into tens and ones */
+        var $low-tens = {
+            if( $low-number >= 10 ) {
+                expr ( floor( $low-number div 10 ) );
+            }
+            else {
+                expr "0";
+            }
+        }
+        var $low-ones = $low-number mod 10;
+    
+        var $high-tens = {
+            if( $high-number >= 10 ) {
+                expr ( floor( $high-number div 10 ) );
+            }
+            else {
+                expr "0";
+            }
+        }
+        var $high-ones = $high-number mod 10;
+
+        /* Start processing range patterns */
+        call do-low-range( $low-tens, $low-ones, $high-tens, $high-ones );
+    
+        /* End the regex pattern */
+        expr ")";
+    }
+}
+
+template do-low-range( $low-tens, $low-ones, $high-tens, $high-ones ) {
+
+    /* If low and high tens are the same then just output the range */
+    if( $low-tens == $high-tens ) {
+        /* The tens cannot be zero, so assume there is a value there */
+        expr "(" _ $low-tens;
+        
+        /* If both are the same then just dump the number, otherwise do a range */
+        if( $low-ones == $high-ones ) {
+            expr $low-ones;
+        }
+        else {
+            expr "[" _ $low-ones _ "-" _ $high-ones _ "]";
+        }
+        
+        expr ")";
+    }
+    else {
+        /* Process a range for just the low number */
+        expr "(";
+        if( $low-tens > 0 ) {
+            expr $low-tens;
+        }
+        
+        /* Only do a range if there is a range */
+        if( $low-ones == 9 ) {
+            expr $low-ones;
+        }
+        else {
+            expr "[" _ $low-ones _ "-9]";
+        }
+        expr ")";
+
+        /* Insert a pipe */
+        expr "|";
+        
+        /* Move up by ten and process again */
+        call do-low-range( $low-tens = $low-tens + 1, $low-ones = 0, $high-tens, $high-ones );
     }
 }
