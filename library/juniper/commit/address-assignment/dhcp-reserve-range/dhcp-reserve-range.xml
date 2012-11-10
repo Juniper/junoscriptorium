@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<script>
+  <title>dhcp-reserve-range.slax</title>
+  <author>bbennett</author>
+  <synopsis>
+	Reserves a range of IP addresses in local dhcp server for static bindings.
+  </synopsis>
+  <coe>commit</coe>
+  <type>commit</type>
+
+  <description>
+Junos routers do not support a range to be excluded from the dynamic dhcp pool in addition static-bindings must be inside the dynamic range for a pool. This means you cannot reserve a section of the dhcp range to be used only for static-bindings. For example you may want 172.16.1.32-47 to be reserved for static bindings only and have dyanmic bindings start at 48.
+
+This script mimicks the desired behavior by doing tranient change on commit that has fake static-bidings to "reserve" the range for future static-bindings. If a static-binding exists for an IP address in the range a fake binding is not created.
+
+  </description>
+
+  <keyword>dhcp</keyword>
+  <keyword>commit</keyword>
+  <keyword>static</keyword>
+  <example>
+    <title>configuration</title>
+    <description>Sample configuration</description>
+    <config>example-1.conf</config>
+    <output>example-1.output</output>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

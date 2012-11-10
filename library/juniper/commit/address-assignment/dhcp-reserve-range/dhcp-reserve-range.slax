@@ -1,0 +1,151 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+/* ns dyn = "http://exslt.org/dynamic";
+ns bit extension = "http://xml.libslax.org/bit"; */
+
+import "../import/junos.xsl";
+
+var $MAC_PREFIX = "be:ef";
+
+match configuration {
+    var $toplevel = .;
+    for-each (system/services/dhcp/pool/apply-macro[name='reserved-range']) {
+		var $low_ip = data[name == "low"]/value;
+    	var $high_ip = data[name == "high"]/value;
+
+    	if (jcs:empty($low_ip)) {
+    		<xnm:error> {
+    			call jcs:edit-path($dot=.);
+    			<message> "'low' ip address value required";
+    		}    	
+    	}
+
+    	if (jcs:empty($high_ip)) {
+    		<xnm:error> {
+    			call jcs:edit-path($dot=.);
+    			<message> "'high' ip address value required";
+    		}    	
+    	}
+
+    	var $low_dec = { call ipv4_to_dec($ip = $low_ip); }
+    	var $high_dec = { call ipv4_to_dec($ip = $high_ip); }
+
+    	if ($low_dec > $high_dec) {
+    		<xnm:error> {
+    			call jcs:edit-path($dot=.);
+    			<message> "Invalid range: 'low' reserved address is greater than 'high'";
+    		}
+    	} 
+
+    	var $pool = ..;
+    	var $pool_low_dec = { call ipv4_to_dec($ip =../address-range/low); }
+    	var $pool_high_dec = { call ipv4_to_dec($ip = ../address-range/high); }
+
+    	if ($low_dec < $pool_low_dec) {
+    		<xnm:error> {
+    			call jcs:edit-path($dot=.);
+    			<message> "Invalid range: 'low' reserved address lower than the pool";
+    		}    		
+    	}
+
+    	if ($high_dec > $pool_high_dec) {
+    		<xnm:error> {
+    			call jcs:edit-path($dot=.);
+    			<message> "Invalid range: 'high' reserved address is greater than the pool";
+    		}
+    	} 
+
+    	var $range := { call emit-range($start = $low_dec, $end = $high_dec); }
+    	for-each ($range/num) {
+            var $current_ip = { call dec_to_ipv4($num = .); }
+            /* Only create a transient chage for a fake bining if a real static-binding doesn't already exist */
+            if (jcs:empty($toplevel/system/services/dhcp/static-binding[fixed-address/name == $current_ip])) {
+    	    	call jcs:emit-change($dot = $toplevel/system/services/dhcp, $tag = 'transient-change') {
+    	    		with $content = {
+    	    			<static-binding> {
+                            <name> {
+                                call create_fake_mac($ip = $current_ip);
+                            }
+                            <fixed-address> {
+                                <name> $current_ip;
+                            }
+                        }
+    	    		}
+    	    	}
+            }
+	    }
+    }
+ }
+
+template emit-range($start, $end) {
+	<num> $start;
+	if ($start < $end) {
+
+		call emit-range($start = $start + 1, $end = $end);
+	}
+}
+
+var $HEX_DIGITS := {
+        <digit> 'a';
+        <digit> 'b';
+        <digit> 'c';
+        <digit> 'd';
+        <digit> 'e';
+        <digit> 'f';    
+}
+
+template get_rev_hex_digits($num) {
+    if ($num > 0) {
+        var $val = $num mod 16;
+        if ($val > 9) {
+            <digit> $HEX_DIGITS/digit[$val - 9];
+        } else {
+            <digit> $val;
+        }
+        call get_rev_hex_digits($num = floor($num div 16));
+    }
+}
+
+template to_hex($num) {
+    var $rev_hex := { call get_rev_hex_digits($num = $num); }
+    for-each ($rev_hex/digit) {
+        <xsl:sort select="position()" data-type="number" order="descending">;
+        expr .;
+    }
+}
+
+
+template create_fake_mac($ip) {
+    var $octets = jcs:split("(\\.)", $ip);
+    var $hex_a = { call to_hex($num = $octets[1]); }
+    var $hex_b = { call to_hex($num = $octets[2]); }
+    var $hex_c = { call to_hex($num = $octets[3]); }
+    var $hex_d = { call to_hex($num = $octets[4]); }
+    /*  
+     * This is more elegant but required slax 1.1 which is only 12.2 and above.  
+     * Eventually I will switch over to this method as 12.2+ becomes more widely deployed 
+     */
+    /*
+    var $hex_octets := dyn:map($octets, "concat(':', substring-after(bit:to-hex(bit:from-int(number(.))), 'x'))"); 
+    var $rtf = { copy-of $hex_octets; }*/
+    expr $MAC_PREFIX _ ':' _ $hex_a _ ':' _ $hex_b _ ':' _ $hex_c _ ':' _ $hex_d;
+}
+
+template ipv4_to_dec($ip) {
+	var $octets = jcs:split("(\\.)", $ip);
+	expr $octets[1]*16777216 + $octets[2]*65536 + $octets[3]*256 + $octets[4];
+}
+
+template dec_to_ipv4($num) {
+	var $d = round($num) mod 256;
+	var $num2 = ($num - $d) div 256;
+	var $c = round($num2) mod 256;
+	var $num3 = ($num2 - $c) div 256;
+	var $b = round($num3) mod 256;
+	var $num4 = ($num3 - $b) div 256;
+	var $a = round($num4) mod 256;
+	expr $a _ "." _ $b _ "." _ $c _ "." _ $d;
+}
