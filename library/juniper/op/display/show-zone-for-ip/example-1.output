@@ -1,0 +1,3 @@
+bbennett@SRX210> op show-zone-for-ip ip 172.16.1.40    
+  Matching Route                 NH Interface    Route Table     Security Zone
+  172.16.1.0/24                  vlan.1001       inet.0          TRUST

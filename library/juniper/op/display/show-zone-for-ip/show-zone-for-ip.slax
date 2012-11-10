@@ -1,0 +1,75 @@
+/*
+ *
+ * NAME: show-zone-for-ip.slax
+ * PURPOSE: Created to find the security zone that an IP address lives in.
+ *
+ * Changelog:
+ *  v1.1:
+ *      * Fixed issue when used on a clustered SRX
+ *      * Increaed the IP column for IPv6 valuestoa
+ *      * Optimized lookup the zone for an interface (remoted the loop)
+ *      * Use a single RPC connection
+ *      * Added some progress information for debugging
+ *  v1.1.1:
+ *      * Fixed stupid bug in matching a zone interface
+ *  v1.2:
+ *      * Allow for the specified IP address to be a local IP address on 
+ *        the firewall
+ */
+ 
+ version 1.0;
+ ns junos = "http://xml.juniper.net/junos/*/junos";
+ ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ import "../import/junos.xsl";
+ var $arguments = {
+     <argument> {
+         <name> "ip";
+         <description> "IP address you are searching for";
+     }
+ }
+ param $ip;
+ 
+ match / {
+    <op-script-results> {
+    
+        if (jcs:empty($ip)) {
+            <xsl:message terminate="yes"> "Please specify the IP address.";
+        } 
+
+        var $get-route-info-rpc = <get-route-information> {
+            <destination> $ip;
+            <best>;
+        }   
+        var $get-zone-info-rpc = <get-zones-information>;
+
+        expr jcs:progress("Opening RPC connection.");
+        var $conn = jcs:open();
+
+        expr jcs:progress("Getting 'show route' output");
+        var $route-output = jcs:execute($conn, $get-route-info-rpc);
+
+        expr jcs:progress("Getting 'show security zones' output");
+        var $zone-output = jcs:execute($conn, $get-zone-info-rpc);
+
+        expr jcs:close($conn);
+    
+        var $format = "%s %-30s %-15s %-15s %s";
+    
+        var $header = jcs:printf($format, " ", "Matching Route", "NH Interface", "Route Table", "Security Zone");
+        <output> $header;
+    
+        for-each ($route-output/route-table) {
+            var $route-table = ./table-name;
+            var $route = ./rt/rt-destination;
+
+            for-each (./rt/rt-entry/nh) {
+                var $route-interface = jcs:first-of(./via, ./nh-local-interface, "");
+                /* Find security zone */
+                var $zone-name = $zone-output//zones-security[zones-security-interfaces/zones-security-interface-name == $route-interface]/zones-security-zonename;
+                var $line = jcs:printf($format, " ", $route, $route-interface, $route-table, $zone-name);
+                <output> $line;
+            }
+        }
+    }
+}

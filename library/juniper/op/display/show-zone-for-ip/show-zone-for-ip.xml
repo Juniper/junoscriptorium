@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<script>
+  <title>show-zone-for-ip.slax</title>
+  <author>bbennett</author>
+  <synopsis>
+	Identify a zone for a paticular IP address using the routing table and zone information.
+  </synopsis>
+  <coe>op</coe>
+  <type>display</type>
+
+  <description>
+On the SRX platforms with a good number of zones it may be useful to find out which zone a destination IP address would belong to.  This script uses the routing table to determine the next-hop interface of an IP address.  It then discovers which zone that next-hop interfaces lives in.
+
+This script should work for both IPv4 and IPv6 as well as support virtual-routers.
+
+  </description>
+
+  <keyword>zones</keyword>
+  <keyword>srx</keyword>
+  <example>
+    <title>Sample output</title>
+    <description>Example usage with a single ip address and inet.0.</description>
+    <output>example-1.output</output>
+  </example>
+  <example>
+    <title>More complex output</title>
+    <description>Example usage with a single ip address matching multiple default routes in different routing tables.</description>
+    <output>example-2.output</output>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>

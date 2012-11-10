@@ -1,0 +1,5 @@
+bbennett@SRX210> op show-zone-for-ip ip 8.8.8.8        
+  Matching Route                 NH Interface    Route Table     Security Zone
+  0.0.0.0/0                      fe-0/0/7.0      inet.0          UNTRUST   
+  0.0.0.0/0                      lt-0/0/0.2      test.inet.0     RI-TRUST
+  0.0.0.0/0                      lt-0/0/0.3      test.inet.0     RI-TRUST
