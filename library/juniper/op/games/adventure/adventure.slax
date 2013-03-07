@@ -1,7 +1,7 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.41
- * Last Modified : November 25, 2009
+ * Version       : 1.43
+ * Last Modified : March 7, 2013
  * Platform      : all
  * Release       : 9.6 and above
  *
@@ -39,6 +39,9 @@
  *    displayed in the prompt until the memory size exceeds 50 megs.  Also various
  *    edits were made to comments, text, as well as the license.
  *    1.41 - Converted to UNIX newlines.
+ *    1.42 - Removed extraneous "error" message when exiting normally.
+ *    1.43 - Made slight modifications to avoid syntax bugs introduced with SLAX 1.1
+ *    in Junos 12.2.
  *
  * License       : BSD-Style
  *  Copyright (c) 2009 Curtis Call. All Rights Reserved.
@@ -3029,7 +3032,7 @@ match / {
             
             /* Close the connection */
             expr jcs:close( $connection );
-            <xsl:message terminate="yes"> "Not an error, but we are exiting after clearing all game data.";
+            <xsl:message terminate="yes"> "\rGoodbye!";
         }
         else {
             expr adv:write-raw-message("Well that's a relief!");
@@ -4089,7 +4092,9 @@ match / {
     }
 
     /* We have something... */    
-    if( count( $inventory-set/object ) > 0 ) {
+    /* Workaround SLAX 1.1 syntax bug */
+    var $temp-count = count( $inventory-set/object );
+    if( $temp-count > 0 ) {
         expr adv:write-message( 99 );
         
         /* Display all the stuff */
@@ -5044,15 +5049,13 @@ match / {
 
 
 /*
- * adv:exit - Closes the game by using <xsl:message terminate="yes">.  This will
- * cause "error:" to be displayed so indicate in the string that there really isn't
- * an error.
+ * adv:exit - Closes the game by using <xsl:message terminate="yes">.  
  */
 <func:function name="adv:exit"> {
 
     /* Close the connection */
     expr jcs:close( $connection );
-    <xsl:message terminate="yes"> "Just kidding, there is no error, we're just exiting Adventure...";
+    <xsl:message terminate="yes"> "\rGoodbye!";
 }
 
 
@@ -5311,7 +5314,9 @@ match / {
         }
         
         /* If there are items to steal then steal them and move the chest */
-        if( count( $treasure-set/steal ) > 0 ) {
+        /* Workaround SLAX 1.1 syntax bug */
+        var $temp-count = count( $treasure-set/steal );
+        if( $temp-count > 0 ) {
             expr adv:write-message(  128 ); /* Pirate har har message */
             expr adv:drop-object( $chest, $chest-location );
             expr adv:drop-object( $message, $message-location );
@@ -8285,7 +8290,7 @@ var $database := {
             }
             <message> {
                 <number> 84;
-                <text> "Okay, now where did I put my orange smoke? ... > POOF! <\n" _ /* ">" */
+                <text> "Okay, now where did I put my orange smoke? ... > POOF! <\n" _ 
                        "Everything disappears in a dense cloud of orange smoke.";
             }
             <message> {
