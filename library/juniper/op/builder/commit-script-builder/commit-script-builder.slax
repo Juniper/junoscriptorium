@@ -1,7 +1,7 @@
 /*
  * Author        : Curtis Call
- * Version       : 1.15
- * Last Modified : October 26, 2010
+ * Version       : 1.16
+ * Last Modified : March 7, 2013
  * Platform      : all
  * Release       : 10.0 and above
  *
@@ -18,9 +18,11 @@
  * using jcs:get-input(). This was required due to changes in Junos 10.2 that limited
  * the prompt size to 1024 bytes. However, this makes the script susceptible to PR 473816
  * so | no-more must always be used when running it.
+ * 1.16 - Output menus line by line to work around the unfortunate buffer limit added by
+ * SLAX 1.1 in Junos 12.2.
  *
  * License       : BSD-Style
- *  Copyright (c) 2010 Curtis Call. All Rights Reserved.
+ *  Copyright (c) 2013 Curtis Call. All Rights Reserved.
  *  Redistribution and use in source and binary forms, with or without modification, 
  *  are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice, this 
@@ -53,7 +55,7 @@ ns csb extension = "http://xml.juniper.net/commit-script-builder";
 import "../import/junos.xsl";
 
 /* Builder version number */
-var $script-version = "1.14"; 
+var $script-version = "1.16"; 
 
 /* Possible violation actions */
 var $error = "Error";
@@ -252,33 +254,31 @@ match / {
     /* Retrieve the current selections */
     var $selections = csb:get-violation-selections();
 
-    var $before-prompt = {
-        expr  "_\r \n[Configuration Violation Categories]\n" _
-                 "------------------------------------\n";
-        for-each( $violation-category-set[ position() <= round( count( $violation-category-set ) div 2) ] ) {
-            var $first-string = " " _ position() _ ". " _ .;
-            var $second-string = {
-                var $number = round( count( $violation-category-set ) div 2 ) + position(); 
-                if( $number <= count( $violation-category-set ) ) {
-                    expr " " _ $number _ ". " _ $violation-category-set[ number( $number ) ];
-                }
-                else {
-                    expr "";
-                }
+	expr jcs:output("_\r \n[Configuration Violation Categories]\n",
+		 "------------------------------------");
+	for-each( $violation-category-set[ position() <= round( count( $violation-category-set ) div 2) ] ) {
+	    var $first-string = " " _ position() _ ". " _ .;
+	    var $second-string = {
+            var $number = round( count( $violation-category-set ) div 2 ) + position(); 
+            if( $number <= count( $violation-category-set ) ) {
+                expr " " _ $number _ ". " _ $violation-category-set[ number( $number ) ];
             }
-            expr jcs:printf( "%-20s %-20s", $first-string,  $second-string ) _ "\n"; 
-        }
-        expr " " _ ( count( $violation-category-set ) + 1 ) _ ". <All Categories>\n";
-        expr " " _ ( count( $violation-category-set ) + 2 ) _ ". <Current Selections>\n";
-        expr "...\n";
-        expr " 0. Return to Main Menu\n" _
-             "------------------------------------\n";
-        expr    "(" _ count( $selections/violation ) _ " selected violations)\n";
-    }
+            else {
+                expr "";
+            }
+	    }
+	    /* Output line by line in order to avoid buffer issues */
+	    expr jcs:output( jcs:printf( "%-20s %-20s", $first-string,  $second-string ) ); 
+	}
+	expr jcs:output( " ", ( count( $violation-category-set ) + 1 ), ". <All Categories>");
+	expr jcs:output( " ", ( count( $violation-category-set ) + 2 ), ". <Current Selections>");
+	expr jcs:output( "...");
+	expr jcs:output(" 0. Return to Main Menu\n",
+	     "------------------------------------");
+	expr jcs:output( "(", count( $selections/violation ), " selected violations)");
     var $prompt = {
         expr "Select Category:> ";
     }
-    expr jcs:output( $before-prompt );
     var $answer = csb:safe-get-input( $prompt );
     
     /* Valid responses are numbers within the category range */
@@ -347,26 +347,23 @@ match / {
     }
     var $line = { call build-line( $length = string-length( $title ) + 2, $character = "-" ); }
     
-    var $before-prompt = {
-        expr "_\r \n[" _ $title _ "]\n" _ $line _ "\n";
-        for-each( $display-violations/violation ) {
-            var $template-name = template-name;
-            /* Display the selected violations with brackets around them */
-            if( $selections/violation[template-name == $template-name ] ) {
-                expr "[" _ position() _ "] " _ synopsis _ "\n";
-            }
-            else {
-                expr " " _ position() _ ". " _ synopsis _ "\n";
-            }
+    expr jcs:output( "_\r \n[",  $title,  "]\n",  $line);
+    for-each( $display-violations/violation ) {
+        var $template-name = template-name;
+        /* Display the selected violations with brackets around them */
+        if( $selections/violation[template-name == $template-name ] ) {
+            expr jcs:output( "[", position(), "] ",  synopsis);
         }
-        expr "...\n";
-        expr " 0. Return to Category Menu\n" _ $line _ "\n";
-        expr "[#] = Action is selected\n";
+        else {
+            expr jcs:output( " ", position(), ". ", synopsis);
+        }
     }
+    expr jcs:output( "...");
+    expr jcs:output(" 0. Return to Category Menu\n", $line);
+    expr jcs:output( "[#] = Action is selected" );
     var $prompt = {
         expr "Select Violation to Edit:> ";
     }
-    expr jcs:output( $before-prompt );
     var $answer = csb:safe-get-input( $prompt );
     
     /* edit the violation */
