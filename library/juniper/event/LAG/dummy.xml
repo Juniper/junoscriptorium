@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<script>
+<author>NA</author>
+<title>dummy.slax</title>
+<synopsis>
+This event script enables LAG support for JVAE
+</synopsis>
+<coe>event</coe>
+<type>LAG</type>
+
+<description>
+This script is required to enable LAG for mamagement port of JVAE.
+</description>
+
+ <example>
+ <title>Example</title>
+ <config>dummy.conf</config>
+ </example>
+
+<xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+src="../../../../../web/leaf.js" 
+type="text/javascript"/>
+</script>
