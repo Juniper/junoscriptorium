@@ -1,0 +1,70 @@
+/*      
+*    NAME: clear_secondary_path_after_inactive.slax
+*    VERSION: 1.0
+*    PURPOSE: The requirement is that when an mpls lsp switches from
+*             secondary path to primary path, we flap the secondary path
+*             in order to reset the bandwidth (when configured with
+*             auto-bandwidth resignal-minimum-bandwidth).
+*    AUTHOR: Francis Luong (Franco) -- @francisluong - http://about.me/francisluong
+*       
+* To use, copy the file to /var/db/scripts/event on each routing-engine
+* and then add the following configuration:
+*
+event-options { 
+    event-script {
+        file clear_secondary_path_after_inactive.slax;
+    }
+}
+*/
+                
+version 1.0;
+        
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+ 
+/* Embedded event policy: set the policy to refresh every five minutes */
+
+var $event-definition = {
+    <event-options> {
+        <policy> {
+            <name> "clear_secondary_path_after_inactive";
+            <events> "rpd_mpls_lsp_switch";
+            <then>{
+                <event-script>{
+                    <name> "clear_secondary_path_after_inactive.slax";
+                }
+            }
+        }
+    }
+}
+
+/* begin script */
+
+match / {
+  <event-script-results> {
+
+    /* Gather Relevant data fom event-script-input */
+    var $lsp-name = event-script-input/trigger-event/attribute-list/attribute[name == "lsp-name"]/value;
+    var $bandwidth = event-script-input/trigger-event/attribute-list/attribute[name == "bandwidth"]/value;
+    var $old-pathname = event-script-input/trigger-event/attribute-list/attribute[name == "old-pathname"]/value;
+    var $old-path-type = event-script-input/trigger-event/attribute-list/attribute[name == "old-path-type"]/value;
+    if( $old-path-type = "secondary" ) {
+      var $clear-lsp-path = <clear-mpls-lsp-information> {
+        <regex> $lsp-name;
+        <path> $old-pathname;
+      }
+      var $result = jcs:invoke( $clear-lsp-path );
+      /* Add a Syslog to indicate that the LSP has been cleared */
+      var $message = "resetting LSP " _ $lsp-name _ " PATH " _ $old-pathname ;
+      expr jcs:syslog( "user.info", $message );
+      if ( $result//self::xnm:error ) {
+        /* handle error? */
+      }
+    }
+  }
+}
+
+
