@@ -1,0 +1,63 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+param $activate-group;  /* Group to get activated in configuration */
+param $deactivate-group; /* Group to get deactivated in configuration */
+
+match / {
+    <event-script-results> {
+
+         var $connection = jcs:open(); /* Opens connection with local mgd */
+        
+         /* Reading group configuration */
+         var $groups-get-config = <get-configuration database="committed"> {
+             <configuration> {
+                 <groups>;
+             }
+         } 
+
+         /* Executing groups configuration RPC */
+         var $config-groups = jcs:execute($connection, $groups-get-config);
+
+         /* Verbose logs to syslog */
+         if ($config-groups/groups[name == $activate-group]) {
+             expr jcs:syslog("external.notice", "Group ", $activate-group, " exist in the configuration");
+         } else {
+             expr jcs:syslog("external.notice", "Group ", $activate-group, " does not exist in the configuration");
+             <xsl:message terminate="yes"> "Script terminated!!";
+         }  
+         if ($config-groups/groups[name == $deactivate-group]) {
+             expr jcs:syslog("external.notice", "Group ", $deactivate-group, " exist in the configuration");
+         } else {
+             expr jcs:syslog("external.notice", "Group ", $deactivate-group, " does not exist in the configuration");
+             <xsl:message terminate="yes"> "Script terminated!!";
+         }   
+
+         /* Activate/De-Activate specific configuration */
+         var $configuration-change = <configuration> {
+             <groups active="active"> {
+                 <name> $activate-group;
+             }
+             <groups inactive="inactive"> {
+                 <name> $deactivate-group;
+             }
+         }
+
+         /* Load and commit the configuration */
+         var $results := { call jcs:load-configuration($connection, $configuration = $configuration-change); }
+
+         if ($results//xnm:error) {
+             for-each ($results//xnm:error) {
+                 /* Dump error messages to syslog */  
+                 expr jcs:syslog("external.notice", message);
+             }  
+         }
+         /* The connection is closed */
+         var $close-results = jcs:close($connection);
+    }
+}

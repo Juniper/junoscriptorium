@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<script>
+  <title>activate-config.slax</title>
+  <author>dsatya</author>
+  <synopsis>
+	Event-based script to automatically activate/deactivate specific groups 
+  </synopsis>
+  <coe>event</coe>
+  <type>support</type>
+
+  <description>
+Based on receiving a event this script would trigger the activation of one config group and the deactivation of another config group, so contents of thechanged config live in the normal config file, after successful execution of this event script.
+  </description>
+
+  <keyword>support</keyword>
+  <example>
+    <title>Configuration</title>
+    <description>Configuration required for this event script.</description>
+    <config>example-1.conf</config>
+  </example>
+
+  <xhtml:script xmlns:xhtml="http://www.w3.org/1999/xhtml"
+                src="../../../../../web/leaf.js" 
+	        type="text/javascript"/>
+</script>
