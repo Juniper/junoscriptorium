@@ -9,7 +9,9 @@
   <type>support</type>
 
   <description>
-Based on receiving a event this script would trigger the activation of one config group and the deactivation of another config group, so contents of thechanged config live in the normal config file, after successful execution of this event script.
+Based on receiving a event this script would trigger the activation of one config
+group and the deactivation of another config group, so contents of thechanged 
+config live in the normal config file, after successful execution of this event script.
   </description>
 
   <keyword>support</keyword>
