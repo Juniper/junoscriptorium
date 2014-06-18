@@ -1,0 +1,16 @@
+user@JUNOS> op slax-doctor filename /var/db/scripts/op/demo-safe-file-get.slax
+->Total lines in /var/db/scripts/op/demo-safe-file-get.slax = 650
+->Found 13 templates in script file
+->Found 0 functions in script file
+->SLAX Doctor - starting line by line checkup...
+[Processing lines 1-101]
+[Processing lines 101-201]
+[Processing lines 201-301]
+[Processing lines 301-401]
+[Processing lines 401-501]
+[Processing lines 501-601]
+[Processing lines 601-701]
+Line 623: Possible unterminated quote
+Line 634: Possible missing bracket
+Line 635: Possible missing bracket
+->Checkup Done!

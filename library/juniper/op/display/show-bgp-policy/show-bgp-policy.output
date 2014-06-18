@@ -1,0 +1,26 @@
+[edit protocols bgp group test]
+user@cli# run op show-bgp-policy neighbor 10.0.0.1 direction import database candidate
+BGP Neighbor: 10.0.0.1 in group test
+Import Policies: block-private block-local adjust-local-pref
+Policy: block-private
+    policy-statement block-private {
+        from {
+            route-filter 192.168.0.0/16 orlonger;
+            route-filter 10.0.0.0/8 orlonger;
+            route-filter 172.16.0.0/12 orlonger;
+        }
+        then reject;
+    }
+Policy: block-local
+    policy-statement block-local {
+        from {
+            route-filter 1.0.0.0/24 orlonger;
+        }
+        then reject;
+    }
+Policy: adjust-local-pref
+    policy-statement adjust-local-pref {
+        then {
+            local-preference 90;
+        }
+    }    
