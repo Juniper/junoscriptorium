@@ -1,0 +1,123 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+/*
+ * Creates lo0 filter based on configured protocol
+ *
+ *    lo0 filter protects the routing engine from external assault
+ * 
+ *    Look at configuration to know what (and how) to accept
+ *        [system services]
+ *        [protocols bgp group neighbor]
+ *
+ *    Use apply-macro to extend syntax where required
+ *        [edit system services]
+ *        user@cli# show
+ *        ssh {
+ *          apply-macro allow {
+ *            10.1.2.0/24;
+ *            10.3.4.0/24;
+ *            10.3.4.5/32 except;
+ *          }
+ *        }
+ */
+
+match configuration {
+    var $top = .;
+
+    <transient-change> {
+        <firewall> {
+            <filter replace="replace"> {
+                <name> "lo0-filter";
+                var $services = system/services;
+                call service-term($name = "ssh", $this = $services/ssh);
+                call service-term($name = "xnm-ssl", $port = 3220,
+                                  $this = $services/xnm-ssl);
+                call service-term($name = "netconf", $port = 830,
+                                  $this = $services/netconf);
+                call protocol-term($name = "bgp", $this = protocols/bgp,
+                                   $peers = protocols/bgp/group/neighbor/name);
+                var $ntp = system/ntp;
+                call protocol-term($name = "ntp", $this = $ntp, $protocol = "udp",
+                                   $peers = $ntp/peer/name | $ntp/server/name);
+            }
+        }
+
+    <interfaces> {
+            <interface> {
+                <name> "lo0";
+                <unit> {
+                    <name> "0";
+                    <family> {
+                        <inet> {
+                            <filter> {
+                                <input> "lo0-filter";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+template service-term($name, $port = $name, $protocol = "tcp", $this) {
+    if ($this) {
+        <term> {
+            <name> $name;
+            <from> {
+                if ($protocol) {
+                    <protocol> $protocol;
+                }
+                <destination-port> $port;
+
+                var $mac = $this/apply-macro[name == "allow"];
+                if ($mac) {
+                    for-each ($mac/data) {
+                        <source-address> {
+                            <name> name;
+                            if (value == "except") {
+                                <except>;
+                            }   
+                        }   
+                    }   
+                }   
+            }
+            <then> {
+                <accept>;
+            }   
+        }   
+    }   
+}
+
+template protocol-term($name, $port = $name, $protocol = "tcp",
+                       $this, $peers) {
+    if ($this) {
+        <term> {
+            <name> $name;
+            <from> {
+                if ($protocol) {
+                    <protocol> $protocol;
+                }
+                <destination-port> $port;
+
+                if ($peers) {
+                    for-each ($peers) {
+                        <source-address> {
+                            <name> .;
+            
+                        }   
+                    }   
+                }   
+            }
+            <then> {
+                <accept>;
+            }  
+        }  
+    } 
+}

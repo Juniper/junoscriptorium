@@ -1,0 +1,9 @@
+[edit system services]
+user@cli# show
+ssh {
+    apply-macro allow {
+        10.1.2.0/24;
+        10.3.4.0/24;
+        10.3.4.5/32 except;
+    }
+}
