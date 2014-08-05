@@ -1,22 +1,68 @@
-Example output for RSTP:
-		> op stp 
-		-------------------------------------------------------------
-		Region       Rt Priority  Root MAC            Root?  Why Not?                      
-		RSTP         8192         40:b4:f0:6a:dc:01   No     Your priority: 32768          
-		                                              Root port:  ge-0/0/47.0        
+**RSTP Example**  
+	
+	> op stp 
 
-Example output for MSTP:
-		> op stp 
-		-------------------------------------------------------------
-		Region       Rt Priority  Root MAC            Root?  Why Not?                      
-		CIST         32768        3c:8a:b0:9c:3a:01   Yes    N/A                           
-		  VLANS: 0-9,51-4094                         
-		-------------------------------------------------------------
-		Region       Rt Priority  Root MAC            Root?  Why Not?                      
-		MSTI 1       16385        3c:8a:b0:9c:3a:01   No    Root has lower MAC.    
-		                                              Root port:  ge-0/0/13.0         
-		  VLANS: 10-20                               
-		-------------------------------------------------------------
-		Region       Rt Priority  Root MAC            Root?  Why Not?                      
-		MSTI 2       16385        3c:8a:b0:9c:3a:01   Yes    N/A                           
-		  VLANS: 21-50     
+	-------------------------------------------------------------
+	Region       Rt Priority  Root MAC            Root?  Why Not?
+	RSTP         8192         40:b4:f0:6a:dc:01   No     Your priority: 32768
+	                                              Root port:  ge-0/0/47.0
+
+**MSTP Example**  
+
+	> op stp 
+
+	-------------------------------------------------------------
+	Region       Rt Priority  Root MAC            Root?  Why Not?                      
+	CIST         8192         00:19:e2:51:83:c1   No     Your priority: 32768          
+	                                              Root port: ge-0/0/12.0         
+	VLANS: 0-264, 267-269, 271-1300, 1303-1330, 1333-4094
+
+	-------------------------------------------------------------
+	Configuration Name     Revision Level    Configuration Digest                    
+	Test-MSTP              1                 0x2adca6e344946ceedde262329c949bb0      
+
+	-------------------------------------------------------------
+	Region       Rt Priority  Root MAC            Root?  Why Not?                      
+	MSTI 1       32769        00:19:e2:51:85:c1   No     Root has lower MAC.           
+	VLANS: 1301-1302                              Root port: ge-0/0/12.0         
+
+	-------------------------------------------------------------
+	Region       Rt Priority  Root MAC            Root?  Why Not?                      
+	MSTI 2       32770        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	No active interfaces on any VLANs in this MSTI.
+	VLANS: 1331-1332                             
+
+	-------------------------------------------------------------
+	Region       Rt Priority  Root MAC            Root?  Why Not?                      
+	MSTI 3       32771        00:19:e2:51:85:c1   No     Root has lower MAC.           
+	VLANS: 265-266, 270                           Root port: ge-0/0/12.0  
+
+**VSTP Example**  
+
+	> op stp 
+
+	VSTP Instances:
+	VSTP VLAN    Rt Priority  Root MAC            Root?  Why Not?                      
+	 Vlan 10     32778        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 11     32779        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 12     32780        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 13     32781        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 1301   34069        00:19:e2:51:85:c1   No     Root has lower MAC.           
+	                                              Root port: ge-0/0/12.0         
+	 Vlan 1331   34099        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 14     32782        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 15     32783        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 16     32784        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 17     32785        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 18     32786        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 21     32789        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 23     32791        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 24     32792        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 258    33026        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 265    33033        00:19:e2:51:85:c1   No     Root has lower MAC.           
+	                                              Root port: ge-0/0/12.0         
+	 Vlan 400    33168        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 500    33268        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 620    33388        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 621    33389        3c:8a:b0:9b:fc:81   Yes    N/A                           
+	 Vlan 666    33434        3c:8a:b0:9b:fc:81   Yes    N/A  
