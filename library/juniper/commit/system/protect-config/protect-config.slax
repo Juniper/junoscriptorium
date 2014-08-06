@@ -4,7 +4,12 @@ ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
 ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
 import "../import/junos.xsl";
 match configuration {
-    expr "\n-->\n";
+/*
+
+version: 1.1
+date: 8 August 2014
+*/
+
     /*
     - Make sure [edit chassis] is not totally deleted...
     -
@@ -18,11 +23,17 @@ match configuration {
     - We are making sure that the loopback interface configuration is present
     - and it has family inet configured.
     - The commit will fail if this is the case.
+    - 
+    - Uncomment the line with 'v6-enable' if you have/want to cover IPv6 too.
      */
     call error-if-missing($must = interfaces/interface[name == "lo0"]/unit[name == "0"]/family/inet/address, $statement = "interfaces lo0 unit 0 family inet address");
+
+/* v6-enable BEGIN
+    call error-if-missing($must = interfaces/interface[name == "lo0"]/unit[name == "0"]/family/inet6/address, $statement = "interfaces lo0 unit 0 family inet6 address");
+/* v6-enable END
+	
     /*
-    - Now we check the present loopback interface configuration and make sure it's not
-    - deleted nor disabled.
+    - Now we check the present loopback interface configuration and make sure it's not disabled.
     - The commit will fail if this is the case.
      */
     call error-if-present($must = interfaces/interface[name == "lo0"]/disable | interfaces/interface[name == "lo0"]/unit[name == "0"]/disable) {
@@ -31,13 +42,13 @@ match configuration {
          }
     }
     /*
-    - Make sure snmp 0/0 is not configured. It would mess up with auto-filter !QQ
+    - Make sure snmp 0/0 is not configured. It would mess up with some apply-path implementations on the loopback filter !
     - The commit will fail if this is the case.
      */
     call error-if-present($must = snmp/community[name == *]/clients[name == "0.0.0.0/0"]) {
         with $message = {
             expr "0.0.0.0/0 restrict is not recommended along with apply-path";
-            expr "because it would compromise the firewall filter !!! ";
+            expr " because it would compromise the firewall filter !!! ";
          }
     }
     /*
