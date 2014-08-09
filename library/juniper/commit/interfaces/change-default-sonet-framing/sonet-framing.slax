@@ -31,7 +31,7 @@ match configuration {
                     expr $pic;
                  }
                 with $content = {
-        <chassis> {
+        			<chassis> {
                         <fpc> {
                             <name> $fpc;
                             <pic> {
