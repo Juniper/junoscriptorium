@@ -1,0 +1,340 @@
+version 1.0;
+
+/*
+ * Copyright (c) 2014, Juniper Networks, Inc.
+ * All rights reserved.
+ * Filename      : op-pim-mofrr.slax
+ * Author        : Andre Stiphout <andre@juniper.net>
+ * Platform      : MX TRIO
+ * Release       : Junos 14.1+ (feature introduced with 14.1, script uses mvars)
+ * Version       : 0.93
+ * Date          : 2014-09-30 22:00
+ * Description   : Count per pim interface the active & backup paths for MoFRR
+ *
+ */
+
+/*
+ * The aim of the script is to query the active versus backup paths in use
+ * when MoFRR is configured. The script verifies that pim is configured as
+ * well as MoFRR. The configured pim interfaces are collected and then all
+ * the joins in that instance are inspected to see which join has an active
+ * and backup upstream-interface. Only (S,G) interfaces are queried.
+ * Only specific interfaces are queried: ge/xe/et/ae, _all_ is not supported.
+ * When no instance is provided, the main instance is queried.
+ * 
+ * CLI responsiveness & MGD util is acceptable for up to a 1000 (S,G).
+ * Dual RE/NSR is supported. How to use:
+ *
+ * juniper@t4bnjurom1e1-re0> op pim-mofrr instance Test
+ *
+ * Instance Name:      Test
+ *
+ * Interface Name      Status    Active Joins   Backup Joins   Total Joins
+ * ge-1/0/0.1107       Up        271            230            501
+ * ge-1/0/1.1107       Up        221            280            501
+ * ge-1/0/2.2107       Up        294            206            500
+ * ge-1/0/3.2107       Up        215            285            500
+ *
+ * Totals                        1001           1001           2002
+ *
+ * v0.90   Initial release.
+ * v0.91   Added checks to verify pim & mofrr are enabled.
+ * v0.92   Added support global instance, more error-checking, added totals.
+ * v0.93   Modified formatting.
+ *
+ */
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+var $arguments = {
+    <argument> {
+        <name> "instance";
+        <description> "Select the routing-instance, none for global instance.";
+    }
+}
+param $instance = "none";
+
+
+/* open connection to mgd so we can get the data we need */
+var $mgd = jcs:open();
+
+match / {
+
+	<op-script-results> {
+
+        /* abort if no connection to local $mgd */
+        if ($mgd/..//xnm:error) {
+            <xsl:message terminate="yes"> "Error connecting on mgd on this RE";
+        }
+
+        /* get the complete configuration for the routing-options, could be inherited */
+        var $getOptions = <get-configuration database="committed" inherit="inherit"> {
+            <configuration> {
+                <routing-options>;
+            }
+        }
+
+        var $configOptions = jcs:execute($mgd, $getOptions);
+
+        if ($configOptions/..//xnm:error) {
+            <xsl:message terminate="yes"> "Error gathering routing-options";
+        }
+
+        /* retrieve RE status */
+        var $reStatus = { call checkMaster(); }
+
+        /* if this RE is master or if nonstop-routing has been enabled, continue */
+        if ( $reStatus == "master" or not( jcs:empty ($configOptions/routing-options/nonstop-routing ))) {
+
+            /* output the instance name */
+            <output> "\n";
+            <output> jcs:printf( "%-20s%-30s", "Instance Name: ", $instance );
+            <output> "\n";
+
+            /* if no instance has been provided, the global instance will be assumed */
+            if ( $instance = "none" ) {
+
+                /* verify that mofrr is configured, otherwise exit with an error */
+                if( not( jcs:empty( $configOptions/routing-options/multicast/stream-protection ))) {
+
+                    var $getPim = <get-configuration database="committed" inherit="inherit"> {
+                        <configuration> {
+                            <protocols> {
+                                <pim>;
+                            }
+                        }
+                    }
+
+                    var $configPim = jcs:execute($mgd, $getPim);
+
+                    if ($configPim/..//xnm:error) {
+                        <xsl:message terminate="yes"> "Error gathering pim protocol configuration";
+                    }
+
+                    /* get all pim-joins for the instance */
+                    var $getPimJoin = <get-pim-join-information> {
+                        <sg>;
+                    }
+
+                    var $pimJoins = jcs:execute($mgd, $getPimJoin);
+
+                    if ($pimJoins/..//xnm:error) {
+                        <xsl:message terminate="yes"> "Error gathering pim join information";
+                    }
+
+                    /* get all pim-interfaces for the instance */
+                    var $getPimIfls = <get-pim-interfaces-information>;
+
+                    var $pimIfls = jcs:execute($mgd, $getPimIfls);
+
+                    if ($pimIfls/..//xnm:error) {
+                        <xsl:message terminate="yes"> "Error gathering pim interface information";
+                    }
+
+                    /* verify that pim is configured, otherwise exit with an error */
+                    if( not( jcs:empty( $configPim/protocols/pim ))) {
+
+                        /* output the headers */
+                        <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s", "Interface Name", "Status", "Active Joins", "Backup Joins", "Total Joins" );
+
+                        /* introduce mvars to count the total number of paths */
+                        mvar $sumActivePaths = 0;
+                        mvar $sumBackupPaths = 0;
+                        mvar $sumTotalPaths = 0;
+
+                        /* iterate through all configured PIM interface-names starting with ge, xe, et or ae */
+                        for-each( $configInstance/routing-instances/instance/protocols/pim/interface[ (( starts-with( name, "ge" )) or ( starts-with( name, "xe" )) or ( starts-with( name, "et" )) or ( starts-with( name, "ae" )))]) {
+
+                            /* only use interfaces that are not disabled */
+                            if( not( disable ) ) {
+
+                                /* retrieve the interface name from the pim configuration */
+                                var $iflPimName = name;
+                                var $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
+                                var $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
+                                var $totalPaths = $activePaths + $backupPaths;
+
+                                /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
+                                <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
+                                    $iflPimName, $pimIfls/pim-interface[pim-interface-name == $iflPimName]/status, $activePaths, $backupPaths, $totalPaths );
+
+                                /* add the number of paths to the total */
+                                set $sumActivePaths = $sumActivePaths + $activePaths;
+                                set $sumBackupPaths = $sumBackupPaths + $backupPaths;
+                                set $sumTotalPaths = $sumActivePaths + $sumBackupPaths;
+
+                            }
+                        }
+
+                        /* print the total active/backup paths */
+                        <output> "\n";
+                        <output> jcs:printf( "%-30s%-15s%-15s%-15s", "Totals", $sumActivePaths, $sumBackupPaths, $sumTotalPaths );
+
+                    } else {
+
+                        <output> "Pim is not enabled in this instance.";
+
+                    }
+
+                } else {
+
+                    <output> "MoFRR is not enabled in this instance.";
+                }
+
+            /* routing-instance specific */
+
+            } else {
+
+    			/* get the complete configuration for the instance, could be inherited */
+    			var $getConfiguration = <get-configuration database="committed" inherit="inherit"> {
+                    <configuration> {
+                        <routing-instances> {
+                            <instance> {
+                                <name> $instance;
+                            }
+            			}
+                    }
+                }
+
+                var $configInstance = jcs:execute($mgd, $getConfiguration);
+
+                if ($configInstance/..//xnm:error) {
+                    <xsl:message terminate="yes"> "Error gathering instance configuration";
+                }
+
+                /* verify that mofrr is configured, otherwise exit with an error */
+                if( not( jcs:empty( $configInstance/routing-instances/instance/routing-options/multicast/stream-protection ))) {
+
+                    /* get all pim-joins for the instance */
+                    var $getPimJoin = <get-pim-join-information> {
+                        <instance> $instance;
+                        <sg>;
+                    }
+
+                    var $pimJoins = jcs:execute($mgd, $getPimJoin);
+
+                    if ($pimJoins/..//xnm:error) {
+                        <xsl:message terminate="yes"> "Error gathering pim join information";
+                    }
+
+                    /* get all pim-interfaces for the instance */
+                    var $getPimIfls = <get-pim-interfaces-information> {
+                        <instance> $instance;
+                    }
+
+                    var $pimIfls = jcs:execute($mgd, $getPimIfls);
+
+                    if ($pimIfls/..//xnm:error) {
+                        <xsl:message terminate="yes"> "Error gathering pim interface information";
+                    }
+
+                    /* verify that pim is configured, otherwise exit with an error */
+                    if( not( jcs:empty( $configInstance/routing-instances/instance/protocols/pim ))) {
+
+                        /* output the headers */
+                        <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s", "Interface Name", "Status", "Active Joins", "Backup Joins", "Total Joins" );
+
+                        /* introduce mvars to count the total number of paths */
+                        mvar $sumActivePaths = 0;
+                        mvar $sumBackupPaths = 0;
+                        mvar $sumTotalPaths = 0;
+
+                        /* iterate through all configured PIM interface-names starting with ge, xe, et or ae */
+                        for-each( $configInstance/routing-instances/instance/protocols/pim/interface[ (( starts-with( name, "ge" )) or ( starts-with( name, "xe" )) or ( starts-with( name, "et" )) or ( starts-with( name, "ae" )))]) {
+
+                            /* only use interfaces that are not disabled */
+                            if( not( disable ) ) {
+
+                                /* retrieve the interface name from the pim configuration */
+                                var $iflPimName = name;
+                                var $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
+                                var $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
+                                var $totalPaths = $activePaths + $backupPaths;
+
+                                /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
+                                <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
+                                    $iflPimName, $pimIfls/pim-interface[pim-interface-name == $iflPimName]/status, $activePaths, $backupPaths, $totalPaths );
+
+                                /* add the number of paths to the total */
+                                set $sumActivePaths = $sumActivePaths + $activePaths;
+                                set $sumBackupPaths = $sumBackupPaths + $backupPaths;
+                                set $sumTotalPaths = $sumActivePaths + $sumBackupPaths;
+
+                            }
+                        }
+
+                        /* print the total active/backup paths */
+                        <output> "\n";
+                        <output> jcs:printf( "%-30s%-15s%-15s%-15s", "Totals", $sumActivePaths, $sumBackupPaths, $sumTotalPaths );
+
+                    } else {
+
+                        <output> "Pim is not enabled in this instance.";
+
+                    }
+
+                } else {
+
+                    <output> "MoFRR is not enabled in this instance.";
+
+                }
+            }
+
+        } else {
+        
+            expr jcs:output( "This Routing-Engine is not the Master-RE, neither has NSR been enabled!" );
+        
+        }
+    }
+
+    /* closes the connection handle */
+    expr jcs:close( $mgd );
+}
+
+template checkMaster() {
+
+    /* master-state is available natively when querying junos-context */
+    if ( $junos-context ) {
+        if ( $junos-context/re-master ) {
+          <output> "master";
+        }
+        else {
+           <output> "backup";
+        }
+    }
+    /* if not available, other means are used to determine mastership */
+    else {
+
+        var $getReInfo = <get-route-engine-information> ;
+        var $reInfo = jcs:execute( $mgd, $getReInfo );
+
+        if ( $reInfo/..//xnm:error ) { <xsl:message terminate="yes"> "Error getting RE information."; }
+
+        /* if there is only one RE then is has to be master */
+        if ( $reInfo/route-engine ) {
+            if ( count( $reInfo/route-engine ) == 1 ) {
+                <output> "master";
+            } else {
+
+                /* this command only works on master RE with MX chassis */
+                var $getChassisInfo = <get-chassis-inventory> ;
+                var $chassisInfo = jcs:execute( $mgd, $getChassisInfo );
+
+                if ($chassisInfo/..//xnm:error) { <xsl:message terminate="yes"> "Error getting Chassis information."; }
+
+                if ( $chassisInfo/chassis/serial-number ) {
+                    <output> "master";
+                } else {
+                    <output> "backup";
+                }
+            }
+        } else {
+            expr jcs:syslog( "daemon.error", $script _ ": ERROR, Unexpected response: " _ $reInfo );
+            <xsl:message terminate="yes">;
+        }
+    }
+}
