@@ -1,0 +1,82 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+import "../import/junos.xsl";
+/*
+--		version: 1.0
+--		date: 20140812
+--		
+--		Script to enforce a policy that every ISIS enabled interface MUST have a minimum metric value,
+--		as defined by the $min-metric variable below.
+--
+--		Both level 1 and level 2 interfaces are subnect to this policy.If and when the level of an interface
+--		isn't specified, the script will automatically configure level 2 (can be tweaked via $newlevel).
+--
+*/
+
+param $min-metric = 2000;
+param $newlevel = 2;				/* interface without a configured level will default to level 2 */ 
+match configuration {
+    var $isis = protocols/isis;
+
+    for-each (protocols/isis/interface[not(starts-with(name, 'lo'))]) {
+        var $ifname = ./name;
+        var $metric = ./level[*]/metric;
+        var $level = ./level/name;
+
+if (not ($metric)) {
+    call jcs:emit-change($dot = .) {
+        with $message = {
+            expr "ISIS metric missing for the interface";
+            expr "\n";
+            expr "Setting a metric of ";
+            expr $min-metric;
+            expr " for interface(s): ";
+            expr "\n";
+            expr $ifname;
+            expr "  -----> (level ";
+            expr $newlevel;
+            expr ")";
+         }
+        with $content = {
+            <level> {
+                <name> $newlevel;
+                <metric> $min-metric;
+                }
+          }
+        }
+ }
+/*
+--
+--
+*/
+        if ($metric <= $min-metric) {
+            call jcs:emit-change($dot = .) {
+                with $message = {
+                    expr "ISIS metric lower than minimum allowed value for the interface";
+                    expr "\n";
+                    expr "Setting a metric of ";
+                    expr $min-metric;
+                    expr " for interface(s): ";
+                    expr "\n";
+                    expr $ifname;
+                    expr "  -----> (level";
+                    expr $level;
+                    expr ")";
+                 }
+                with $content = {
+                    <level> {
+                        <name> $level;
+                        <metric> $min-metric;
+                        }
+                  }
+                }
+                }
+/*
+--
+--
+*/
+    }
+}
