@@ -7,8 +7,8 @@ version 1.0;
  * Author        : Andre Stiphout <andre@juniper.net>
  * Platform      : MX TRIO
  * Release       : Junos 14.1+ (feature introduced with 14.1, script uses mvars)
- * Version       : 0.93
- * Date          : 2014-09-30 22:00
+ * Version       : 0.94
+ * Date          : 2015-02-05 23:00
  * Description   : Count per pim interface the active & backup paths for MoFRR
  *
  */
@@ -25,22 +25,74 @@ version 1.0;
  * CLI responsiveness & MGD util is acceptable for up to a 1000 (S,G).
  * Dual RE/NSR is supported. How to use:
  *
- * juniper@t4bnjurom1e1-re0> op pim-mofrr instance Test
- *
- * Instance Name:      Test
- *
- * Interface Name      Status    Active Joins   Backup Joins   Total Joins
- * ge-1/0/0.1107       Up        271            230            501
- * ge-1/0/1.1107       Up        221            280            501
- * ge-1/0/2.2107       Up        294            206            500
- * ge-1/0/3.2107       Up        215            285            500
- *
- * Totals                        1001           1001           2002
- *
+ * When no arguments are provided, Global table is assumed:
+
+    andre@router> op pim-mofrr                          
+
+    Instance Name:      none                          
+
+    MoFRR is not enabled in the Global instance.
+    MoFRR is enabled in the following Routing-Instances:
+    Test1
+    Test2
+    Test3
+
+ * When a wrong instance is provided, a list of all instances is shown:
+
+    andre@router> op pim-mofrr instance Blah                                                                            
+
+    Instance Name:      Blah                   
+
+    MoFRR is not enabled in this instance.
+    MoFRR is enabled in the following Routing-Instances:
+    Test1
+    Test2
+    Test3
+
+ * When MoFRR is enabled and multiple uplinks are present:
+
+    andre@router> op pim-mofrr instance Test1 
+
+    Instance Name:      Test1                 
+
+    Interface Name      Status    Active Joins   Backup Joins   Total Joins    
+    xe-0/2/0.60         Up        250            251            501            
+    xe-0/2/1.60         Up        250            251            501            
+    xe-7/3/2.60         Absent    0              0              0              
+    xe-7/3/3.60         Absent    0              0              0              
+    xe-2/2/0.60         Up        250            249            499            
+    xe-2/2/1.60         Up        250            249            499            
+    xe-8/3/3.60         Absent    0              0              0              
+    xe-8/3/2.60         Absent    0              0              0              
+
+    Totals                        1000           1000           1499           
+
+ * When MoFRR is enabled but only a single uplink is present:
+
+    andre@router> op pim-mofrr instance Test2       
+
+    Instance Name:      ngtv_edge                     
+
+    Interface Name      Status    Active Joins   Backup Joins   Total Joins    
+    xe-0/3/1.20         Down      0              0              0              
+    xe-7/3/1.20         Absent    0              0              0              
+    xe-2/3/1.20         Up        1010           0              1010           
+    xe-8/3/1.20         Absent    0              0              0              
+    ae14.103            Up        0              0              0              
+
+    Totals                        1010           0              1010           
+
  * v0.90   Initial release.
  * v0.91   Added checks to verify pim & mofrr are enabled.
  * v0.92   Added support global instance, more error-checking, added totals.
  * v0.93   Modified formatting.
+ * v0.94   Major changes:
+ *         . fixed error for Global instance (wrong lookup)
+ *         . added listing of instances when no/wrong instance as argument
+ *         . added interface status for non-existent ifl: absent
+ *         . fixed the one-uplink case, which has no active or backup paths
+ *         . tried removing duplicate work by adding function/template but
+ *           not worth the effort and slows down execution
  *
  */
 
@@ -71,24 +123,20 @@ match / {
             <xsl:message terminate="yes"> "Error connecting on mgd on this RE";
         }
 
-        /* get the complete configuration for the routing-options, could be inherited */
-        var $getOptions = <get-configuration database="committed" inherit="inherit"> {
-            <configuration> {
-                <routing-options>;
-            }
-        }
+        /* get the complete configuration inherited */
+        var $getConfiguration = <get-configuration database="committed" inherit="inherit">;
 
-        var $configOptions = jcs:execute($mgd, $getOptions);
+        var $configInherited = jcs:execute($mgd, $getConfiguration);
 
-        if ($configOptions/..//xnm:error) {
-            <xsl:message terminate="yes"> "Error gathering routing-options";
+        if ($configInherited/..//xnm:error) {
+            <xsl:message terminate="yes"> "Error gathering configuration";
         }
 
         /* retrieve RE status */
         var $reStatus = { call checkMaster(); }
 
         /* if this RE is master or if nonstop-routing has been enabled, continue */
-        if ( $reStatus == "master" or not( jcs:empty ($configOptions/routing-options/nonstop-routing ))) {
+        if ( $reStatus == "master" or not( jcs:empty ($configInherited/routing-options/nonstop-routing ))) {
 
             /* output the instance name */
             <output> "\n";
@@ -99,44 +147,30 @@ match / {
             if ( $instance = "none" ) {
 
                 /* verify that mofrr is configured, otherwise exit with an error */
-                if( not( jcs:empty( $configOptions/routing-options/multicast/stream-protection ))) {
-
-                    var $getPim = <get-configuration database="committed" inherit="inherit"> {
-                        <configuration> {
-                            <protocols> {
-                                <pim>;
-                            }
-                        }
-                    }
-
-                    var $configPim = jcs:execute($mgd, $getPim);
-
-                    if ($configPim/..//xnm:error) {
-                        <xsl:message terminate="yes"> "Error gathering pim protocol configuration";
-                    }
-
-                    /* get all pim-joins for the instance */
-                    var $getPimJoin = <get-pim-join-information> {
-                        <sg>;
-                    }
-
-                    var $pimJoins = jcs:execute($mgd, $getPimJoin);
-
-                    if ($pimJoins/..//xnm:error) {
-                        <xsl:message terminate="yes"> "Error gathering pim join information";
-                    }
-
-                    /* get all pim-interfaces for the instance */
-                    var $getPimIfls = <get-pim-interfaces-information>;
-
-                    var $pimIfls = jcs:execute($mgd, $getPimIfls);
-
-                    if ($pimIfls/..//xnm:error) {
-                        <xsl:message terminate="yes"> "Error gathering pim interface information";
-                    }
+                if( not( jcs:empty( $configInherited/routing-options/multicast/stream-protection ))) {
 
                     /* verify that pim is configured, otherwise exit with an error */
-                    if( not( jcs:empty( $configPim/protocols/pim ))) {
+                    if( not( jcs:empty( $configInherited/protocols/pim ))) {
+
+                        /* get all pim-joins for the instance */
+                        var $getPimJoin = <get-pim-join-information> {
+                            <sg>;
+                        }
+
+                        var $pimJoins = jcs:execute($mgd, $getPimJoin);
+
+                        if ($pimJoins/..//xnm:error) {
+                            <xsl:message terminate="yes"> "Error gathering pim join information";
+                        }
+
+                        /* get all pim-interfaces for the instance */
+                        var $getPimIfls = <get-pim-interfaces-information>;
+
+                        var $pimIfls = jcs:execute($mgd, $getPimIfls);
+
+                        if ($pimIfls/..//xnm:error) {
+                            <xsl:message terminate="yes"> "Error gathering pim interface information";
+                        }
 
                         /* output the headers */
                         <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s", "Interface Name", "Status", "Active Joins", "Backup Joins", "Total Joins" );
@@ -147,26 +181,48 @@ match / {
                         mvar $sumTotalPaths = 0;
 
                         /* iterate through all configured PIM interface-names starting with ge, xe, et or ae */
-                        for-each( $configInstance/routing-instances/instance/protocols/pim/interface[ (( starts-with( name, "ge" )) or ( starts-with( name, "xe" )) or ( starts-with( name, "et" )) or ( starts-with( name, "ae" )))]) {
+                        for-each( $configInherited/protocols/pim/interface[ (( starts-with( name, "ge" )) or ( starts-with( name, "xe" )) or ( starts-with( name, "et" )) or ( starts-with( name, "ae" )))]) {
 
                             /* only use interfaces that are not disabled */
                             if( not( disable ) ) {
 
                                 /* retrieve the interface name from the pim configuration */
                                 var $iflPimName = name;
+                                mvar $iflPimStatus = $pimIfls/pim-interface[pim-interface-name == $iflPimName]/status;
+
+                                if ( jcs:empty( $iflPimStatus )) {
+
+                                    set $iflPimStatus = "Absent";
+
+                                }
+
                                 var $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
                                 var $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
                                 var $totalPaths = $activePaths + $backupPaths;
 
-                                /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
-                                <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
-                                    $iflPimName, $pimIfls/pim-interface[pim-interface-name == $iflPimName]/status, $activePaths, $backupPaths, $totalPaths );
+                                if ( $activePaths = 0 ) {
 
-                                /* add the number of paths to the total */
-                                set $sumActivePaths = $sumActivePaths + $activePaths;
-                                set $sumBackupPaths = $sumBackupPaths + $backupPaths;
-                                set $sumTotalPaths = $sumActivePaths + $sumBackupPaths;
+                                    var $upstreamPaths = count( $pimJoins/join-family/join-group[ upstream-interface-name == $iflPimName ]);
 
+                                    /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
+                                    <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
+                                        $iflPimName, $iflPimStatus, $upstreamPaths, "0", $upstreamPaths );
+
+                                    set $sumActivePaths = $sumActivePaths + $upstreamPaths;
+                                    set $sumBackupPaths = $sumBackupPaths + 0;
+                                    set $sumTotalPaths = $sumTotalPaths + $upstreamPaths;
+
+                                } else {
+
+                                    /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
+                                    <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
+                                        $iflPimName, $iflPimStatus, $activePaths, $backupPaths, $totalPaths );
+
+                                    /* add the number of paths to the total */
+                                    set $sumActivePaths = $sumActivePaths + $activePaths;
+                                    set $sumBackupPaths = $sumBackupPaths + $backupPaths;
+                                    set $sumTotalPaths = $sumActivePaths + $totalPaths;
+                                }
                             }
                         }
 
@@ -176,64 +232,50 @@ match / {
 
                     } else {
 
-                        <output> "Pim is not enabled in this instance.";
+                        <output> "Pim is not enabled in the Global instance.";
 
                     }
 
                 } else {
 
-                    <output> "MoFRR is not enabled in this instance.";
+                    <output> "MoFRR is not enabled in the Global instance.";
+
+                    call listMofrrInstances( $config = $configInherited );
+
                 }
 
             /* routing-instance specific */
 
             } else {
 
-    			/* get the complete configuration for the instance, could be inherited */
-    			var $getConfiguration = <get-configuration database="committed" inherit="inherit"> {
-                    <configuration> {
-                        <routing-instances> {
-                            <instance> {
-                                <name> $instance;
-                            }
-            			}
-                    }
-                }
-
-                var $configInstance = jcs:execute($mgd, $getConfiguration);
-
-                if ($configInstance/..//xnm:error) {
-                    <xsl:message terminate="yes"> "Error gathering instance configuration";
-                }
-
                 /* verify that mofrr is configured, otherwise exit with an error */
-                if( not( jcs:empty( $configInstance/routing-instances/instance/routing-options/multicast/stream-protection ))) {
-
-                    /* get all pim-joins for the instance */
-                    var $getPimJoin = <get-pim-join-information> {
-                        <instance> $instance;
-                        <sg>;
-                    }
-
-                    var $pimJoins = jcs:execute($mgd, $getPimJoin);
-
-                    if ($pimJoins/..//xnm:error) {
-                        <xsl:message terminate="yes"> "Error gathering pim join information";
-                    }
-
-                    /* get all pim-interfaces for the instance */
-                    var $getPimIfls = <get-pim-interfaces-information> {
-                        <instance> $instance;
-                    }
-
-                    var $pimIfls = jcs:execute($mgd, $getPimIfls);
-
-                    if ($pimIfls/..//xnm:error) {
-                        <xsl:message terminate="yes"> "Error gathering pim interface information";
-                    }
+                if( not( jcs:empty( $configInherited/routing-instances/instance[ name == $instance ]/routing-options/multicast/stream-protection ))) {
 
                     /* verify that pim is configured, otherwise exit with an error */
-                    if( not( jcs:empty( $configInstance/routing-instances/instance/protocols/pim ))) {
+                    if( not( jcs:empty( $configInherited/routing-instances/instance[ name == $instance ]/protocols/pim ))) {
+
+                        /* get all pim-joins for the instance */
+                        var $getPimJoin = <get-pim-join-information> {
+                            <instance> $instance;
+                            <sg>;
+                        }
+
+                        var $pimJoins = jcs:execute($mgd, $getPimJoin);
+
+                        if ($pimJoins/..//xnm:error) {
+                            <xsl:message terminate="yes"> "Error gathering pim join information";
+                        }
+
+                        /* get all pim-interfaces for the instance */
+                        var $getPimIfls = <get-pim-interfaces-information> {
+                            <instance> $instance;
+                        }
+
+                        var $pimIfls = jcs:execute($mgd, $getPimIfls);
+
+                        if ($pimIfls/..//xnm:error) {
+                            <xsl:message terminate="yes"> "Error gathering pim interface information";
+                        }
 
                         /* output the headers */
                         <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s", "Interface Name", "Status", "Active Joins", "Backup Joins", "Total Joins" );
@@ -244,26 +286,48 @@ match / {
                         mvar $sumTotalPaths = 0;
 
                         /* iterate through all configured PIM interface-names starting with ge, xe, et or ae */
-                        for-each( $configInstance/routing-instances/instance/protocols/pim/interface[ (( starts-with( name, "ge" )) or ( starts-with( name, "xe" )) or ( starts-with( name, "et" )) or ( starts-with( name, "ae" )))]) {
+                        for-each( $configInherited/routing-instances/instance[ name == $instance ]/protocols/pim/interface[ (( starts-with( name, "ge" )) or ( starts-with( name, "xe" )) or ( starts-with( name, "et" )) or ( starts-with( name, "ae" )))]) {
 
                             /* only use interfaces that are not disabled */
                             if( not( disable ) ) {
 
                                 /* retrieve the interface name from the pim configuration */
                                 var $iflPimName = name;
+                                mvar $iflPimStatus = $pimIfls/pim-interface[pim-interface-name == $iflPimName]/status;
+
+                                if ( jcs:empty( $iflPimStatus )) {
+
+                                    set $iflPimStatus = "Absent";
+
+                                }
+
                                 var $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
                                 var $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
                                 var $totalPaths = $activePaths + $backupPaths;
 
-                                /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
-                                <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
-                                    $iflPimName, $pimIfls/pim-interface[pim-interface-name == $iflPimName]/status, $activePaths, $backupPaths, $totalPaths );
+                                if ( $activePaths = 0 ) {
 
-                                /* add the number of paths to the total */
-                                set $sumActivePaths = $sumActivePaths + $activePaths;
-                                set $sumBackupPaths = $sumBackupPaths + $backupPaths;
-                                set $sumTotalPaths = $sumActivePaths + $sumBackupPaths;
+                                    var $upstreamPaths = count( $pimJoins/join-family/join-group[ upstream-interface-name == $iflPimName ]);
 
+                                    /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
+                                    <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
+                                        $iflPimName, $iflPimStatus, $upstreamPaths, "0", $upstreamPaths );
+
+                                    set $sumActivePaths = $sumActivePaths + $upstreamPaths;
+                                    set $sumBackupPaths = $sumBackupPaths + 0;
+                                    set $sumTotalPaths = $sumTotalPaths + $upstreamPaths;
+
+                                } else {
+
+                                    /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
+                                    <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
+                                        $iflPimName, $iflPimStatus, $activePaths, $backupPaths, $totalPaths );
+
+                                    /* add the number of paths to the total */
+                                    set $sumActivePaths = $sumActivePaths + $activePaths;
+                                    set $sumBackupPaths = $sumBackupPaths + $backupPaths;
+                                    set $sumTotalPaths = $sumActivePaths + $totalPaths;
+                                }
                             }
                         }
 
@@ -280,6 +344,8 @@ match / {
                 } else {
 
                     <output> "MoFRR is not enabled in this instance.";
+
+                    call listMofrrInstances( $config = $configInherited );
 
                 }
             }
@@ -293,6 +359,33 @@ match / {
 
     /* closes the connection handle */
     expr jcs:close( $mgd );
+}
+
+
+template listMofrrInstances( $config ) {
+
+    mvar $routingInstancesMofrr;
+
+    for-each( $config/routing-instances/instance ) {
+
+        if ( routing-options/multicast/stream-protection ) {
+
+            append $routingInstancesMofrr += name;
+            append $routingInstancesMofrr += "\n";
+
+        }
+    }
+
+    if ( jcs:empty( $routingInstancesMofrr )) {
+
+        <output> "MoFRR is not enabled in any Routing-Instance.";
+
+    } else {
+
+        <output> "MoFRR is enabled in the following Routing-Instances:";
+        <output> $routingInstancesMofrr;
+
+    }
 }
 
 template checkMaster() {
