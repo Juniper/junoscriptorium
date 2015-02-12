@@ -7,8 +7,8 @@ version 1.0;
  * Author        : Andre Stiphout <andre@juniper.net>
  * Platform      : MX TRIO
  * Release       : Junos 14.1+ (feature introduced with 14.1, script uses mvars)
- * Version       : 0.94
- * Date          : 2015-02-05 23:00
+ * Version       : 0.95
+ * Date          : 2015-02-10 20:00
  * Description   : Count per pim interface the active & backup paths for MoFRR
  *
  */
@@ -25,7 +25,8 @@ version 1.0;
  * CLI responsiveness & MGD util is acceptable for up to a 1000 (S,G).
  * Dual RE/NSR is supported. How to use:
  *
- * When no arguments are provided, Global table is assumed:
+ * When no arguments are provided, Global table is assumed and if MoFRR is
+   not active a list of RIs with MoFRR is shows.
 
     andre@router> op pim-mofrr                          
 
@@ -33,9 +34,10 @@ version 1.0;
 
     MoFRR is not enabled in the Global instance.
     MoFRR is enabled in the following Routing-Instances:
-    Test1
-    Test2
-    Test3
+    
+        * Test1
+        * Test2
+        * Test3
 
  * When a wrong instance is provided, a list of all instances is shown:
 
@@ -45,9 +47,10 @@ version 1.0;
 
     MoFRR is not enabled in this instance.
     MoFRR is enabled in the following Routing-Instances:
-    Test1
-    Test2
-    Test3
+
+        * Test1
+        * Test2
+        * Test3
 
  * When MoFRR is enabled and multiple uplinks are present:
 
@@ -93,7 +96,11 @@ version 1.0;
  *         . fixed the one-uplink case, which has no active or backup paths
  *         . tried removing duplicate work by adding function/template but
  *           not worth the effort and slows down execution
- *
+ * v0.95   Minor changes:
+           . fixed error with total Paths
+           . fixed error with detection of one-uplink case
+           . at the expense of some mvars, removed duplication and decreased runtime
+           . updated formatting of output of the routing-instance list
  */
 
 ns junos = "http://xml.juniper.net/junos/*/junos";
@@ -183,6 +190,10 @@ match / {
                         /* iterate through all configured PIM interface-names starting with ge, xe, et or ae */
                         for-each( $configInherited/protocols/pim/interface[ (( starts-with( name, "ge" )) or ( starts-with( name, "xe" )) or ( starts-with( name, "et" )) or ( starts-with( name, "ae" )))]) {
 
+                            mvar $activePaths = 0;
+                            mvar $backupPaths = 0;
+                            mvar $totalPaths = 0;
+
                             /* only use interfaces that are not disabled */
                             if( not( disable ) ) {
 
@@ -190,39 +201,34 @@ match / {
                                 var $iflPimName = name;
                                 mvar $iflPimStatus = $pimIfls/pim-interface[pim-interface-name == $iflPimName]/status;
 
+                                /* verify the hardware is actually present */
                                 if ( jcs:empty( $iflPimStatus )) {
 
                                     set $iflPimStatus = "Absent";
 
-                                }
-
-                                var $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
-                                var $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
-                                var $totalPaths = $activePaths + $backupPaths;
-
-                                if ( $activePaths = 0 ) {
-
-                                    var $upstreamPaths = count( $pimJoins/join-family/join-group[ upstream-interface-name == $iflPimName ]);
-
-                                    /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
-                                    <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
-                                        $iflPimName, $iflPimStatus, $upstreamPaths, "0", $upstreamPaths );
-
-                                    set $sumActivePaths = $sumActivePaths + $upstreamPaths;
-                                    set $sumBackupPaths = $sumBackupPaths + 0;
-                                    set $sumTotalPaths = $sumTotalPaths + $upstreamPaths;
-
                                 } else {
 
-                                    /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
-                                    <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
-                                        $iflPimName, $iflPimStatus, $activePaths, $backupPaths, $totalPaths );
+                                    set $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
+                                    set $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
+                                    set $totalPaths = $activePaths + $backupPaths;
 
-                                    /* add the number of paths to the total */
-                                    set $sumActivePaths = $sumActivePaths + $activePaths;
-                                    set $sumBackupPaths = $sumBackupPaths + $backupPaths;
-                                    set $sumTotalPaths = $sumActivePaths + $totalPaths;
+                                    /* if both active & mofrr-backup are not present, there is only a single upstream interface with a different xpath */
+                                    if (( $activePaths = 0 ) and ( $backupPaths = 0 )) {
+
+                                        set $activePaths = count( $pimJoins/join-family/join-group[ upstream-interface-name == $iflPimName ]);
+
+                                    }
                                 }
+
+                                /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
+                                <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
+                                    $iflPimName, $iflPimStatus, $activePaths, $backupPaths, $totalPaths );
+
+                                /* add the number of paths to the total */
+                                set $sumActivePaths = $sumActivePaths + $activePaths;
+                                set $sumBackupPaths = $sumBackupPaths + $backupPaths;
+                                set $sumTotalPaths = $sumTotalPaths + $totalPaths;
+  
                             }
                         }
 
@@ -288,6 +294,10 @@ match / {
                         /* iterate through all configured PIM interface-names starting with ge, xe, et or ae */
                         for-each( $configInherited/routing-instances/instance[ name == $instance ]/protocols/pim/interface[ (( starts-with( name, "ge" )) or ( starts-with( name, "xe" )) or ( starts-with( name, "et" )) or ( starts-with( name, "ae" )))]) {
 
+                            mvar $activePaths = 0;
+                            mvar $backupPaths = 0;
+                            mvar $totalPaths = 0;
+
                             /* only use interfaces that are not disabled */
                             if( not( disable ) ) {
 
@@ -295,39 +305,34 @@ match / {
                                 var $iflPimName = name;
                                 mvar $iflPimStatus = $pimIfls/pim-interface[pim-interface-name == $iflPimName]/status;
 
+                                /* verify the hardware is actually present */
                                 if ( jcs:empty( $iflPimStatus )) {
 
                                     set $iflPimStatus = "Absent";
 
-                                }
-
-                                var $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
-                                var $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
-                                var $totalPaths = $activePaths + $backupPaths;
-
-                                if ( $activePaths = 0 ) {
-
-                                    var $upstreamPaths = count( $pimJoins/join-family/join-group[ upstream-interface-name == $iflPimName ]);
-
-                                    /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
-                                    <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
-                                        $iflPimName, $iflPimStatus, $upstreamPaths, "0", $upstreamPaths );
-
-                                    set $sumActivePaths = $sumActivePaths + $upstreamPaths;
-                                    set $sumBackupPaths = $sumBackupPaths + 0;
-                                    set $sumTotalPaths = $sumTotalPaths + $upstreamPaths;
-
                                 } else {
 
-                                    /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
-                                    <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
-                                        $iflPimName, $iflPimStatus, $activePaths, $backupPaths, $totalPaths );
+                                    set $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
+                                    set $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
+                                    set $totalPaths = $activePaths + $backupPaths;
 
-                                    /* add the number of paths to the total */
-                                    set $sumActivePaths = $sumActivePaths + $activePaths;
-                                    set $sumBackupPaths = $sumBackupPaths + $backupPaths;
-                                    set $sumTotalPaths = $sumActivePaths + $totalPaths;
+                                    /* if both active & mofrr-backup are not present, there is only a single upstream interface with a different xpath */
+                                    if (( $activePaths = 0 ) and ( $backupPaths = 0 )) {
+
+                                        set $activePaths = count( $pimJoins/join-family/join-group[ upstream-interface-name == $iflPimName ]);
+
+                                    }
                                 }
+
+                                /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
+                                <output> jcs:printf( "%-20s%-10s%-15s%-15s%-15s",
+                                    $iflPimName, $iflPimStatus, $activePaths, $backupPaths, $totalPaths );
+
+                                /* add the number of paths to the total */
+                                set $sumActivePaths = $sumActivePaths + $activePaths;
+                                set $sumBackupPaths = $sumBackupPaths + $backupPaths;
+                                set $sumTotalPaths = $sumTotalPaths + $totalPaths;
+
                             }
                         }
 
@@ -366,10 +371,13 @@ template listMofrrInstances( $config ) {
 
     mvar $routingInstancesMofrr;
 
+    /* walk through all routing-instances  and if mofrr found to be enabled add it to the mvar including tab, star, id and return */
     for-each( $config/routing-instances/instance ) {
 
         if ( routing-options/multicast/stream-protection ) {
 
+            append $routingInstancesMofrr += "\t";
+            append $routingInstancesMofrr += "* ";
             append $routingInstancesMofrr += name;
             append $routingInstancesMofrr += "\n";
 
@@ -382,8 +390,9 @@ template listMofrrInstances( $config ) {
 
     } else {
 
+        /* output the mvar, add double-return, tab and star, which is otherwise not in the output, even though it is in the mvar */
         <output> "MoFRR is enabled in the following Routing-Instances:";
-        <output> $routingInstancesMofrr;
+        <output> "\n\n\t* " _ $routingInstancesMofrr;
 
     }
 }
