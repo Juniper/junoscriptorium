@@ -1,14 +1,14 @@
 version 1.0;
 
 /*
- * Copyright (c) 2014, Juniper Networks, Inc.
+ * Copyright (c) 2015, Juniper Networks, Inc.
  * All rights reserved.
  * Filename      : op-pim-mofrr.slax
  * Author        : Andre Stiphout <andre@juniper.net>
  * Platform      : MX TRIO
  * Release       : Junos 14.1+ (feature introduced with 14.1, script uses mvars)
- * Version       : 0.95
- * Date          : 2015-02-10 20:00
+ * Version       : 0.96
+ * Date          : 2015-03-10 20:30
  * Description   : Count per pim interface the active & backup paths for MoFRR
  *
  */
@@ -74,7 +74,7 @@ version 1.0;
 
     andre@router> op pim-mofrr instance Test2       
 
-    Instance Name:      ngtv_edge                     
+    Instance Name:      Test2                     
 
     Interface Name      Status    Active Joins   Backup Joins   Total Joins    
     xe-0/3/1.20         Down      0              0              0              
@@ -101,6 +101,8 @@ version 1.0;
            . fixed error with detection of one-uplink case
            . at the expense of some mvars, removed duplication and decreased runtime
            . updated formatting of output of the routing-instance list
+ * v0.96   Fixed another error with total Paths
+ *
  */
 
 ns junos = "http://xml.juniper.net/junos/*/junos";
@@ -210,7 +212,6 @@ match / {
 
                                     set $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
                                     set $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
-                                    set $totalPaths = $activePaths + $backupPaths;
 
                                     /* if both active & mofrr-backup are not present, there is only a single upstream interface with a different xpath */
                                     if (( $activePaths = 0 ) and ( $backupPaths = 0 )) {
@@ -218,6 +219,9 @@ match / {
                                         set $activePaths = count( $pimJoins/join-family/join-group[ upstream-interface-name == $iflPimName ]);
 
                                     }
+
+                                    set $totalPaths = $activePaths + $backupPaths;
+
                                 }
 
                                 /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
@@ -314,7 +318,6 @@ match / {
 
                                     set $activePaths = count( $pimJoins/join-family/join-group/active-upstream-path[ upstream-interface-name == $iflPimName ]);
                                     set $backupPaths = count( $pimJoins/join-family/join-group/mofrr-backup-upstream-path[ upstream-interface-name == $iflPimName ]);
-                                    set $totalPaths = $activePaths + $backupPaths;
 
                                     /* if both active & mofrr-backup are not present, there is only a single upstream interface with a different xpath */
                                     if (( $activePaths = 0 ) and ( $backupPaths = 0 )) {
@@ -322,6 +325,9 @@ match / {
                                         set $activePaths = count( $pimJoins/join-family/join-group[ upstream-interface-name == $iflPimName ]);
 
                                     }
+
+                                    set $totalPaths = $activePaths + $backupPaths;
+
                                 }
 
                                 /* print on a single line, the interface-name, the pim-interface status, a count of active and count of backup paths */
