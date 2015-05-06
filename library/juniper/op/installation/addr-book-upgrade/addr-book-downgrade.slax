@@ -175,7 +175,7 @@ template get-junos-version() {
 
      var $osrelease = jcs:sysctl("kern.osrelease", "s");
 
-     var $version = jcs:split("[IRB-]", $osrelease, 2);
+     var $version = jcs:split("[IRBSX-]", $osrelease, 2);
 
      expr $version[1];
 
