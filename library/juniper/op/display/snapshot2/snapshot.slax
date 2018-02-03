@@ -1,0 +1,269 @@
+
+version 1.1;
+/*
+************************************************
+Script version 2.4 written by Rich Boldy 2/2/2016 
+This script is an op script that displays a snapshot 
+of the most relevent inforation about the router,
+it's opperational status and the status of major
+protcols and interfaces. 
+************************************************
+* To run this script it must be installed in   * 
+* /var/db/scripts/op/ and called snapshot.slax *
+* The following configured must be present:    *
+* set system scripts op file snapshot.slax     *                      
+* Type: "op snapshot" to run it                *  
+************************************************
+*/
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+
+match / 
+{
+<op-script-results>  {
+
+
+<output> "----------------------------------------------------------------------------------------------------------------";
+<output> "                                              Welcome "_ $user ;
+<output> "----------------------------------------------------------------------------------------------------------------";
+<output> "       ** This is the output of the script "_ $script _ " for "_ $hostname _" on " _$localtime _ " ** ";
+<output> "----------------------------------------------------------------------------------------------------------------";
+call chassis-template();
+<output> "----------------------------------------------------------------------------------------------------------------";
+call system-template();
+<output> "----------------------------------------------------------------------------------------------------------------";
+call ospf-template();
+<output> "----------------------------------------------------------------------------------------------------------------";
+call ldp-template();
+<output> "----------------------------------------------------------------------------------------------------------------";
+call rsvp-template();
+<output> "----------------------------------------------------------------------------------------------------------------";
+call bgp-template();
+<output> "----------------------------------------------------------------------------------------------------------------";
+call interface-template();
+<output> "----------------------------------------------------------------------------------------------------------------";
+ }
+}
+
+template chassis-template() {
+
+/* CHASSIS ALARMS */
+
+var $query0 = { <command> "show chassis alarms"; }
+var $result0 = jcs:invoke($query0);              
+<alarm-information> {
+ for-each($result0) { 
+  if ($result0/alarm-detail/alarm-class != "") {
+   <output> "CHASSIS:   *** RED *** : " _$result0/alarm-detail/alarm-class _" ALARM - " _$result0/alarm-detail/alarm-description; 
+      }
+else {
+<output> "CHASSIS:   ** GREEN ** : There are no active chassis alarms";
+     }
+    } 
+   }
+}
+
+template system-template() {
+
+/* SYSTEM ALARMS */
+
+var $query10 = { <command> "show system alarms"; }
+var $result10 = jcs:invoke($query10);
+<alarm-information> {
+ for-each($result10) { 
+  if ($result10/alarm-detail/alarm-class != "") {
+   <output> "SYSTEM:    *** RED *** : " _$result10/alarm-detail/alarm-class _" ALARM - " _$result10/alarm-detail/alarm-description; 
+      }
+else {
+<output> "SYSTEM:    ** GREEN ** : There are no active system alarms";
+    } 
+   }
+  } 
+
+/* SYSTEM UPTIME AND USERS */
+
+var $query20 = { <command> "show system users"; }
+var $result20 = jcs:invoke($query20);
+<system-users-information> {
+ <output> "SYSTEM:    *  INFO   * : System Uptime is " _$result20/uptime-information/up-time;
+ for-each($result20/uptime-information/user-table/user-entry) { <output> "SYSTEM:    *  INFO   * : " _ user _" is currently logged in from " _ from _" since " _ login-time;
+    }
+ }
+
+/* SYSTEM LAST COMMIT */
+
+var $query30 = { <command> "show system commit"; }
+var $result30 = jcs:invoke($query30);
+<commit-information> {
+ <output> "SYSTEM:    *  INFO   * : Last commit was " _$result30/commit-history/date-time _" by: " _$result30/commit-history/user;
+   }
+
+/* SYSTEM VERSION */
+
+var $query40 = { <command> "show version"; }
+var $result40 = jcs:invoke($query40);
+<software-information> {
+ <output> "SYSTEM:    *  INFO   * : " _$result40/host-name _ " is a " _$result40/product-model _ " running " _$result40/package-information/comment; 
+   }
+
+/* ROUTING-ENGINE-STATUS */
+
+var $query45 = { <command> "show chassis routing-engine"; } 
+var $result45 = jcs:invoke($query45);
+
+
+
+for-each ($result45/route-engine) {
+if ((mastership-state!="master") && (mastership-state!="backup")) {
+  <output> "RSVP:      *** RED *** : RE" _ slot _ " is not OK";
+}   
+if ((slot=="0") && (status=="OK")) {
+ <output> "SYSTEM:    *  INFO   * : RE0 is " _ status _ " and " _ mastership-state _ " and has been up for " _ up-time _ " since " _ last-reboot-reason;
+}
+if ((slot=="1") && (status=="OK")) {
+ <output> "SYSTEM:    *  INFO   * : RE1 is " _ status _ " and " _ mastership-state _ " and has been up for " _ up-time _ " since " _ last-reboot-reason;
+   }
+ }
+}
+/******************** END OF TEMPLATE *********************/
+
+
+
+template ldp-template() {
+
+/* LDP-SESSION-UP-COUNT */
+
+var $query55 = {
+    <get-ldp-session-information>;
+}
+var $result55 = jcs:invoke($query55);
+var $count55 = count($result55/ldp-session[ldp-session-state=="Operational"]);
+<output> "LDP:       ** GREEN ** : There are "_$count55 _ " neighbor sessions UP";
+
+/* LDP-NIEGHBOR-DOWN-IDENTIFICATION */
+   
+var $query60 = { <command> "show ldp interface"; }
+var $result60 = jcs:invoke($query60);              
+<ldp-interface-information> {
+ for-each($result60/ldp-interface) {
+if ((ldp-neighbor-count=="0") && (interface-name!="lo0.0")) { 
+ <output> "LDP:       *** RED *** : Interface " _ interface-name _" has zero neighbors"; 
+    } 
+   }
+ }
+}
+
+/******************** END OF TEMPLATE *********************/
+
+template ospf-template() {
+
+/* OSPF-NEIGHBORS-UP-COUNT */
+
+var $query70 = {
+    <get-ospf-neighbor-information>;
+}
+var $result70 = jcs:invoke($query70);
+var $count70 = count($result70/ospf-neighbor[ospf-neighbor-state=="Full"]);
+<output> "OSPF:      ** GREEN ** : There are "_$count70 _ " OSPF neighbor sessions UP";
+
+/* OSPF-NIEGHBOR-DOWN-IDENTIFICATION */
+
+var $query80 = { <command> "show ospf interface"; }
+var $result80 = jcs:invoke($query80);              
+<ospf-interface-information> {
+ for-each($result80/ospf-interface) {
+if ((neighbor-count=="0") && (interface-name!="lo0.0")) { 
+  <output> "OSPF:      *** RED *** : Neighbor session configured on " _ interface-name _" is DOWN"; 
+    } 
+   }
+  }
+}
+
+/******************** END OF TEMPLATE *********************/
+
+template rsvp-template() {
+
+/* RSVP-NEIGHBORS-UP-COUNT */
+
+var $query90 = {
+    <get-rsvp-interface-information>;
+}
+var $result90 = jcs:invoke($query90);
+var $count90 = count($result90/rsvp-interface[rsvp-status="Up"]);
+<output> "RSVP:      ** GREEN ** : There are "_$count90 _ " RSVP interfaces UP";
+
+/* RSVP-LSP's */
+
+var $query95 = {
+    <get-mpls-lsp-information>;
+}
+var $result95 = jcs:invoke($query95);
+for-each ($result95/rsvp-session-data[session-type=="Ingress"]) { 
+<output> "RSVP:      *  INFO   * : There are " _ count _ " Egress-LSPs Operational";
+}
+for-each ($result95/rsvp-session-data[session-type=="Egress"]) {
+<output> "RSVP:      *  INFO   * : There are " _ count _ " Ingress-LSPs Operational";
+}
+
+/* RSVP-NIEGHBOR-DOWN-IDENTIFICATION */
+
+var $query100 = { <command> "show rsvp interface"; }
+var $result100 = jcs:invoke($query100);
+<rsvp-interface-information> {
+ for-each($result100/rsvp-interface) {
+if ((rsvp-status=="Down") && (interface-name!="lo0.0")) {
+  <output> "RSVP:      *** RED *** : Neighbor session configured on " _ interface-name _" is DOWN";
+    }
+   }
+  } 
+}
+
+/******************** END OF TEMPLATE *********************/
+
+template bgp-template() {
+
+/* BGP-NEIGHBORS-UP-COUNT */
+
+var $query110 = {
+    <get-bgp-summary-information>;
+}
+var $result110 = jcs:invoke($query110);
+var $count110 = count($result110/bgp-peer[peer-state=="Established"]);
+ <output> "BGP:       ** GREEN ** : There are "_$count110 _ " BGP neighbor sessions UP";
+
+/* BGP-NIEGHBOR-DOWN-IDENTIFICATION */
+
+var $query120 = { <command> "show bgp summary"; }
+var $result120 = jcs:invoke($query120);              
+<bgp-information> {
+ for-each($result120/bgp-peer[peer-state!="Established"]) { 
+  <output> "BGP:       *** RED *** : Peer " _ description _" @ " _ peer-address _" is DOWN"; 
+    } 
+   }
+}
+
+/******************** END OF TEMPLATE *********************/
+
+template interface-template() {
+
+/* INTERFACES IN UP/DOWN STATE */
+
+var $query130 = { <command> "show interfaces terse"; }
+var $result130 = jcs:invoke($query130);  
+<interface-information> {
+ for-each ($result130/physical-interface) { 
+  if ((admin-status=="up") && (oper-status=="down")) { 
+  <output> "INTERFACE: *** RED *** : " _ name _" is Admin Up and Operationally DOWN"; 
+          }
+       }
+    }
+}
+
+/******************** END OF TEMPLATE *********************/
+
+
