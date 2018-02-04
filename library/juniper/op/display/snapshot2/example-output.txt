@@ -1,0 +1,42 @@
+{master}
+nikola_tesla@re0.bcr1.sib> op snapshot
+----------------------------------------------------------------------------------------------------------------
+                                              Welcome nikola_tesla
+----------------------------------------------------------------------------------------------------------------
+       ** This is the output of the script snapshot.slax for re0.bcr1.ash4 on Wed Jan 24 17:22:24 2018 **
+----------------------------------------------------------------------------------------------------------------
+CHASSIS:   ** GREEN ** : There are no active chassis alarms
+----------------------------------------------------------------------------------------------------------------
+SYSTEM:    ** GREEN ** : There are no active system alarms
+SYSTEM:    *  INFO   * : System Uptime is 433 days, 10:36
+SYSTEM:    *  INFO   * : nikola_tesla is currently logged in from 100.64.6.135 since 5:22PM
+SYSTEM:    *  INFO   * : Last commit was 2018-01-18 23:36:07 UTC by: nikola_tesla
+SYSTEM:    *  INFO   * : re0.bcr1.ash4 is a mx480 running Junos: 14.2R7.5
+SYSTEM:    *  INFO   * : RE0 is OK and master and has been up for 433 days, 10 hours, 35 minutes, 34 seconds since Router rebooted after a normal shutdown.
+SYSTEM:    *  INFO   * : RE1 is OK and backup and has been up for 433 days, 11 hours, 7 seconds since Router rebooted after a normal shutdown.
+----------------------------------------------------------------------------------------------------------------
+OSPF:      ** GREEN ** : There are 14 OSPF neighbor sessions UP
+OSPF:      *** RED *** : Neighbor session configured on ae3.0 is DOWN
+OSPF:      *** RED *** : Neighbor session configured on ae4.0 is DOWN
+----------------------------------------------------------------------------------------------------------------
+LDP:       ** GREEN ** : There are 25 neighbor sessions UP
+LDP:       *** RED *** : Interface ae3.0 has zero neighbors
+LDP:       *** RED *** : Interface ae4.0 has zero neighbors
+----------------------------------------------------------------------------------------------------------------
+RSVP:      ** GREEN ** : There are 10 RSVP interfaces UP
+RSVP:      *  INFO   * : There are 35 Egress-LSPs Operational
+RSVP:      *  INFO   * : There are 32 Ingress-LSPs Operational
+----------------------------------------------------------------------------------------------------------------
+BGP:       ** GREEN ** : There are 258 BGP neighbor sessions U
+BGP:       *** RED *** : Peer bar1.ash2 @ 192.0.2.11 is DOWN
+BGP:       *** RED *** : Peer bar2.ash2 @ 192.0.2.12 is DOWN
+BGP:       *** RED *** : Peer Runet-1909 Tungusha @ 192.0.2.09 is DOWN
+----------------------------------------------------------------------------------------------------------------
+INTERFACE: *** RED *** : xe-5/1/2 is Admin Up and Operationally DOWN
+INTERFACE: *** RED *** : xe-5/1/3 is Admin Up and Operationally DOWN
+INTERFACE: *** RED *** : xe-5/1/5 is Admin Up and Operationally DOWN
+INTERFACE: *** RED *** : ae3 is Admin Up and Operationally DOWN
+INTERFACE: *** RED *** : ae4 is Admin Up and Operationally DOWN
+----------------------------------------------------------------------------------------------------------------
+
+
