@@ -38,8 +38,9 @@ def main():
             s = build_xml_filter( xml_config, ht_element.getparent().getparent())
             paths.append( s)
     if paths:
-        path = '<configuration>'+"".join( paths)+'</configuration>'    
-        xml_config = dev.rpc.get_config( filter_xml=path,options={'database':'committed','inherit':'inherit', 'format':'text'})
+        path = '<configuration>'+"".join( paths)+'</configuration>'
+        #17.x versions of PyEz expect filter_xml to be an etree instance
+        xml_config = dev.rpc.get_config( filter_xml= etree.XML( path),options={'database':'committed','inherit':'inherit', 'format':'text'})
         print xml_config.text
     else:
         print 'hashtag \'{}\' is not found'.format( args.hashtag)
