@@ -54,20 +54,22 @@
 
         expr jcs:close($conn);
     
-        var $format = "%s %-30s %-15s %-15s %s";
+        var $format = "%s %-30s %-15s %-15s %-15s %-25s %s";
     
-        var $header = jcs:printf($format, " ", "Matching Route", "NH Interface", "Route Table", "Security Zone");
+        var $header = jcs:printf($format, " ", "Matching Route", "NH Router", "NH Interface", "Protocol", "Route Table", "Security Zone");
         <output> $header;
     
         for-each ($route-output/route-table) {
             var $route-table = ./table-name;
             var $route = ./rt/rt-destination;
+            var $protocol = ./rt/rt-entry/protocol-name;
 
             for-each (./rt/rt-entry/nh) {
                 var $route-interface = jcs:first-of(./via, ./nh-local-interface, "");
+                var $route-nh = ./to;
                 /* Find security zone */
                 var $zone-name = $zone-output//zones-security[zones-security-interfaces/zones-security-interface-name == $route-interface]/zones-security-zonename;
-                var $line = jcs:printf($format, " ", $route, $route-interface, $route-table, $zone-name);
+                var $line = jcs:printf($format, " ", $route, $route-nh, $route-interface, $protocol, $route-table, $zone-name);
                 <output> $line;
             }
         }
