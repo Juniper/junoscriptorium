@@ -25,7 +25,7 @@ import "../import/junos.xsl";
  *                                         <address> {
  *                                            <name> unit/family/inet/address/name;
  *                                                <vrrp-group> {
- *                                                    <name> unit/family/inet/address/vrrp-gropu/name;
+ *                                                    <name> unit/family/inet/address/vrrp-group/name;
  *                                                        <priority> "1";
  *                                                        }
  *                                                     }
