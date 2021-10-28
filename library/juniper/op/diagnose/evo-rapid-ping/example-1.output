@@ -1,0 +1,20 @@
+lab@vPTX-EVO1-re0> op ping.py ?
+Possible completions:
+  <[Enter]>            Execute this command
+  <name>               Argument name
+  bypass               Bypass routing table, use specified interface (yes / no)
+  count                Number of ping requests to send (2..1000 packets)
+  detail               Display detailed output
+  dst                  Hostname or IP address of remote host
+  interface            Source interface (multicast, all-ones, unrouted packets)
+  invoke-debugger      Invoke script in debugger mode
+  source               Source address of echo request
+  |                    Pipe through a command
+{master}
+lab@vPTX-EVO1-re0> op ping.py dst 127.0.0.1
+Adjusting count to 10, range is 2 to 1000
+PING 127.0.0.1: 56(84) data bytes
+!!!!!!!!!!
+10 packets transmitted, 10 packets received 0% packet loss
+Start time: 2021-10-28 12:26:16 CEST
+End   time: 2021-10-28 12:26:18 CEST
