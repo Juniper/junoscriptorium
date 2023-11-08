@@ -10,7 +10,7 @@
    ```
    dev.rpc.op_script(script='scriptname.py')
    ```
-   #### Examples with REST
+   #### Examples with cURL
    Text, JSON, and XML supported. More information can be found in the [REST API Guide](https://www.juniper.net/documentation/us/en/software/junos/rest-api/topics/concept/rest-api-overview.html).
    ```
    curl http://username:password@X.X.X.X:3000/rpc/op-script -d "scriptname.py" -H "Content-Type: plain/text" -H "Accept: text/plain"
