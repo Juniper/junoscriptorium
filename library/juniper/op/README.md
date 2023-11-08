@@ -5,3 +5,11 @@
 
 ## Execute an Op Script via RPC
    The XML name is op-script as seen in the [YANG file](https://github.com/Juniper/yang/blob/c2dfe1caf5599af8ba5d76d1dbf9833340390dbc/16.1/operational/op.yang#L195)
+   #### Example with PyEZ
+   ```
+   dev.rpc.op_script(script='scriptname.py')
+   ```
+   #### Example with REST
+   ```
+   curl http://username:password@X.X.X.X:3000/rpc/op-script -d "scriptname.py" -H "Content-Type: plain/text" -H "Accept: text/plain"
+   ```
